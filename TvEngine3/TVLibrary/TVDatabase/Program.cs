@@ -465,6 +465,53 @@ namespace TvDatabase
       }
     }
 
+
+    /// <summary>
+    /// The programs series id
+    /// </summary>
+    public int SeriesNumAsInt
+    {
+      get
+      {
+        try
+        {
+          return Convert.ToInt32(seriesNum);
+        }
+        catch
+        {
+          return 0;
+        }
+      }
+      set
+      {
+        isChanged |= seriesNum != value.ToString();
+        seriesNum = value.ToString();
+      }
+    }
+
+    /// <summary>
+    /// The programs episode number from the distributor
+    /// </summary>
+    public int EpisodeNumAsInt
+    {
+      get
+      {
+        try
+        {
+          return Convert.ToInt32(episodeNum);
+        }
+        catch
+        {
+          return 0;
+        }
+      }
+      set
+      {
+        isChanged |= episodeNum != value.ToString();
+        episodeNum = value.ToString();
+      }
+    }
+
     /// <summary>
     /// The programs episode title from the distributor
     /// </summary>
@@ -686,6 +733,86 @@ namespace TvDatabase
       stmt.SetParameter("pEndTime", endTime);
       // execute the statement/query and create a collection of User instances from the result set
       return ObjectFactory.GetCollection<Program>(stmt.Execute());
+    }
+
+    public static string GetDateTimeString()
+    {
+      string provider = ProviderFactory.GetDefaultProvider().Name.ToLowerInvariant();
+      if (provider == "mysql")
+      {
+        return "yyyy-MM-dd HH:mm:ss";
+      }
+      return "yyyyMMdd HH:mm:ss";
+    }
+
+    public static string EscapeSQLString(string original)
+    {
+      string provider = ProviderFactory.GetDefaultProvider().Name.ToLowerInvariant();
+      if (provider == "mysql")
+      {
+        return original.Replace("\\", "\\\\").Replace("'", "\\'");
+      }
+      else
+      {
+        return original.Replace("\\", "\\\\").Replace("'", "''");
+      }
+    }
+
+    public static IList<Program> RetrieveEveryTimeOnEveryChannelOnlyNewerEpisodesSchedules(string title, int lastseriesNum, int lastepisodeNum)
+    {
+      IList<Program> data = new List<Program>();
+      String SqlSelectCommand;
+
+      if (lastseriesNum == 0 && lastepisodeNum == 0)
+      {
+        // we don't have any valid episodedata => select all
+        SqlSelectCommand = String.Format("SELECT * FROM Program WHERE Title = '{0}' AND startTime >= '{1}'",
+                                         EscapeSQLString(title), DateTime.Now.ToString(GetDateTimeString()));
+      }
+      else
+      {
+        SqlSelectCommand = String.Format("SELECT * FROM Program WHERE Title = '{0}' AND startTime >= '{1}' AND " +
+                                         "((SeriesNum = {2} AND EpisodeNum > {3}) OR (SeriesNum > {4}))",
+                                         EscapeSQLString(title), DateTime.Now.ToString(GetDateTimeString()),
+                                         lastseriesNum, lastepisodeNum, lastseriesNum);
+      }
+
+      SqlStatement stmt = new SqlBuilder(StatementType.Select, typeof(Program)).GetStatement(true);
+      SqlStatement mansql = new SqlStatement(StatementType.Select, stmt.Command, SqlSelectCommand.ToString(),
+                                                    typeof(Program));
+      IList<Program> data1 = ObjectFactory.GetCollection<Program>(mansql.Execute());
+
+      for (int i = 0; i < data1.Count; i++)
+      {
+        bool present = false;
+        // we only need to check for double episode if we have data
+        if (data1[i].EpisodeNumAsInt > 0 && data1[i].SeriesNumAsInt > 0)
+        {
+          for (int i2 = 0; i2 < data.Count; i2++)
+          {
+            // is this schedule already present? and do we have valid episodedata
+            if (data[i2].EpisodeNumAsInt == data1[i].EpisodeNumAsInt && data[i2].SeriesNumAsInt == data1[i].SeriesNumAsInt)
+            {
+              present = true;
+              Log.Debug("TVDB Program: RetrieveEveryTimeOnEveryChannelOnlyNewerEpisodesSchedules: detected double episode: {0} CHannel 1: {1} Channel 2: {2}",
+                data1[i].Title, data[i2].idChannel, data1[i].idChannel);
+              // earlier wins ;-) 
+              if (data1[i].StartTime < data[i2].StartTime)
+              {
+                // replace recording with the one which starts earlier
+                data[i2] = data1[i];
+              }
+              break;
+            }
+          }
+        }
+        if (!present)
+        {
+          data.Add(data1[i]);
+        }
+      }
+
+      return data;
     }
 
     public static IList<Program> RetrieveWeeklyEveryTimeOnThisChannel(DateTime startTime, DateTime endTime, string title,

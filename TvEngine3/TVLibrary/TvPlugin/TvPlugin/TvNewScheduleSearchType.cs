@@ -300,7 +300,10 @@ namespace TvPlugin
           rec.ScheduleType = (int)ScheduleRecordingType.Weekends;
           break;
         case 7://everytime weekly, this channel
-          rec.ScheduleType = (int) ScheduleRecordingType.WeeklyEveryTimeOnThisChannel;
+          rec.ScheduleType = (int)ScheduleRecordingType.WeeklyEveryTimeOnThisChannel;
+          break;
+        case 8://everytime, all channels but only new episodes
+          rec.ScheduleType = (int)ScheduleRecordingType.EveryTimeOnEveryChannelOnlyNewerEpisodes;
           break;
       }
 
