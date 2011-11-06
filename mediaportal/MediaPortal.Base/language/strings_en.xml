@@ -1528,16 +1528,11 @@
     <String id="6041">Two days ago</String>
     <String id="6042">Enter a skip step number of seconds</String>
     <String id="6050">Current week</String>
-    <String id="6055">Earlier this week</String>
-    <String id="6056">Last week</String>
     <String id="6060">Current month</String>
-    <String id="6062">Earlier this month</String>
     <String id="6065">Last month</String>
     <String id="6070">Current year</String>
-    <String id="6075">Earlier this year</String>
     <String id="6080">Last year</String>
     <String id="6090">Older</String>
-    <String id="6095">Future</String>
     <String id="8000" prefix="My ">Mail</String>
     <String id="8001">Check Mailbox</String>
     <String id="8002">Auto-check off</String>
@@ -2038,6 +2033,7 @@
     <String id="200021">TV Set-up - EPG</String>
     <String id="990000">Weekly on this channel</String>
     <String id="990001">{0} on channel {1}</String>
+    <String id="990002">Everytime new episodes</String>
     <String id="200022">MediaPortal has found the following TV cards:</String>
     <String id="200023">Press the Next button to configure these cards</String>
     <String id="200024">TV Set-up</String>
@@ -2328,7 +2324,6 @@
     <String id="300224">Video thumbs disabled globally</String>
     <String id="300225">Use "Sort title"</String>
     <String id="300226">Use only internal nfo scraper</String>
-    <String id="300227">Clear Blacklisted thumbs</String>
     <String id="300228">Ask for confirmation when stopping timeshift</String>
     <String id="300229">Minimize to tray on focus loss</String>
     <String id="300230">Stop playback on removal of an audio renderer</String>
