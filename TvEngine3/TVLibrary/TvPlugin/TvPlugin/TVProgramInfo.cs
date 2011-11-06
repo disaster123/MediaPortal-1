@@ -1077,8 +1077,9 @@ namespace TvPlugin
           || (schedule.ScheduleType == (int)ScheduleRecordingType.Weekly)
           || (schedule.ScheduleType == (int)ScheduleRecordingType.WorkingDays)
           || (schedule.ScheduleType == (int)ScheduleRecordingType.EveryTimeOnEveryChannel)
+          || (schedule.ScheduleType == (int)ScheduleRecordingType.EveryTimeOnEveryChannelOnlyNewerEpisodes)
           || (schedule.ScheduleType == (int)ScheduleRecordingType.EveryTimeOnThisChannel)
-          || (schedule.ScheduleType == (int) ScheduleRecordingType.WeeklyEveryTimeOnThisChannel))          
+          || (schedule.ScheduleType == (int)ScheduleRecordingType.WeeklyEveryTimeOnThisChannel))          
       {
         GUIDialogMenu dlg = (GUIDialogMenu)GUIWindowManager.GetWindow((int)Window.WINDOW_DIALOG_MENU);
         if (dlg == null)
@@ -1167,11 +1168,17 @@ namespace TvPlugin
       }
       else
       {
-        Log.Debug("TVProgramInfo.CreateProgram - no series schedule");
-        // no series schedule => create it
+        // series schedule => create it
         schedule = new Schedule(program.IdChannel, program.Title, program.StartTime, program.EndTime);
         schedule.PreRecordInterval = Int32.Parse(layer.GetSetting("preRecordInterval", "5").Value);
         schedule.PostRecordInterval = Int32.Parse(layer.GetSetting("postRecordInterval", "5").Value);
+        if ((int)scheduleType == (int)ScheduleRecordingType.EveryTimeOnEveryChannelOnlyNewerEpisodes &&
+            program.SeriesNumAsInt > 0 && program.EpisodeNumAsInt > 0)
+        {
+          schedule.LastseriesNum = program.SeriesNumAsInt;
+          // -1 so that this schedule will also get recorded (SQL Rule is > X)
+          schedule.LastepisodeNum = program.EpisodeNumAsInt-1;
+        }
         schedule.ScheduleType = scheduleType;
       }
 
@@ -1211,7 +1218,7 @@ namespace TvPlugin
             dlg.AddConflictRecording(item);
           }
           dlg.ConflictingEpisodes = (scheduleType != (int)ScheduleRecordingType.Once);
-          dlg.ConflictingRecording = true;
+		   dlg.ConflictingRecording = true;
           dlg.DoModal(dialogId);
           switch (dlg.SelectedLabel)
           {
@@ -1400,6 +1407,7 @@ namespace TvPlugin
         dlg.Add(GUILocalizeStrings.Get(WeekEndTool.GetText(DayType.Record_WorkingDays)));
         dlg.Add(GUILocalizeStrings.Get(WeekEndTool.GetText(DayType.Record_WeekendDays)));
         dlg.AddLocalizedString(990000); // 990000=Weekly everytime on this channel
+        dlg.AddLocalizedString(990002); // 990002=Every time every channel but only new episodes
 
         dlg.DoModal(GetID);
         if (dlg.SelectedLabel == -1)
@@ -1433,6 +1441,9 @@ namespace TvPlugin
             break;
           case 7://Weekly everytime, this channel
             scheduleType = (int)ScheduleRecordingType.WeeklyEveryTimeOnThisChannel;
+            break;
+          case 8://every time every channel but only newer episodes
+            scheduleType = (int)ScheduleRecordingType.EveryTimeOnEveryChannelOnlyNewerEpisodes;
             break;
         }
         CreateProgram(CurrentProgram, scheduleType, GetID);

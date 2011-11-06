@@ -718,7 +718,7 @@
     <String id="789">Jetzt: </String>
     <String id="790">Anschließend: </String>
     <String id="791">Cover-Flow</String>
-    <String id="792">Ansichts-Menü</String>
+	<String id="792">Ansichts-Menü</String>
     <String id="798">niedrig</String>
     <String id="799">hoch</String>
     <String id="800">Fängt an mit</String>
@@ -732,8 +732,8 @@
     <String id="808">Zutaten</String>
     <String id="809">Anweisungen</String>
     <String id="810">Karte</String>
-    <String id="811">Radio-Aufnahmen</String>
-    <String id="812">Radiosender</String>
+	<String id="811">Radio-Aufnahmen</String>
+	<String id="812">Radiosender</String>
     <String id="820">Noch nicht gesehene Aufnahme löschen?</String>
     <String id="830">Als ungesehen markieren</String>
     <String id="831">Wechseldatenträger auswerfen</String>
@@ -1011,10 +1011,10 @@
     <String id="1208">Sortieren: Komponist</String>
     <String id="1211">Wiedergabe bei {0} fortsetzen</String>
     <String id="1212">Erinnern aufheben</String>
-    <String id="1213">Diesen Sender anhören</String>
-    <String id="1214">Komponisten</String>
-    <String id="1215">Dirigenten</String>
-    <String id="1216">Disks</String>
+    <String id="1213">Diesen Sender anhören</String> 
+  	<String id="1214">Komponisten</String> 
+  	<String id="1215">Dirigenten</String> 
+  	<String id="1216">Disks</String>
     <String id="1220">Sortieren: Erstellungsdatum</String>
     <String id="1221">Sortieren: Änderungsdatum</String>
     <String id="1222">Gruppen</String>
@@ -1435,7 +1435,7 @@
     <String id="4515">Cover-Such-Ergebnisse</String>
     <String id="4516">Kein Cover gefunden</String>
     <String id="4517">Schließen</String>
-    <String id="4518">Album Name nicht gefunden\r\nVersuche: {0}</String>
+    <String id="4518">Album Name nicht  gefunden\r\nVersuche: {0}</String>
     <String id="4519">Aktuelles Cover</String>
     <String id="4520">Überspringen</String>
     <String id="4521">Zeige Infos zum Album/Interpreten</String>
@@ -1980,7 +1980,7 @@
     <String id="102016">Benachrichtigung</String>
     <String id="102017">Aufnahmekonflikt</String>
     <String id="102018">CI-Menü</String>
-    <String id="102019">TV-Benachrichtigung</String>
+  	<String id="102019">TV-Benachrichtigung</String>
     <String id="102600" prefix="Mein ">Wetter</String>
     <String id="102700" prefix="Meine ">Nachrichten</String>
     <String id="102900">Bildschirm-Schoner</String>
@@ -2033,7 +2033,8 @@
     <String id="200021">TV-Konfiguration - EPG</String>
     <String id="990000">Wöchentlich an Tag X auf diesem Kanal</String>
     <String id="990001">{0} immer auf {1}</String>
-    <String id="200022">MediaPortal hat folgende TV-Karten gefunden: </String>
+    <String id="990002">Immer nur neue Episoden</String>
+    <String id="200022">MediaPortal hat folgende TV-Karten gefunden:</String>
     <String id="200023">Drücken sie den "Weiter" Knopf um die TV-Karten einzurichten</String>
     <String id="200024">TV-Konfiguration</String>
     <String id="200025">Sprache</String>
