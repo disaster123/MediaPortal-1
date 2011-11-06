@@ -778,7 +778,10 @@ namespace TvPlugin
             case (int)ScheduleRecordingType.EveryTimeOnEveryChannel:
               item.Label2 = GUILocalizeStrings.Get(651);
               break;
-           case (int) ScheduleRecordingType.WeeklyEveryTimeOnThisChannel:
+            case (int)ScheduleRecordingType.EveryTimeOnEveryChannelOnlyNewerEpisodes:
+              item.Label2 = GUILocalizeStrings.Get(990002);
+              break;
+            case (int)ScheduleRecordingType.WeeklyEveryTimeOnThisChannel:
              switch (rec.StartTime.DayOfWeek)
              {
                  case DayOfWeek.Monday:
@@ -1104,6 +1107,9 @@ namespace TvPlugin
           case ScheduleRecordingType.WeeklyEveryTimeOnThisChannel:
             dlg.SelectedLabel = 7;
             break;
+          case ScheduleRecordingType.EveryTimeOnEveryChannelOnlyNewerEpisodes:
+            dlg.SelectedLabel = 8;
+            break;
         }
         dlg.DoModal(GetID);
         if (dlg.SelectedLabel == -1)
@@ -1142,6 +1148,10 @@ namespace TvPlugin
             break;
           case 7://Weekly everytime, this channel
             rec.ScheduleType = (int)ScheduleRecordingType.WeeklyEveryTimeOnThisChannel;
+            rec.Canceled = Schedule.MinSchedule;
+            break;
+          case 8://every time every channel but only newer episodes
+            rec.ScheduleType = (int)ScheduleRecordingType.EveryTimeOnEveryChannelOnlyNewerEpisodes;
             rec.Canceled = Schedule.MinSchedule;
             break;
         }
@@ -1205,6 +1215,9 @@ namespace TvPlugin
           break;
         case ScheduleRecordingType.EveryTimeOnEveryChannel:
           strType = GUILocalizeStrings.Get(651); //Everytime on any channel
+          break;
+        case ScheduleRecordingType.EveryTimeOnEveryChannelOnlyNewerEpisodes:
+          strType = GUILocalizeStrings.Get(990002);
           break;
         case ScheduleRecordingType.EveryTimeOnThisChannel:
           strType = String.Format(GUILocalizeStrings.Get(650), schedule.ReferencedChannel().DisplayName);
