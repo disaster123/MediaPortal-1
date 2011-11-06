@@ -59,8 +59,28 @@ namespace TvService
 
     public void OnScheduleEnded(string recordingFilename, Schedule recording, TvDatabase.Program program)
     {
-      Log.Write("diskmanagement: recording {0} ended. type:{1} max episodes:{2}",
-                program.Title, (ScheduleRecordingType)recording.ScheduleType, recording.MaxAirings);
+      Schedule parentrec = recording.ReferencedSchedule();
+      Log.Write("diskmanagement: recording {0} / {1} ended. type:{2} max episodes:{3} Endtime: {4}",
+                program.Title, recording.ProgramName, (ScheduleRecordingType)recording.ScheduleType, recording.MaxAirings, recording.EndTime.ToString());
+      if (parentrec != null)
+      {
+        Log.Write("diskmanagement: parent recording was {0} type:{1} S{2}E{3}",
+                  parentrec.ProgramName, (ScheduleRecordingType)parentrec.ScheduleType,
+                  program.SeriesNumAsInt, program.EpisodeNumAsInt);
+        // Update only series and episodedata for EveryTimeOnEveryChannelOnlyNewerEpisodes and only if the recording is complete
+        if ((ScheduleRecordingType)parentrec.ScheduleType == ScheduleRecordingType.EveryTimeOnEveryChannelOnlyNewerEpisodes &&
+             DateTime.Now >= recording.EndTime)
+        {
+          Log.Write("diskmanagement: Update series and episodedata for {0} type:{1} to: S{2}E{3}",
+                    parentrec.ProgramName, (ScheduleRecordingType)parentrec.ScheduleType,
+                    program.SeriesNumAsInt, program.EpisodeNumAsInt);
+
+          parentrec.LastseriesNum = program.SeriesNumAsInt;
+          parentrec.LastepisodeNum = program.EpisodeNumAsInt;
+          parentrec.Persist();
+
+        }
+      }
 
       CheckEpsiodesForRecording(recording, program);
     }

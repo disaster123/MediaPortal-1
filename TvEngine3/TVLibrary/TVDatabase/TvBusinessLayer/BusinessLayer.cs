@@ -3187,6 +3187,33 @@ namespace TvDatabase
       }
 
       IList<Program> programs;
+      if (rec.ScheduleType == (int)ScheduleRecordingType.EveryTimeOnEveryChannelOnlyNewerEpisodes)
+      {
+        programs = Program.RetrieveEveryTimeOnEveryChannelOnlyNewerEpisodesSchedules(rec.ProgramName, rec.LastseriesNum, rec.LastepisodeNum);
+
+        foreach (Program prog in programs)
+        {
+          if (rec.IsRecordingProgram(prog, false))
+          {
+            Schedule recNew = rec.Clone();
+            recNew.ScheduleType = (int)ScheduleRecordingType.Once;
+            recNew.IdChannel = prog.IdChannel;
+            recNew.StartTime = prog.StartTime;
+            recNew.EndTime = prog.EndTime;
+            recNew.LastseriesNum = prog.SeriesNumAsInt;
+            recNew.LastepisodeNum = prog.EpisodeNumAsInt;
+            recNew.Series = true;
+            if (rec.IsSerieIsCanceled(recNew.StartTime))
+            {
+              recNew.Canceled = recNew.StartTime;
+            }
+            recordings.Add(recNew);
+          }
+        }
+
+        return recordings;
+      }
+
       if (rec.ScheduleType == (int)ScheduleRecordingType.WeeklyEveryTimeOnThisChannel)
       {
         //Log.Debug("get {0} {1} EveryTimeOnThisChannel", rec.ProgramName, rec.ReferencedChannel().Name);
