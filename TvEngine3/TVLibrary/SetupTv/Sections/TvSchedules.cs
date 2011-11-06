@@ -104,6 +104,11 @@ namespace SetupTv.Sections
             item.SubItems.Add("Always");
             item.SubItems.Add("All channels");
             break;
+          case ScheduleRecordingType.EveryTimeOnEveryChannelOnlyNewerEpisodes:
+            item.ImageIndex = 0;
+            item.SubItems.Add("OnlyNewerEpisodes");
+            item.SubItems.Add("S"+schedule.LastseriesNum+"E"+schedule.LastepisodeNum);
+            break;
         }
         item.SubItems.Add(schedule.ProgramName);
         item.SubItems.Add(String.Format("{0} mins", schedule.PreRecordInterval));
