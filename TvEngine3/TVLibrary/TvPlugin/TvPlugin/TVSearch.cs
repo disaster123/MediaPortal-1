@@ -1200,6 +1200,7 @@ namespace TvPlugin
         dlg.Add(GUILocalizeStrings.Get(WeekEndTool.GetText(DayType.Record_WorkingDays)));
         dlg.Add(GUILocalizeStrings.Get(WeekEndTool.GetText(DayType.Record_WeekendDays)));
         dlg.Add(GUILocalizeStrings.Get(990000));  // 990000=Weekly everytime on this channel
+        dlg.Add(GUILocalizeStrings.Get(990002));  // 990002=Every time every channel but only newer episodes
 
         dlg.DoModal(GetID);
         if (dlg.SelectedLabel == -1)
@@ -1259,6 +1260,15 @@ namespace TvPlugin
             break;
           case 8://Weekly everytime, this channel
             rec.ScheduleType = (int)ScheduleRecordingType.WeeklyEveryTimeOnThisChannel;
+            break;
+          case 9://every time every channel but only newer episodes
+            rec.ScheduleType = (int)ScheduleRecordingType.EveryTimeOnEveryChannelOnlyNewerEpisodes;
+            if (program.SeriesNumAsInt > 0 && program.EpisodeNumAsInt > 0)
+            {
+              // -1 so that this program gets also recorded
+              rec.LastseriesNum = program.SeriesNumAsInt;
+              rec.LastepisodeNum = program.EpisodeNumAsInt-1;
+            }
             break;
         }
         rec.Persist();
