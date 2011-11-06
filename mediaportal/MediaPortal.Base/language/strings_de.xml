@@ -2394,5 +2394,6 @@
 		<String id="990001">{0} immer auf {1}</String>
 		<String id="350041">Künstler-Infos und Foto laden</String>
 		<String id="350042">Zap-Eingabe-Timeout</String>
+		<String id="990002">Immer nur neue Episoden</String>		
 	</Section>
 </Language>
