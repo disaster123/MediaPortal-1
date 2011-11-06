@@ -328,6 +328,10 @@ namespace TvPlugin
             item.Label = rec.ProgramName;
             item.Label2 = GUILocalizeStrings.Get(651);
             break;
+          case (int)ScheduleRecordingType.EveryTimeOnEveryChannelOnlyNewerEpisodes:
+            item.Label = rec.ProgramName;
+            item.Label2 = GUILocalizeStrings.Get(990002);
+            break;
         }
       }
     }

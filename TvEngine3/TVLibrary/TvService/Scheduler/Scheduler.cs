@@ -716,8 +716,13 @@ namespace TvService
         case ScheduleRecordingType.EveryTimeOnEveryChannel:
           isTimeToRecord = IsTimeToRecordEveryTimeOnEveryChannel(schedule);
           break;
+
         case ScheduleRecordingType.WeeklyEveryTimeOnThisChannel:
           isTimeToRecord = IsTimeToRecordWeeklyEveryTimeOnThisChannel(schedule, currentTime);
+          break;
+
+        case ScheduleRecordingType.EveryTimeOnEveryChannelOnlyNewerEpisodes:
+          isTimeToRecord = IsTimeToRecordEveryTimeOnEveryChannelOnlyNewerEpisodes(schedule);
           break;
       }
       return isTimeToRecord;
@@ -749,6 +754,34 @@ namespace TvService
             }
           }
         }
+      }
+
+      return isTimeToRecord;
+    }
+
+    private bool IsTimeToRecordEveryTimeOnEveryChannelOnlyNewerEpisodes(Schedule schedule)
+    {
+      bool isTimeToRecord = false;
+      bool createSpawnedOnceSchedule = false;
+
+      IList<TvDatabase.Program> programs = TvDatabase.Program.RetrieveCurrentRunningByTitle(schedule.ProgramName,
+                                                                                            schedule.PreRecordInterval,
+                                                                                            schedule.PostRecordInterval);
+      foreach (TvDatabase.Program program in programs)
+      {
+        if ((program.SeriesNumAsInt == schedule.LastseriesNum && program.EpisodeNumAsInt > schedule.LastepisodeNum) ||
+            (program.SeriesNumAsInt > schedule.LastseriesNum) || (schedule.LastseriesNum == 0 && schedule.LastepisodeNum == 0))
+        if (!schedule.IsSerieIsCanceled(program.StartTime))
+        {
+          if (CreateSpawnedOnceSchedule(schedule, program))
+          {
+            createSpawnedOnceSchedule = true;
+          }
+        }
+      }
+      if (createSpawnedOnceSchedule)
+      {
+        ResetTimer(); //lets process the spawned once schedule at once.
       }
 
       return isTimeToRecord;
@@ -884,6 +917,9 @@ namespace TvService
           newSchedule.StartTime = current.StartTime;
           newSchedule.EndTime = current.EndTime;
           newSchedule.ScheduleType = 0; // type Once
+          // remove me? perhaps there is another way to get the correct series and episodenumbers?
+          newSchedule.LastseriesNum = current.SeriesNumAsInt;
+          newSchedule.LastepisodeNum = current.EpisodeNumAsInt;
           newSchedule.Series = true;
           newSchedule.IdParentSchedule = schedule.IdSchedule;
           newSchedule.Persist();

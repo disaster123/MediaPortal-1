@@ -43,7 +43,8 @@ namespace TvDatabase
     EveryTimeOnEveryChannel,
     Weekends,
     WorkingDays,
-    WeeklyEveryTimeOnThisChannel
+    WeeklyEveryTimeOnThisChannel,
+    EveryTimeOnEveryChannelOnlyNewerEpisodes
   }
 
   /// <summary>
@@ -81,6 +82,9 @@ namespace TvDatabase
     [TableColumn("recommendedCard", NotNull = true)] private int recommendedCard;
     [TableColumn("series", NotNull = true)] private bool series;
 
+    [TableColumn("lastepisodeNum", NotNull = true)] private int lastepisodeNum;
+    [TableColumn("lastseriesNum", NotNull = true)] private int lastseriesNum;    
+
     #endregion
 
     #region Constructors
@@ -107,6 +111,8 @@ namespace TvDatabase
       Series = (scheduleType > 0);
       StartTime = startTime;
       recommendedCard = -1;
+      lastseriesNum = 0;
+      lastepisodeNum = 0;
     }
 
     /// <summary> 
@@ -115,7 +121,17 @@ namespace TvDatabase
     public Schedule(int idChannel, int idParentSchedule, int scheduleType, string programName, DateTime startTime,
                     DateTime endTime,
                     int maxAirings, int priority, string directory, int quality, int keepMethod, DateTime keepDate,
-                    int preRecordInterval, int postRecordInterval, DateTime canceled)
+                    int preRecordInterval, int postRecordInterval, DateTime canceled) : 
+                    this(idChannel, idParentSchedule, scheduleType, programName, startTime,
+                    endTime, maxAirings, priority, directory, quality, keepMethod, keepDate,
+                    preRecordInterval, postRecordInterval, canceled, 0, 0)
+    {
+    }
+
+    public Schedule(int idChannel, int idParentSchedule, int scheduleType, string programName, DateTime startTime,
+                    DateTime endTime,
+                    int maxAirings, int priority, string directory, int quality, int keepMethod, DateTime keepDate,
+                    int preRecordInterval, int postRecordInterval, DateTime canceled, int lastseriesNum, int lastepisodeNum)
     {
       isChanged = true;
       this.idChannel = idChannel;
@@ -134,6 +150,8 @@ namespace TvDatabase
       this.postRecordInterval = postRecordInterval;
       this.canceled = canceled;
       this.series = (scheduleType > 0);
+      this.lastepisodeNum = lastepisodeNum;
+      this.lastseriesNum = lastseriesNum;
       recommendedCard = -1;
     }
 
@@ -159,6 +177,8 @@ namespace TvDatabase
       postRecordInterval = schedule.postRecordInterval;
       canceled = schedule.canceled;
       series = schedule.Series;
+      lastseriesNum = schedule.lastseriesNum;
+      lastepisodeNum = schedule.lastepisodeNum;
       recommendedCard = -1;
     }
 
@@ -169,7 +189,18 @@ namespace TvDatabase
     public Schedule(int idSchedule, int idParentSchedule, int idChannel, int scheduleType, string programName,
                     DateTime startTime,
                     DateTime endTime, int maxAirings, int priority, string directory, int quality, int keepMethod,
-                    DateTime keepDate, int preRecordInterval, int postRecordInterval, DateTime canceled)
+                    DateTime keepDate, int preRecordInterval, int postRecordInterval, DateTime canceled) :
+      this(idSchedule, idParentSchedule, idChannel, scheduleType, programName, startTime,
+                    endTime, maxAirings, priority, directory, quality, keepMethod,
+                    keepDate, preRecordInterval, postRecordInterval, canceled, 0, 0)
+    {
+    }
+
+    public Schedule(int idSchedule, int idParentSchedule, int idChannel, int scheduleType, string programName,
+                    DateTime startTime,
+                    DateTime endTime, int maxAirings, int priority, string directory, int quality, int keepMethod,
+                    DateTime keepDate, int preRecordInterval, int postRecordInterval, DateTime canceled,
+                    int lastseriesNum , int lastepisodeNum)
     {
       this.idSchedule = idSchedule;
       this.idParentSchedule = idParentSchedule;
@@ -188,6 +219,8 @@ namespace TvDatabase
       this.postRecordInterval = postRecordInterval;
       this.canceled = canceled;
       this.series = (scheduleType > 0);
+      this.lastseriesNum = lastseriesNum;
+      this.lastepisodeNum = lastepisodeNum;
       recommendedCard = -1;
     }
 
@@ -433,6 +466,32 @@ namespace TvDatabase
       }
     }
 
+    /// <summary>
+    /// Property relating to database column lastseasonNum
+    /// </summary>
+    public int LastseriesNum
+    {
+      get { return lastseriesNum; }
+      set
+      {
+        isChanged |= lastseriesNum != value;
+        lastseriesNum = value;
+      }
+    }
+
+    /// <summary>
+    /// Property relating to database column lastepisodeNum
+    /// </summary>
+    public int LastepisodeNum
+    {
+      get { return lastepisodeNum; }
+      set
+      {
+        isChanged |= lastepisodeNum != value;
+        lastepisodeNum = value;
+      }
+    }
+
     #endregion
 
     #region Storage and Retrieval
@@ -675,6 +734,10 @@ namespace TvDatabase
           progs = Program.RetrieveWeeklyEveryTimeOnThisChannel(schedule.startTime, schedule.endTime, schedule.programName, schedule.ReferencedChannel().IdChannel);
           break;
 
+        case (int)ScheduleRecordingType.EveryTimeOnEveryChannelOnlyNewerEpisodes:
+          progs = Program.RetrieveEveryTimeOnEveryChannelOnlyNewerEpisodesSchedules(schedule.programName, schedule.lastseriesNum, schedule.lastepisodeNum);
+          break;
+
         case (int)ScheduleRecordingType.Weekends:
           progs = Program.RetrieveWeekends(schedule.startTime, schedule.endTime, schedule.ReferencedChannel().IdChannel);
           break;
@@ -695,6 +758,7 @@ namespace TvDatabase
     {
       if (schedule.ScheduleType == (int)ScheduleRecordingType.EveryTimeOnEveryChannel ||
           schedule.ScheduleType == (int)ScheduleRecordingType.EveryTimeOnThisChannel ||
+          schedule.ScheduleType == (int)ScheduleRecordingType.EveryTimeOnEveryChannelOnlyNewerEpisodes ||
           schedule.ScheduleType == (int)ScheduleRecordingType.WeeklyEveryTimeOnThisChannel)
       {
         return false;
@@ -1057,6 +1121,19 @@ namespace TvDatabase
             return true;
           }
           break;
+        case ScheduleRecordingType.EveryTimeOnEveryChannelOnlyNewerEpisodes:
+          if (program.Title == ProgramName && 
+              ((program.SeriesNumAsInt == lastseriesNum && program.EpisodeNumAsInt > lastepisodeNum) || 
+               (program.SeriesNumAsInt > lastseriesNum) || (lastseriesNum == 0 && lastepisodeNum == 0))
+            )
+          {
+            if (filterCanceledRecordings && IsSerieIsCanceled(program.StartTime))
+            {
+              return false;
+            }
+            return true;
+          }
+          break;
         case ScheduleRecordingType.EveryTimeOnThisChannel:
           if (program.Title == ProgramName && program.IdChannel == IdChannel)
           {
@@ -1340,7 +1417,7 @@ namespace TvDatabase
       Schedule schedule = new Schedule(IdChannel, idParentSchedule, scheduleType, ProgramName, StartTime, EndTime,
                                        MaxAirings, Priority,
                                        Directory, Quality, KeepMethod, KeepDate, PreRecordInterval, PostRecordInterval,
-                                       Canceled);
+                                       Canceled, lastepisodeNum, lastepisodeNum);
 
       schedule.series = series;
       schedule.idSchedule = idSchedule;
