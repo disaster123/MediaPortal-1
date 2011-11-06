@@ -593,9 +593,10 @@ namespace TvLibrary.Implementations.DVB
       if (channel is DVBSChannel)
       {
         DVBSChannel dvbsChannel = channel as DVBSChannel;
-        if (dvbsChannel.ModulationType == ModulationType.ModNotSet)
+        DVBSChannel tuningChannel = new DVBSChannel(dvbsChannel);
+        if (_conditionalAccess != null)
         {
-          dvbsChannel.ModulationType = ModulationType.ModQpsk;
+          tuningChannel = _conditionalAccess.SetDVBS2Modulation(_parameters, tuningChannel);
         }
         int lowOsc;
         int hiOsc;
@@ -616,9 +617,9 @@ namespace TvLibrary.Implementations.DVB
                                         };
         DigitalDemodulator2Settings dSettings = new DigitalDemodulator2Settings
                                                   {
-                                                    InnerFECRate = dvbsChannel.InnerFecRate,
+                                                    InnerFECRate = tuningChannel.InnerFecRate,
                                                     InnerFECMethod = FECMethod.MethodNotSet,
-                                                    Modulation = dvbsChannel.ModulationType,
+                                                    Modulation = tuningChannel.ModulationType,
                                                     OuterFECMethod = FECMethod.MethodNotSet,
                                                     OuterFECRate = BinaryConvolutionCodeRate.RateNotSet,
                                                     Pilot = Pilot.NotSet,
