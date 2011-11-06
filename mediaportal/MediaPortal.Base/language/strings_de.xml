@@ -1904,6 +1904,7 @@
     <String id="200021">TV-Konfiguration - EPG</String>
     <String id="990000">Wöchentlich an Tag X auf diesem Kanal</String>
     <String id="990001">{0} immer auf {1}</String>
+    <String id="990002">Immer nur neue Episoden</String>
     <String id="200022">MediaPortal hat folgende TV-Karten gefunden:</String>
     <String id="200023">Drücken sie den "Weiter" Knopf um die TV-Karten einzurichten</String>
     <String id="200024">TV-Konfiguration</String>
