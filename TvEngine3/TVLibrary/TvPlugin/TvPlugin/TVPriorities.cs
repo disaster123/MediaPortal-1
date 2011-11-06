@@ -403,6 +403,10 @@ namespace TvPlugin
             item.Label = rec.ProgramName;
             item.Label2 = GUILocalizeStrings.Get(651);
             break;
+          case ScheduleRecordingType.EveryTimeOnEveryChannelOnlyNewerEpisodes:
+            item.Label = rec.ProgramName;
+            item.Label2 = GUILocalizeStrings.Get(990002);
+            break;
         }
       }
     }
@@ -591,6 +595,7 @@ namespace TvPlugin
         dlg.Add(GUILocalizeStrings.Get(WeekEndTool.GetText(DayType.Record_WorkingDays)));
         dlg.Add(GUILocalizeStrings.Get(WeekEndTool.GetText(DayType.Record_WeekendDays)));
         dlg.Add(GUILocalizeStrings.Get(990000));// 990000=Weekly everytime on this channel		
+        dlg.Add(GUILocalizeStrings.Get(990002));// 990002=Every channel but only newer episodes
         switch ((ScheduleRecordingType)rec.ScheduleType)
         {
           case ScheduleRecordingType.Once:
@@ -616,6 +621,9 @@ namespace TvPlugin
             break;
           case ScheduleRecordingType.WeeklyEveryTimeOnThisChannel:
             dlg.SelectedLabel = 7;
+            break;
+          case ScheduleRecordingType.EveryTimeOnEveryChannelOnlyNewerEpisodes:
+            dlg.SelectedLabel = 8;
             break;
         }
         dlg.DoModal(GetID);
@@ -657,6 +665,10 @@ namespace TvPlugin
             rec.ScheduleType = (int)ScheduleRecordingType.WeeklyEveryTimeOnThisChannel;
             rec.Canceled = Schedule.MinSchedule;
             break;
+          case 8://every time every channel but only new episodes
+            rec.ScheduleType = (int)ScheduleRecordingType.EveryTimeOnEveryChannelOnlyNewerEpisodes;
+            rec.Canceled = Schedule.MinSchedule;
+            break;
         }
         rec.Persist();
         TvServer server = new TvServer();
@@ -694,6 +706,9 @@ namespace TvPlugin
           break;
         case ScheduleRecordingType.WeeklyEveryTimeOnThisChannel:
           strType = GUILocalizeStrings.Get(990000);//Weekly Everytime on this channel
+          break;
+        case ScheduleRecordingType.EveryTimeOnEveryChannelOnlyNewerEpisodes:
+          strType = GUILocalizeStrings.Get(990002);//every time every channel but only newer episodes
           break;
       }
       return strType;

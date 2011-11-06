@@ -156,6 +156,7 @@ namespace TvEngine
       getWorkingDaysSchedules(scheduleList, scheduleListToParse);
       getWeeklyEveryTimeOnThisChannelSchedules(scheduleList, scheduleListToParse);
       getEveryTimeOnEveryChannelSchedules(scheduleList, scheduleListToParse);
+      getEveryTimeOnEveryChannelOnlyNewerEpisodesSchedules(scheduleList, scheduleListToParse);
       getEveryTimeOnThisChannelSchedules(scheduleList, scheduleListToParse);
       removeCanceledSchedules(scheduleListToParse);
 
@@ -684,6 +685,41 @@ namespace TvEngine
       layer = null;
       foreach (Schedule sched in refFillList) schedulesList.Remove(sched);
     }
+
+    /// <summary>
+    /// Gets the every time on every channel but only newer episodes
+    /// </summary>
+    /// <param name="schedulesList">The schedules list.</param>
+    /// <returns></returns>
+    private void getEveryTimeOnEveryChannelOnlyNewerEpisodesSchedules(IList<Schedule> schedulesList, IList<Schedule> refFillList)
+    {
+      foreach (Schedule schedule in schedulesList)
+      {
+        ScheduleRecordingType scheduleType = (ScheduleRecordingType)schedule.ScheduleType;
+        if (schedule.Canceled != Schedule.MinSchedule) continue;
+        if (scheduleType != ScheduleRecordingType.EveryTimeOnEveryChannelOnlyNewerEpisodes) continue;
+        IList<Program> programsList = Program.RetrieveEveryTimeOnEveryChannelOnlyNewerEpisodesSchedules(schedule.ProgramName, schedule.LastseriesNum, schedule.LastepisodeNum);
+
+        if (programsList != null)
+        {
+          foreach (Program program in programsList)
+          {
+            Schedule incomingSchedule = schedule.Clone();
+            incomingSchedule.IdChannel = program.IdChannel;
+            incomingSchedule.ProgramName = program.Title;
+            incomingSchedule.StartTime = program.StartTime;
+            incomingSchedule.EndTime = program.EndTime;
+            incomingSchedule.PreRecordInterval = schedule.PreRecordInterval;
+            incomingSchedule.PostRecordInterval = schedule.PostRecordInterval;
+            incomingSchedule.LastseriesNum = schedule.LastseriesNum;
+            incomingSchedule.LastepisodeNum = schedule.LastepisodeNum;
+            refFillList.Add(incomingSchedule);
+          } //foreach (Program _program in _programsList)
+        }
+      } //foreach (Schedule _Schedule in schedulesList)
+      foreach (Schedule sched in refFillList) schedulesList.Remove(sched);
+    }
+
 
     /// <summary>
     /// Gets the Weekly every time on this channel schedules.
