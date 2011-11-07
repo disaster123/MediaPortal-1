@@ -273,7 +273,7 @@ namespace TvPlugin
       GUIControl.SelectItemControl(GetID, facadeLayout.GetID, _iSelectedItem);
 
       btnSortBy.SortChanged += new SortEventHandler(SortChanged);
-    }
+      }
 
     protected override bool AllowLayout(Layout layout)
     {
@@ -886,7 +886,32 @@ namespace TvPlugin
         {
           SmallThumb = StationLogo;
         }
+        /*
+        if (!Utils.FileExistsInCache(previewThumb) && TVHome.RecordingPath().Length > 0)
+        {
+          previewThumb = Path.ChangeExtension(aRecording.FileName, Utils.GetThumbExtension());
+          //use user defined recording folder as either UNC or network drive
+          string fileName = Path.GetFileName(previewThumb);
+          string fileNameSimple = TVHome.RecordingPath() + "\\" + fileName;
 
+          if (!File.Exists(fileNameSimple))
+          //maybe file exist in folder, schedules recs often appear in folders, no way to intelligently determine this.
+          {
+            DirectoryInfo dirInfo = Directory.GetParent(aRecording.FileName);
+            if (dirInfo != null)
+            {
+              string parentFolderName = dirInfo.Name;
+              fileNameSimple = TVHome.RecordingPath() + "\\" + parentFolderName + "\\" + fileName;
+              if (!File.Exists(fileNameSimple)) {
+                // set it to old filename where we had simply changed the extension
+                fileNameSimple = previewThumb;
+              }
+            }
+          }
+
+          previewThumb = fileNameSimple;
+        }
+        */
         // Display previews only if the option to create them is active                
         if (Utils.FileExistsInCache(PreviewThumb))
         {
