@@ -257,7 +257,7 @@ namespace SetupTv.Sections
         foreach (GroupMap map in maps)
         {
           Channel ch = map.ReferencedChannel();
-          if (ch.IsTv)
+          if (ch.IsTv && ch.VisibleInGuide)
           {
             channelsO.Add(ch);
           }

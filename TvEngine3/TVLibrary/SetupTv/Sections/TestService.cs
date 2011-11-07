@@ -615,6 +615,7 @@ namespace SetupTv.Sections
         foreach (Channel ch in channels)
         {
           if (ch.IsTv == false) continue;
+          if (ch.VisibleInGuide == false) continue;
           bool hasFta = false;
           bool hasScrambled = false;
           IList<TuningDetail> tuningDetails = ch.ReferringTuningDetail();
@@ -656,6 +657,7 @@ namespace SetupTv.Sections
         {
           Channel ch = map.ReferencedChannel();
           if (ch.IsTv == false) continue;
+          if (ch.VisibleInGuide == false) continue;
           bool hasFta = false;
           bool hasScrambled = false;
           IList<TuningDetail> tuningDetails = ch.ReferringTuningDetail();
