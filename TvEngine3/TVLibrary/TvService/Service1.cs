@@ -815,7 +815,7 @@ namespace TvService
 
           FileVersionInfo versionInfo = FileVersionInfo.GetVersionInfo(Application.ExecutablePath);
 
-          Log.WriteFile("TVService v" + versionInfo.FileVersion + " is starting up on " +
+          Log.WriteFile("TVService Disaster Edition v" + versionInfo.FileVersion + " is starting up on " +
                         OSInfo.OSInfo.GetOSDisplayVersion());
 
           //Check for unsupported operating systems
