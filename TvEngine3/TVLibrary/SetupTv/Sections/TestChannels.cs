@@ -186,7 +186,7 @@ namespace SetupTv.Sections
               while (_users.ContainsKey(user.Name))
               {
                 user.Name = "stress-" + Convert.ToString(rnd.Next(1, 500)) + " [" + priority + "]";
-              }              
+              }
 
               _users.Add(user.Name, true);
               ThreadPool.QueueUserWorkItem(delegate { TuneChannelsForUser(user, channelsForUser); });
@@ -273,7 +273,7 @@ namespace SetupTv.Sections
         channelTestThread.IsBackground = true;
         channelTestThread.Priority = ThreadPriority.Lowest;
         channelsO = channels as List<Channel>;
-        channelsO.AddRange(maps.Select(map => map.ReferencedChannel()).Where(ch => ch.IsTv));
+        channelsO.AddRange(maps.Select(map => map.ReferencedChannel()).Where(ch => ch.IsTv && ch.VisibleInGuide));
         _usersShareChannels = chkShareChannels.Checked;
         _tunedelay = txtTuneDelay.Value;
         _concurrentTunes = txtConcurrentTunes.Value;
@@ -536,7 +536,7 @@ namespace SetupTv.Sections
           item.SubItems[7].Text = "N/A";
         }
       }
-    }    
+    }
 
     private int Add2Log(string state, string channel, double msec, string name, string card, string details)
     {
