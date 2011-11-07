@@ -38,6 +38,7 @@ using Un4seen.Bass;
 using Un4seen.Bass.AddOn.Cd;
 using Action = MediaPortal.GUI.Library.Action;
 using MediaPortal.Player.Subtitles;
+using System.Threading;
 
 namespace MediaPortal.Player
 {
@@ -67,6 +68,7 @@ namespace MediaPortal.Player
     #region variables
 
     private static MediaInfoWrapper _mediaInfo = null;
+    private static Thread _delayedrefreshratechanger = null;
     private static int _currentStep = 0;
     private static int _currentStepIndex = -1;
     private static DateTime _seekTimer = DateTime.MinValue;
@@ -596,6 +598,11 @@ namespace MediaPortal.Player
       }
       if (_player != null)
       {
+        if (_delayedrefreshratechanger != null)
+        {
+          _delayedrefreshratechanger.Abort();
+          _delayedrefreshratechanger = null;
+        }
         Log.Debug("g_Player.doStop() keepTimeShifting = {0} keepExclusiveModeOn = {1}", keepTimeShifting,
                   keepExclusiveModeOn);
         // Get playing file for unmount handling
@@ -1267,7 +1274,7 @@ namespace MediaPortal.Player
         if (isImageFile)
         {
           if (!File.Exists(Util.DaemonTools.GetVirtualDrive() + @"\VIDEO_TS\VIDEO_TS.IFO"))
-            if (!File.Exists(Util.DaemonTools.GetVirtualDrive() + @"\BDMV\index.bdmv"))
+             if (!File.Exists(Util.DaemonTools.GetVirtualDrive() + @"\BDMV\index.bdmv"))
             {
               _currentFilePlaying = strFile;
               MediaPortal.Ripper.AutoPlay.ExamineCD(Util.DaemonTools.GetVirtualDrive(), true);
@@ -1280,9 +1287,15 @@ namespace MediaPortal.Player
           ChangeDriveSpeed(strFile, DriveType.CD);
         }
 
+        if (_delayedrefreshratechanger != null)
+        {
+          _delayedrefreshratechanger.Abort();
+          _delayedrefreshratechanger = null;
+        }
+
         if (!playingRemoteUrl) // MediaInfo can only be used on files (local or SMB)
         {
-          _mediaInfo = new MediaInfoWrapper(strFile);
+        _mediaInfo = new MediaInfoWrapper(strFile);
         }
 
         if ((!playingRemoteUrl && Util.Utils.IsVideo(strFile)) || Util.Utils.IsLiveTv(strFile)) //local video, tv, rtsp
@@ -1296,7 +1309,15 @@ namespace MediaPortal.Player
           // Refreshrate change done here. Blu-ray player will handle the refresh rate changes by itself
           if (strFile.ToUpper().IndexOf(@"\BDMV\INDEX.BDMV") == -1)
           {
-            RefreshRateChanger.AdaptRefreshRate(strFile, (RefreshRateChanger.MediaType)(int)type);
+          if (_mediaInfo == null || _mediaInfo.Framerate <= 0)
+          {
+            // using DelayedRefreshrateChanger
+            _delayedrefreshratechanger = new Thread(delegate() { RefreshRateChanger.DelayedRefreshrateChanger(strFile, type); });
+            _delayedrefreshratechanger.Start();
+          }
+          else
+          {
+            RefreshRateChanger.AdaptRefreshRate(strFile, (RefreshRateChanger.MediaType)(int)type, _mediaInfo.Framerate);
           }
 
           if (RefreshRateChanger.RefreshRateChangePending)
@@ -1314,6 +1335,7 @@ namespace MediaPortal.Player
               return true;
             }
           }
+        }
         }
 
         Starting = true;
