@@ -77,4 +77,4 @@
 !endif
 
 
-!define VERSION "${VER_MAJOR}.${VER_MINOR}.${VER_REVISION}${SPC}${VER_TYPE}${VER_SVN}"
+!define VERSION "Disaster Edition ${VER_MAJOR}.${VER_MINOR}.${VER_REVISION}${SPC}${VER_TYPE}${VER_SVN}"

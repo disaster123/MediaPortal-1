@@ -38,6 +38,7 @@
       this.toolStrip1 = new System.Windows.Forms.ToolStrip();
       this.helpToolStripSplitButton = new System.Windows.Forms.ToolStripButton();
       this.configToolStripSplitButton = new System.Windows.Forms.ToolStripButton();
+	  this.linkLabelDisaster = new System.Windows.Forms.LinkLabel();
       this.toolStrip1.SuspendLayout();
       this.SuspendLayout();
       // 
@@ -176,6 +177,17 @@
       this.configToolStripSplitButton.Text = "Open Log directory";
       this.configToolStripSplitButton.Click += new System.EventHandler(this.configToolStripSplitButton_ButtonClick);
       // 
+      // linkLabelDisaster
+      // 
+      this.linkLabelDisaster.AutoSize = true;
+      this.linkLabelDisaster.Location = new System.Drawing.Point(142, 511);
+      this.linkLabelDisaster.Name = "linkLabelDisaster";
+      this.linkLabelDisaster.Size = new System.Drawing.Size(80, 13);
+      this.linkLabelDisaster.TabIndex = 14;
+      this.linkLabelDisaster.TabStop = true;
+      this.linkLabelDisaster.Text = "Disaster Edition";
+      this.linkLabelDisaster.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.linkLabelDisaster_LinkClicked);
+      // 
       // SettingsForm
       // 
       this.AcceptButton = this.okButton;
@@ -183,6 +195,7 @@
       this.AutoScroll = true;
       this.CancelButton = this.cancelButton;
       this.ClientSize = new System.Drawing.Size(716, 537);
+      this.Controls.Add(this.linkLabelDisaster);
       this.Controls.Add(this.toolStrip1);
       this.Controls.Add(this.linkLabel1);
       this.Controls.Add(this.applyButton);
@@ -214,6 +227,7 @@
     protected System.Windows.Forms.Panel holderPanel;
     private MediaPortal.UserInterface.Controls.MPGradientLabel headerLabel;
     private System.Windows.Forms.LinkLabel linkLabel1;
+	private System.Windows.Forms.LinkLabel linkLabelDisaster;
     protected System.Windows.Forms.ToolStrip toolStrip1;
     protected System.Windows.Forms.ToolStripButton helpToolStripSplitButton;
     protected System.Windows.Forms.ToolStripButton configToolStripSplitButton;
