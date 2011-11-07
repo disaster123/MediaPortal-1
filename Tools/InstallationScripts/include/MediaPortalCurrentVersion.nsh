@@ -42,7 +42,7 @@
 	!define VER_MINOR_DISP		${VER_MINOR}
 	!define VER_REVISION_DISP	${VER_REVISION}
 
-!else 
+!else
 	!define SPC " "
 	!define /math VER_MINOR_DISP	${VER_MINOR} + 1
 	!define VER_REVISION_DISP		0
@@ -103,5 +103,5 @@
 !endif
 
 
-!define VERSION			"${VER_MAJOR}.${VER_MINOR}.${VER_REVISION}${VER_GIT}"
-!define VERSION_DISP	"${VER_MAJOR}.${VER_MINOR_DISP}.${VER_REVISION_DISP}${SPC}${VER_TYPE}${VER_GIT}"
+!define VERSION			"Disaster Edition ${VER_MAJOR}.${VER_MINOR}.${VER_REVISION}${VER_GIT}"
+!define VERSION_DISP	"Disaster Edition ${VER_MAJOR}.${VER_MINOR_DISP}.${VER_REVISION_DISP}${SPC}${VER_TYPE}${VER_GIT}"
