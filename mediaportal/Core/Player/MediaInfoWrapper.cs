@@ -102,7 +102,7 @@ namespace MediaPortal.Player
       bool isAVStream = Util.Utils.IsAVStream(strFile); //other AV streams
 
       //currently disabled for all tv/radio/streaming video
-      if (isTV || isRadio || isRTSP || isAVStream)
+      if (isTV || isRadio || isRTSP || isAVStream || !File.Exists(strFile))
       {
         Log.Debug("MediaInfoWrapper: isTv:{0}, isRadio:{1}, isRTSP:{2}, isAVStream:{3}", isTV, isRadio, isRTSP,
                   isAVStream);
