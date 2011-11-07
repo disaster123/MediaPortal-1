@@ -523,6 +523,7 @@ namespace MediaPortal.Player
       EVRResetStatCounters();
     }
 
+    /// <summary>
     /// Gets EVR frame rate 
     /// Get video FPS - returns FPS from filter graph if 'getReported' is true,
     /// otherwise returns FPS estimated from video timestamps
