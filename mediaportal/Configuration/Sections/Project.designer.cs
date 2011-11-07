@@ -50,6 +50,7 @@ namespace MediaPortal.Configuration.Sections
       this.labelVersion2 = new System.Windows.Forms.Label();
       this.labelVersion1 = new System.Windows.Forms.Label();
       this.paypalPictureBox = new System.Windows.Forms.PictureBox();
+	  this.label1 = new System.Windows.Forms.Label();
       this.groupBoxInfo.SuspendLayout();
       this.groupBoxContact.SuspendLayout();
       this.mpGroupBoxAbout.SuspendLayout();
@@ -222,7 +223,8 @@ namespace MediaPortal.Configuration.Sections
       // mpGroupBoxAbout
       // 
       this.mpGroupBoxAbout.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
-                  | System.Windows.Forms.AnchorStyles.Right)));
+              | System.Windows.Forms.AnchorStyles.Right)));
+      this.mpGroupBoxAbout.Controls.Add(this.label1);
       this.mpGroupBoxAbout.Controls.Add(this.labelVersion3);
       this.mpGroupBoxAbout.Controls.Add(this.labelVersion2);
       this.mpGroupBoxAbout.Controls.Add(this.labelVersion1);
@@ -274,6 +276,16 @@ namespace MediaPortal.Configuration.Sections
       this.paypalPictureBox.TabStop = false;
       this.paypalPictureBox.Click += new System.EventHandler(this.paypalPictureBox_Click);
       // 
+      // label1
+      // 
+      this.label1.AutoSize = true;
+      this.label1.ForeColor = System.Drawing.Color.Red;
+      this.label1.Location = new System.Drawing.Point(59, 36);
+      this.label1.Name = "label1";
+      this.label1.Size = new System.Drawing.Size(80, 13);
+      this.label1.TabIndex = 3;
+      this.label1.Text = "Disaster Edition";
+      // 
       // Project
       // 
       this.Controls.Add(this.paypalPictureBox);
@@ -316,5 +328,6 @@ namespace MediaPortal.Configuration.Sections
     private System.Windows.Forms.Label labelVersion2;
     private System.Windows.Forms.Label labelVersion1;
     private System.Windows.Forms.PictureBox paypalPictureBox;
+	private System.Windows.Forms.Label label1;
   }
 }

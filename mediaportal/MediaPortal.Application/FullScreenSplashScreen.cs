@@ -42,6 +42,7 @@ namespace MediaPortal
     {
       string[] strVersion = version.Split('-');
       lblVersion.Text = strVersion[0];
+      lblVersion.Text += " Disaster Edition";
       Log.Info("Version: Application {0}", strVersion[0]);
       if (strVersion.Length > 1)
       {
