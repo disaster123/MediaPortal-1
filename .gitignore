@@ -9,3 +9,6 @@ obj
 Release
 
 *.orig
+
+*.log
+*.cache
