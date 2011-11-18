@@ -1291,7 +1291,7 @@ namespace TvPlugin
           }
           dlg.ConflictingEpisodes = (scheduleType != (int)ScheduleRecordingType.Once);
           dlg.ConflictingRecording = false;
-          dlg.DoModal(GetID);
+          dlg.DoModal(dialogId);
           switch (dlg.SelectedLabel)
           {
             case 0: // Skip new Recording
