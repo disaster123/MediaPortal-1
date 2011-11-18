@@ -1218,7 +1218,7 @@ namespace TvPlugin
             dlg.AddConflictRecording(item);
           }
           dlg.ConflictingEpisodes = (scheduleType != (int)ScheduleRecordingType.Once);
-          dlg.ConflictingRecording = true;
+		   dlg.ConflictingRecording = true;
           dlg.DoModal(dialogId);
           switch (dlg.SelectedLabel)
           {
