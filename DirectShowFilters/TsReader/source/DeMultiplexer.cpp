@@ -1561,6 +1561,7 @@ void CDeMultiplexer::FillVideoH264(CTsHeader& header, byte* tsPacket)
               m_mpegParserTriggerFormatChange=false;
             }
           }
+          }
         }
         else
         {
@@ -1911,7 +1912,6 @@ void CDeMultiplexer::FillVideoMPEG2(CTsHeader& header, byte* tsPacket)
                   else
                     m_filter.OnMediaTypeChanged(VIDEO_CHANGE);
                 }
-            {
                 if (m_audioChanged || m_videoChanged)
                 {
                   SetMediaChanging(true);

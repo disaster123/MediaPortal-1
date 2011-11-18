@@ -1,0 +1,11 @@
+*.user
+*.pdb
+*.suo
+*.sdf
+*.lib
+*.exp
+
+obj
+Release
+
+*.orig
