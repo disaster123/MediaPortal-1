@@ -65,7 +65,7 @@ public:
   virtual ~CDeMultiplexer(void);
 
   void       Start();
-  void       Flush();
+  void       Flush(bool clearAVready);
   CBuffer*   GetVideo();
   CBuffer*   GetAudio();
   CBuffer*   GetSubtitle();
@@ -130,9 +130,23 @@ public:
   void SetAudioChanging(bool onOff);
   bool IsAudioChanging(void);
 
+  int ReadAheadFromFile();
+
   bool m_DisableDiscontinuitiesFiltering;
   DWORD m_LastDataFromRtsp;
   bool m_bAudioVideoReady;
+  bool m_bFlushDelegated;
+  bool m_bFlushDelgNow;
+  bool m_bFlushRunning;
+  bool m_bReadAheadFromFile;
+
+  //  long m_AudioDataLowCount;
+  //  long m_VideoDataLowCount;
+  long m_AVDataLowCount;
+
+  CCritSec m_sectionFlushAudio;
+  CCritSec m_sectionFlushVideo;
+  CCritSec m_sectionFlushSubtitle;
 
 private:
   struct stAudioStream
@@ -205,7 +219,7 @@ private:
   int m_iAudioIdx;
   int m_iPatVersion;
   int m_ReqPatVersion;
-  int m_WaitNewPatTmo;
+  DWORD m_WaitNewPatTmo;
   int m_receivedPackets;
 
   bool m_bFirstGopFound;
