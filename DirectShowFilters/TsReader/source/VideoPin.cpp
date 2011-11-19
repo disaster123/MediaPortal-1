@@ -330,6 +330,8 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
       }
       else
       {
+        m_bPresentSample = true ;
+        
         CRefTime RefTime, cRefTime, compTemp;
         bool HasTimestamp;
         double fTime = 0.0;
@@ -373,16 +375,27 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
           clock = (double)(RefClock-m_rtStart.m_time)/10000000.0 ;
           fTime = (double)cRefTime.Millisecs()/1000.0f - clock ;
                                                                       
-          if (((fTime > -0.2) && (fTime < 2.5)) || ForcePresent || (m_dRateSeeking != 1.0))
+          if (!ForcePresent && (m_dRateSeeking == 1.0))
           {
-            m_bPresentSample = true;
-            Sleep(1); // Ambass : avoid blocking audio FillBuffer method ( on audio/video starting ) by excessive video Fill buffer preemption
-          }
-          else
-          {
-            // Sample is too late.
-            m_bPresentSample = false ;
-            m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
+            //Discard late samples at start of play,
+            //and samples outside a sensible timing window during play 
+            //(helps with signal corruption recovery)
+            if ((fTime > -0.5) && (fTime < 3.5))
+            {
+              if (fTime > 2.5)
+              {
+                //Too early - stall for a while to avoid over-filling of video pipeline buffers
+                Sleep(10);
+                buffer = NULL;
+                continue;
+              }
+            }
+            else
+            {
+              // Sample is too late.
+              m_bPresentSample = false ;
+              m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
+            }
           }
 
         }
@@ -465,12 +478,15 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
           
           // delete the buffer
           delete buffer;
+          demux.EraseVideoBuff();
         }
         else
         { // Buffer was not displayed because it was out of date, search for next.
           delete buffer;
+          demux.EraseVideoBuff();
           buffer = NULL;
         }
+        Sleep(1); // Avoid excessive video Fill buffer preemption
       }
     } while (buffer == NULL);
     return NOERROR;

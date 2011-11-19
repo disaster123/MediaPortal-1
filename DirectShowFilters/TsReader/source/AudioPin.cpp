@@ -188,11 +188,6 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
   {
     CDeMultiplexer& demux=m_pTsReaderFilter->GetDemultiplexer();
     CBuffer* buffer=NULL;
-
-//    if (!demux.m_bAudioVideoReady)
-//    {
-//      LogDebug("Audio FillBuffer, not m_bAudioVideoReady ");
-//    }
     
     do
     {
@@ -202,7 +197,7 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
       //if the filter is currently seeking to a new position
       //or this pin is currently seeking to a new position then
       //we dont try to read any packets, but simply return...
-      if (m_pTsReaderFilter->IsSeeking() || m_pTsReaderFilter->IsStopping())// /*|| m_bSeeking*/ || m_pTsReaderFilter->IsSeekingToEof())
+      if (m_pTsReaderFilter->IsSeeking() || m_pTsReaderFilter->IsStopping())
       {
         //if (m_pTsReaderFilter->m_ShowBufferAudio) LogDebug("aud:isseeking");
         Sleep(20);
@@ -235,16 +230,15 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
       }
 
       //Wait until we have audio (and video, if pin connected) 
-      if (!demux.m_bAudioVideoReady)
-      {
-        Sleep(5);
-      }
-      else if (buffer==NULL)
+      if (!demux.m_bAudioVideoReady || (buffer==NULL))
       {
         Sleep(10);
+        buffer=NULL; //Continue looping
       }
       else
       {
+        m_bPresentSample = true ;
+        
         int cntA,cntV ;
         CRefTime firstAudio, lastAudio;
         CRefTime firstVideo, lastVideo;
@@ -356,11 +350,18 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
           clock = (double)(RefClock-m_rtStart.m_time)/10000000.0 ;
           fTime = (double)cRefTime.Millisecs()/1000.0f - clock ;
 
-          //if (fTime > -0.05)
-          if ((cRefTime.m_time >= m_pTsReaderFilter->m_ClockOnStart) && (fTime > -0.2) && (fTime < 2.5)) //Discard late or very early samples at start of play
+          //Discard late samples at start of play,
+          //and samples outside a sensible timing window during play 
+          //(helps with signal corruption recovery)
+          if ((cRefTime.m_time >= m_pTsReaderFilter->m_ClockOnStart) && (fTime > -0.2) && (fTime < 2.0))
           {
-            m_bPresentSample = true ;
-            Sleep(2) ;
+            if (fTime > 0.7)
+            {
+              //Too early - stall for a while to avoid over-filling of audio renderer buffers
+              Sleep(10);
+              buffer = NULL;
+              continue;
+            }
           }
           else //Don't drop samples normally - it upsets the rate matching in the audio renderer
           {
@@ -413,12 +414,15 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
           memcpy(pSampleBuffer,buffer->Data(),buffer->Length());
           //delete the buffer and return
           delete buffer;
+          demux.EraseAudioBuff();
         }
         else
         { // Buffer was not displayed because it was out of date, search for next.
           delete buffer;
+          demux.EraseAudioBuff();
           buffer=NULL ;
         }
+        Sleep(2) ;
       }
     } while (buffer==NULL);
     return NOERROR;

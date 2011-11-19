@@ -69,6 +69,8 @@ public:
   CBuffer*   GetVideo();
   CBuffer*   GetAudio();
   CBuffer*   GetSubtitle();
+  void       EraseAudioBuff();
+  void       EraseVideoBuff();
   void       OnTsPacket(byte* tsPacket);
   void       OnNewChannel(CChannelInfo& info);
   void       SetFileReader(FileReader* reader);

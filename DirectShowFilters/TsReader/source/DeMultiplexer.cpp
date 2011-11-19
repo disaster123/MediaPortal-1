@@ -187,12 +187,12 @@ bool CDeMultiplexer::SetAudioStream(int stream)
         SetMediaChanging(true);
         m_filter.m_bForceSeekOnStop=true;     // Force stream to be resumed after
       }
-      else                                    // Mpeg parser info is required or audio graph is already rebuilding.
+      else   // Mpeg parser info is required or audio graph is already rebuilding.
       {
         LogDebug("SetAudioStream : Media already changing");   // just wait 1st GOP
         m_audioChanged = true;
+      }
     }
-  }
   }
   else
   {
@@ -418,7 +418,7 @@ void CDeMultiplexer::FlushVideo()
   _InterlockedAnd(&m_AVDataLowCount, 0) ;
   m_filter.m_bRenderingClockTooFast=false ;
   m_bSetVideoDiscontinuity=true;
-
+  
   Reset();  // PacketSync reset.
 }
 
@@ -455,7 +455,7 @@ void CDeMultiplexer::FlushAudio()
   _InterlockedAnd(&m_AVDataLowCount, 0);
   m_filter.m_bRenderingClockTooFast=false;
   m_bSetAudioDiscontinuity=true;
-
+  
   Reset();  // PacketSync reset.
 }
 
@@ -528,7 +528,7 @@ CBuffer* CDeMultiplexer::GetSubtitle()
   if (m_currentSubtitlePid==0) return NULL;
   if (m_bEndOfFile) return NULL;
   if (m_bHoldSubtitle) return NULL;
-
+  
   //are there subtitle packets in the buffer?
   if (m_vecSubtitleBuffers.size()!=0 )
   {
@@ -558,10 +558,11 @@ CBuffer* CDeMultiplexer::GetVideo()
     return NULL;
   }
 
-  if (  ((m_vecVideoBuffers.size() < 8) 
-     || ((m_LastVideoSample.Millisecs() - m_FirstVideoSample.Millisecs()) < 400) 
-     || (m_LastAudioSample.m_time < m_FirstVideoSample.m_time)) 
-     && !m_bReadAheadFromFile)
+//  if (  ((m_vecVideoBuffers.size() < 8) 
+//     || ((m_LastVideoSample.Millisecs() - m_FirstVideoSample.Millisecs()) < 400) 
+//     || (m_LastAudioSample.m_time < m_FirstVideoSample.m_time)) 
+//     && !m_bReadAheadFromFile)
+  if ((m_vecVideoBuffers.size() < 8) && !m_bReadAheadFromFile)
   {
     //Prefetch some data
     m_bReadAheadFromFile = true;
@@ -581,14 +582,17 @@ CBuffer* CDeMultiplexer::GetVideo()
     if (m_filter.m_bStopping) return NULL;
     if (m_bEndOfFile) return NULL;
 
+    //else try to read some packets from the file
     int SizeRead = ReadFromFile(true,false) ;
 
-    //else try to read some packets from the file
-    if (m_vecVideoBuffers.size()==0 && SizeRead<MIN_READ_SIZE) 
+    if (IsMediaChanging()) return NULL;
+
+    if (m_vecVideoBuffers.size()==0) 
     {
-      // No buffer and nothing to read....
-      if (m_bAudioVideoReady && !m_filter.m_bRenderingClockTooFast) //Running very low on data
+      // No buffer
+      if ((SizeRead < MIN_READ_SIZE) && m_bAudioVideoReady && !m_filter.m_bRenderingClockTooFast)
       {
+        //Running very low on data
         InterlockedIncrement(&m_AVDataLowCount);   
         m_filter.WakeThread();
       }                
@@ -596,22 +600,33 @@ CBuffer* CDeMultiplexer::GetVideo()
     }
   }
 
-  //are there video packets in the buffer?
-  if (m_vecVideoBuffers.size()!=0 && !IsMediaChanging()) // && (m_FirstVideoSample.m_time < m_LastAudioSample.m_time))
-  {
+  if (IsMediaChanging()) return NULL;
+
+  //We should have a video packet available
     CAutoLock lock (&m_sectionVideo);
-    //yup, then return the next one
-    ivecBuffers it =m_vecVideoBuffers.begin();
-    if (it!=m_vecVideoBuffers.end())
+
+  if (m_vecVideoBuffers.size() > 0)
     {
-      CBuffer* videoBuffer=*it;
-      m_vecVideoBuffers.erase(it);
+    ivecBuffers it = m_vecVideoBuffers.begin();
+    CBuffer* videoBuffer = *it;
+    //m_vecVideoBuffers.erase(it);
       return videoBuffer;
     }
-  }
 
   //no video packets available
   return NULL;
+}
+
+//Free a video buffer after use
+void CDeMultiplexer::EraseVideoBuff()
+{
+  CAutoLock lock (&m_sectionVideo);
+  
+  if (m_vecVideoBuffers.size() > 0)
+  {
+    ivecBuffers it = m_vecVideoBuffers.begin();
+    m_vecVideoBuffers.erase(it);
+  }
 }
 
 ///
@@ -629,9 +644,10 @@ CBuffer* CDeMultiplexer::GetAudio()
     return NULL;
   }
 
-  if (   ((m_vecAudioBuffers.size() < 2) 
-      || ((m_LastAudioSample.Millisecs() - m_FirstAudioSample.Millisecs()) < 200))  
-      && !m_bReadAheadFromFile)
+//  if (   ((m_vecAudioBuffers.size() < 2) 
+//      || ((m_LastAudioSample.Millisecs() - m_FirstAudioSample.Millisecs()) < 200))  
+//      && !m_bReadAheadFromFile)
+  if ((m_vecAudioBuffers.size() < 2) && !m_bReadAheadFromFile)
   {
     //Prefetch some data
     m_bReadAheadFromFile = true;
@@ -654,11 +670,12 @@ CBuffer* CDeMultiplexer::GetAudio()
     int SizeRead = ReadFromFile(true,false) ;
 
     //are there audio packets in the buffer?
-    if (m_vecAudioBuffers.size()==0 && SizeRead<MIN_READ_SIZE)
+    if (m_vecAudioBuffers.size()==0)
     {
        // No buffer and nothing to read....
-       if (m_bAudioVideoReady && !m_filter.m_bRenderingClockTooFast) //Running very low on data
+       if ((SizeRead < MIN_READ_SIZE) && m_bAudioVideoReady && !m_filter.m_bRenderingClockTooFast)
        {
+        //Running very low on data
         InterlockedIncrement(&m_AVDataLowCount);   
         m_filter.WakeThread();
        }           
@@ -678,7 +695,7 @@ CBuffer* CDeMultiplexer::GetAudio()
       if (!m_filter.GetAudioPin()->m_EnableSlowMotionOnZapping)
       {
         if (m_LastAudioSample.Millisecs() - m_FirstVideoSample.Millisecs() < 10) return NULL ;   // Not enough simultaneous audio & video to start.
-      }
+      }       
     }
 
 //    // Goal is to start with at least 200mS audio and 400mS video ahead. ( LiveTv and RTSP as TsReader cannot go ahead by itself)
@@ -698,17 +715,33 @@ CBuffer* CDeMultiplexer::GetAudio()
     m_bAudioVideoReady=true ;
   }
 
+  if (IsMediaChanging()) return NULL;
+
   //yup, then return the next one
   CAutoLock lock (&m_sectionAudio);
 
-  ivecBuffers it =m_vecAudioBuffers.begin();
-  CBuffer* audiobuffer=*it;
-  m_vecAudioBuffers.erase(it);
-
-
-  return audiobuffer;
+  if (m_vecAudioBuffers.size() > 0)
+  {
+    ivecBuffers it = m_vecAudioBuffers.begin();
+    CBuffer* audiobuffer = *it;
+    //m_vecAudioBuffers.erase(it);
+    return audiobuffer;
+  }
+  
+  return NULL;
 }
+  
+//Free an audio buffer after use
+void CDeMultiplexer::EraseAudioBuff()
+{
+  CAutoLock lock (&m_sectionAudio);
 
+  if (m_vecAudioBuffers.size() > 0)
+  {
+    ivecBuffers it = m_vecAudioBuffers.begin();
+    m_vecAudioBuffers.erase(it);
+  }
+}
 
 /// Starts the demuxer
 /// This method will read the file until we found the pat/sdt
@@ -971,7 +1004,7 @@ void CDeMultiplexer::OnTsPacket(byte* tsPacket)
   {
     return;
   }
-
+  
   //Buffers about to be flushed
   if (m_bFlushDelgNow || m_bFlushRunning)
   {
@@ -1108,7 +1141,7 @@ void CDeMultiplexer::FillAudio(CTsHeader& header, byte* tsPacket)
                 LogDebug("Demux : Audio to render too late= %03.3f Sec", Delta) ;
                 //  m_filter.m_bRenderingClockTooFast=true;
                 m_MinAudioDelta+=1.0;
-                m_MinVideoDelta+=1.0;
+                m_MinVideoDelta+=1.0;                
               }
             }
           }
@@ -1126,7 +1159,7 @@ void CDeMultiplexer::FillAudio(CTsHeader& header, byte* tsPacket)
         {
           LogDebug(" No data");
           m_AudioValidPES=false; //stop further processing
-      }
+        }
       }
 
       if (m_AudioValidPES)
@@ -1151,6 +1184,7 @@ void CDeMultiplexer::FillAudio(CTsHeader& header, byte* tsPacket)
             m_vecAudioBuffers.erase(it);
             
             //Something is going wrong - Flush the world
+            LogDebug("DeMultiplexer: Audio buffer overrun");
             m_bFlushDelegated = true;
             m_filter.WakeThread();            
           }
@@ -1211,7 +1245,7 @@ void CDeMultiplexer::FillAudio(CTsHeader& header, byte* tsPacket)
 
 /// This method will check if the tspacket is an video packet
 void CDeMultiplexer::FillVideo(CTsHeader& header, byte* tsPacket)
-{
+{                  
   if (m_pids.videoPids.size() == 0 || m_pids.videoPids[0].Pid==0) return;
   if (header.Pid!=m_pids.videoPids[0].Pid) return;
 
@@ -1472,39 +1506,40 @@ void CDeMultiplexer::FillVideoH264(CTsHeader& header, byte* tsPacket)
               pCurrentVideoBuffer->SetDiscontinuity();
             }
             
-              REFERENCE_TIME MediaTime;
-              m_filter.GetMediaPosition(&MediaTime);
-              if (m_filter.m_bStreamCompensated && m_bVideoAtEof && !m_filter.m_bRenderingClockTooFast)
+            REFERENCE_TIME MediaTime;
+            m_filter.GetMediaPosition(&MediaTime);
+            if (m_filter.m_bStreamCompensated && m_bVideoAtEof && !m_filter.m_bRenderingClockTooFast)
+            {
+              float Delta = (float)((double)Ref.Millisecs()/1000.0)-(float)((double)(m_filter.Compensation.m_time+MediaTime)/10000000.0) ;
+              if (Delta < m_MinVideoDelta)
               {
-                 float Delta = (float)((double)Ref.Millisecs()/1000.0)-(float)((double)(m_filter.Compensation.m_time+MediaTime)/10000000.0) ;
-                 if (Delta < m_MinVideoDelta)
-                 {
-                   m_MinVideoDelta=Delta;
-                   if (Delta < 0.2)
-                   {
+                m_MinVideoDelta=Delta;
+                if (Delta < 0.2)
+                {
                   //InterlockedIncrement(&m_VideoDataLowCount);              
                   LogDebug("Demux : Video to render too late= %03.3f Sec", Delta) ;
                   //  m_filter.m_bRenderingClockTooFast=true;
-                     m_MinAudioDelta+=1.0;
-                     m_MinVideoDelta+=1.0;
-                   }
+                  m_MinAudioDelta+=1.0;
+                  m_MinVideoDelta+=1.0;                
+                }
                 else
                 {
                   LogDebug("Demux : Video to render %03.3f Sec", Delta);
                 }
-                 }
               }
-              m_bVideoAtEof = false;
+            }
+            m_bVideoAtEof = false;
 
             if (m_vecVideoBuffers.size()<=MAX_BUF_SIZE)
             {
-            // ownership is transfered to vector
-            m_vecVideoBuffers.push_back(pCurrentVideoBuffer);
-          }
+              // ownership is transfered to vector
+              m_vecVideoBuffers.push_back(pCurrentVideoBuffer);
+            }
             else
             {
               m_bSetVideoDiscontinuity = true;            
               //Something is going wrong - Flush the world
+              LogDebug("DeMultiplexer: Video buffer overrun");
               m_bFlushDelegated = true;
               m_filter.WakeThread();            
             }
@@ -1551,7 +1586,7 @@ void CDeMultiplexer::FillVideoH264(CTsHeader& header, byte* tsPacket)
                   m_filter.OnMediaTypeChanged(VIDEO_CHANGE | AUDIO_CHANGE);
                 else if (m_audioChanged)
                   m_filter.OnMediaTypeChanged(AUDIO_CHANGE);
-                else
+              else
                   m_filter.OnMediaTypeChanged(VIDEO_CHANGE);
               }
               else
@@ -1561,7 +1596,7 @@ void CDeMultiplexer::FillVideoH264(CTsHeader& header, byte* tsPacket)
               m_mpegParserTriggerFormatChange=false;
             }
           }
-          }
+        }
         }
         else
         {
@@ -1845,12 +1880,12 @@ void CDeMultiplexer::FillVideoMPEG2(CTsHeader& header, byte* tsPacket)
               m_filter.GetMediaPosition(&MediaTime);
               if (m_filter.m_bStreamCompensated && m_bVideoAtEof && !m_filter.m_bRenderingClockTooFast)
               {
-                 float Delta = (float)((double)Ref.Millisecs()/1000.0)-(float)((double)(m_filter.Compensation.m_time+MediaTime)/10000000.0) ;
-                 if (Delta < m_MinVideoDelta)
-                 {
-                   m_MinVideoDelta=Delta;
-                   if (Delta < 0.2)
-                   {
+                float Delta = (float)((double)Ref.Millisecs()/1000.0)-(float)((double)(m_filter.Compensation.m_time+MediaTime)/10000000.0) ;
+                if (Delta < m_MinVideoDelta)
+                {
+                  m_MinVideoDelta=Delta;
+                  if (Delta < 0.2)
+                  {
                     //InterlockedIncrement(&m_VideoDataLowCount);              
                     LogDebug("Demux : Video to render too late= %03.3f Sec", Delta) ;
                     //  m_filter.m_bRenderingClockTooFast=true;
@@ -1860,20 +1895,21 @@ void CDeMultiplexer::FillVideoMPEG2(CTsHeader& header, byte* tsPacket)
                   else
                   {
                     LogDebug("Demux : Video to render %03.3f Sec", Delta);
-                   }
-                 }
+                  }
+                }
               }
               m_bVideoAtEof = false ;
 
               if (m_vecVideoBuffers.size()<=MAX_BUF_SIZE)
               {
-              // ownership is transfered to vector
-              m_vecVideoBuffers.push_back(pCurrentVideoBuffer);
-            }
+                // ownership is transfered to vector
+                m_vecVideoBuffers.push_back(pCurrentVideoBuffer);
+              }
               else
               {
                 m_bSetVideoDiscontinuity = true;
                 //Something is going wrong - Flush the world
+                LogDebug("DeMultiplexer: Video buffer overrun");
                 m_bFlushDelegated = true;
                 m_filter.WakeThread();            
               }
@@ -2050,7 +2086,7 @@ void CDeMultiplexer::OnNewChannel(CChannelInfo& info)
 {
   //CAutoLock lock (&m_section);
   CPidTable pids=info.PidTable;
-
+  
   //LogDebug("OnNewChannel callback, pat version:%d->%d",m_iPatVersion, info.PatVersion);
 
   if (info.PatVersion != m_iPatVersion)
@@ -2169,7 +2205,7 @@ void CDeMultiplexer::OnNewChannel(CChannelInfo& info)
     }
   }
   #endif
-
+  
   m_iAudioStream = 0;
 
   LogDebug ("Setting initial audio index to : %i", m_iAudioStream);
