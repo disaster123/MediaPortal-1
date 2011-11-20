@@ -452,9 +452,10 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
               if (m_pTsReaderFilter->m_ShowBufferVideo || fTime < 0.030)
               {
                 int cntA, cntV;
+                DWORD  audSampleCount;
                 CRefTime firstAudio, lastAudio;
                 CRefTime firstVideo, lastVideo;
-                cntA = demux.GetAudioBufferPts(firstAudio, lastAudio); 
+                cntA = demux.GetAudioBufferPts(firstAudio, lastAudio, audSampleCount); 
                 cntV = demux.GetVideoBufferPts(firstVideo, lastVideo) + 1;
 
                 LogDebug("Vid/Ref : %03.3f, Late %c-frame(%02d), Compensated = %03.3f ( %0.3f A/V buffers=%02d/%02d), Clk : %f, State %d, TsMeanDiff %0.3f ms", (float)RefTime.Millisecs()/1000.0f,buffer->GetFrameType(),buffer->GetFrameCount(), (float)cRefTime.Millisecs()/1000.0f, fTime, cntA,cntV,clock, m_pTsReaderFilter->State(), (float)m_fMTDMean/10000.0f);

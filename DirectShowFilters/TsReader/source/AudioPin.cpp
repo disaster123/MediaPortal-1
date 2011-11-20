@@ -240,9 +240,10 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
         m_bPresentSample = true ;
         
         int cntA,cntV ;
+        DWORD  audSampleCount;
         CRefTime firstAudio, lastAudio;
         CRefTime firstVideo, lastVideo;
-        cntA = demux.GetAudioBufferPts(firstAudio, lastAudio) + 1; // this one...
+        cntA = demux.GetAudioBufferPts(firstAudio, lastAudio, audSampleCount); // this one...
         cntV = demux.GetVideoBufferPts(firstVideo, lastVideo);
         #define PRESENT_DELAY 0000000
         
@@ -254,6 +255,7 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
           CRefTime AddVideoCompensation ;
           LogDebug("Audio Samples : %d, First : %03.3f, Last : %03.3f",cntA, (float)firstAudio.Millisecs()/1000.0f,(float)lastAudio.Millisecs()/1000.0f);
           LogDebug("Video Samples : %d, First : %03.3f, Last : %03.3f",cntV, (float)firstVideo.Millisecs()/1000.0f,(float)lastVideo.Millisecs()/1000.0f);
+                    
           if (m_pTsReaderFilter->GetVideoPin()->IsConnected())
           {
             if (firstAudio.Millisecs() < firstVideo.Millisecs())
@@ -319,6 +321,16 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
           //set flag to false so we dont keep compensating
           m_pTsReaderFilter->m_bStreamCompensated = true;
           m_bSubtitleCompensationSet = false;
+        }
+
+        //Calculate sleep times (average sample duration/4)
+        if ((audSampleCount > 0) && ((lastAudio.Millisecs() - firstAudio.Millisecs()) > 0) && (m_dRateSeeking == 1.0))
+        {
+          m_sampleSleepTime = min(50, max(1,(lastAudio.Millisecs() - firstAudio.Millisecs())/(audSampleCount*4)));
+        }
+        else
+        {
+          m_sampleSleepTime = 1;
         }
 
         // Subtitle filter is "found" only after Run() has been completed
@@ -395,7 +407,7 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
             {
               if (m_pTsReaderFilter->m_ShowBufferAudio || fTime < 0.030)
               {
-                LogDebug("Aud/Ref : %03.3f, Late              Compensated = %03.3f ( %0.3f A/V buffers=%02d/%02d), Clk : %f, State %d", (float)RefTime.Millisecs()/1000.0f, (float)cRefTime.Millisecs()/1000.0f, fTime,cntA,cntV, clock, m_pTsReaderFilter->State());
+                LogDebug("Aud/Ref : %03.3f, Late              Compensated = %03.3f ( %0.3f A/V buffers=%02d/%02d), Clk : %f, State %d, Sleep %d ms", (float)RefTime.Millisecs()/1000.0f, (float)cRefTime.Millisecs()/1000.0f, fTime,cntA,cntV, clock, m_pTsReaderFilter->State(), m_sampleSleepTime);
               }
               if (m_pTsReaderFilter->m_ShowBufferAudio) m_pTsReaderFilter->m_ShowBufferAudio--;
             }
@@ -415,14 +427,15 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
           //delete the buffer and return
           delete buffer;
           demux.EraseAudioBuff();
+          Sleep(m_sampleSleepTime) ; //Sleep for a time derived from data rate
         }
         else
         { // Buffer was not displayed because it was out of date, search for next.
           delete buffer;
           demux.EraseAudioBuff();
           buffer=NULL ;
+          Sleep(1) ;
         }
-        Sleep(2) ;
       }
     } while (buffer==NULL);
     return NOERROR;
@@ -489,6 +502,8 @@ HRESULT CAudioPin::OnThreadStartPlay()
   //is not belonging to any previous data
   m_bDiscontinuity = TRUE;
   m_bPresentSample = false;
+  
+  m_sampleSleepTime = 1;
 
   LogDebug("aud:OnThreadStartPlay(%f) %02.2f", (float)m_rtStart.Millisecs()/1000.0f, m_dRateSeeking);
 

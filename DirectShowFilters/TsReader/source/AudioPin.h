@@ -64,6 +64,7 @@ protected:
   CCritSec* m_section;
   bool      m_bPresentSample;
   bool      m_bSubtitleCompensationSet;
+  DWORD     m_sampleSleepTime;
 };
 
 #endif

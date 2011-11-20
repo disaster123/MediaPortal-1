@@ -104,6 +104,7 @@ CDeMultiplexer::CDeMultiplexer(CTsDuration& duration,CTsReaderFilter& filter)
   m_AudioPrevCC = -1;
   m_FirstAudioSample = 0x7FFFFFFF00000000LL;
   m_LastAudioSample = 0;
+  m_AudioSampleCount = 0;
 
   m_WaitHeaderPES=-1 ;
   m_VideoPrevCC = -1;
@@ -447,6 +448,7 @@ void CDeMultiplexer::FlushAudio()
   m_AudioPrevCC = -1;
   m_FirstAudioSample = 0x7FFFFFFF00000000LL;
   m_LastAudioSample = 0;
+  m_AudioSampleCount = 0;
   m_lastAudioPTS.IsValid = false;
   m_AudioValidPES = false;
   m_pCurrentAudioBuffer = new CBuffer();
@@ -1196,7 +1198,8 @@ void CDeMultiplexer::FillAudio(CTsHeader& header, byte* tsPacket)
             if (Ref < m_FirstAudioSample) m_FirstAudioSample = Ref;
             if (Ref > m_LastAudioSample) m_LastAudioSample = Ref;
           }
-
+          m_AudioSampleCount++;
+          
           m_vecAudioBuffers.push_back(*it);
           m_t_vecAudioBuffers.erase(it);
         }
@@ -2071,10 +2074,11 @@ int CDeMultiplexer::GetVideoBufferPts(CRefTime& First, CRefTime& Last)
   return m_vecVideoBuffers.size();
 }
 
-int CDeMultiplexer::GetAudioBufferPts(CRefTime& First, CRefTime& Last)
+int CDeMultiplexer::GetAudioBufferPts(CRefTime& First, CRefTime& Last, DWORD& SampleCount)
 {
   First = m_FirstAudioSample;
   Last = m_LastAudioSample;
+  SampleCount = m_AudioSampleCount;
   return m_vecAudioBuffers.size();
 }
 

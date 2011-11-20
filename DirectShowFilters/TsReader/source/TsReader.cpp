@@ -1447,9 +1447,20 @@ void CTsReaderFilter::ThreadProc()
       {
         CRefTime firstAudio, lastAudio;
         CRefTime firstVideo, lastVideo;
-        int cntA = m_demultiplexer.GetAudioBufferPts(firstAudio, lastAudio);
+        DWORD  audSampleCount, audSampleDur;
+        int cntA = m_demultiplexer.GetAudioBufferPts(firstAudio, lastAudio, audSampleCount);
         int cntV = m_demultiplexer.GetVideoBufferPts(firstVideo, lastVideo);
-        LogDebug("Buffers : A/V = %d/%d, A last : %03.3f, V Last : %03.3f", cntA, cntV, (float)lastAudio.Millisecs()/1000.0f,(float)lastVideo.Millisecs()/1000.0f);
+        
+        if ((audSampleCount > 0) && ((lastAudio.Millisecs() - firstAudio.Millisecs()) > 0))
+        {
+          audSampleDur = max(1,(lastAudio.Millisecs() - firstAudio.Millisecs())/audSampleCount);
+        }
+        else
+        {
+          audSampleDur = 1;
+        }
+        
+        LogDebug("Buffers : A/V = %d/%d, A last : %03.3f, V Last : %03.3f, ASD : %d ms", cntA, cntV, (float)lastAudio.Millisecs()/1000.0f,(float)lastVideo.Millisecs()/1000.0f, audSampleDur);
       }
                         
     }
