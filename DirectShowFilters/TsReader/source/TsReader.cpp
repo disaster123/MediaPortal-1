@@ -442,7 +442,7 @@ STDMETHODIMP CTsReaderFilter::GetState(DWORD dwMilliSecsTimeout, FILTER_STATE *p
     //FFWD is more responsive if we return VFW_S_CANT_CUE when rate != 1.0
     if (m_demultiplexer.m_bAudioVideoReady || (playRate != 1.0))
     {
-      LogDebug("CTsReaderFilter::GetState(), VFW_S_CANT_CUE, playRate %f",(float)playRate);
+      //LogDebug("CTsReaderFilter::GetState(), VFW_S_CANT_CUE, playRate %f",(float)playRate);
       return VFW_S_CANT_CUE;
     }
     else
@@ -454,7 +454,7 @@ STDMETHODIMP CTsReaderFilter::GetState(DWORD dwMilliSecsTimeout, FILTER_STATE *p
   }
   else
   {
-    LogDebug("CTsReaderFilter::GetState(), %d", m_State);
+    //LogDebug("CTsReaderFilter::GetState(), %d", m_State);
     return S_OK;
   }
 }
@@ -1447,20 +1447,19 @@ void CTsReaderFilter::ThreadProc()
       {
         CRefTime firstAudio, lastAudio;
         CRefTime firstVideo, lastVideo;
-        DWORD  audSampleCount, audSampleDur;
+        DWORD  audSampleCount;
+        DWORD  audSampleSleep = 0;
+        float  audSampleDur = 0.0;
         int cntA = m_demultiplexer.GetAudioBufferPts(firstAudio, lastAudio, audSampleCount);
         int cntV = m_demultiplexer.GetVideoBufferPts(firstVideo, lastVideo);
         
-        if ((audSampleCount > 0) && ((lastAudio.Millisecs() - firstAudio.Millisecs()) > 0))
+        if (m_pAudioPin->IsConnected())
         {
-          audSampleDur = max(1,(lastAudio.Millisecs() - firstAudio.Millisecs())/audSampleCount);
-        }
-        else
-        {
-          audSampleDur = 1;
+          audSampleDur = ((float)m_pAudioPin->m_sampleDuration)/10000.0;
+          audSampleSleep = m_pAudioPin->m_sampleSleepTime;
         }
         
-        LogDebug("Buffers : A/V = %d/%d, A last : %03.3f, V Last : %03.3f, ASD : %d ms", cntA, cntV, (float)lastAudio.Millisecs()/1000.0f,(float)lastVideo.Millisecs()/1000.0f, audSampleDur);
+        LogDebug("Buffers : A/V = %d/%d, A last : %03.3f, V Last : %03.3f, ADur : %03.3f ms, ASlp : %d ms", cntA, cntV, (float)lastAudio.Millisecs()/1000.0f,(float)lastVideo.Millisecs()/1000.0f, audSampleDur, audSampleSleep);
       }
                         
     }
