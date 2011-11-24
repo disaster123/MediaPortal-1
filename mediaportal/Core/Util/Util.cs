@@ -644,7 +644,7 @@ namespace MediaPortal.Util
           return;
         }
 
-        if (IsPicture(item.Path))
+        if (!IsVideo(item.Path))
         {
           Log.Debug("SetThumbnails: nothing to do.");
           return;
