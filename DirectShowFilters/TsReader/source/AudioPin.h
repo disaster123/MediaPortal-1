@@ -69,6 +69,7 @@ protected:
   bool      m_bPresentSample;
   bool      m_bSubtitleCompensationSet;
   
+  void     ClearAverageSampleDur();
   LONGLONG GetAverageSampleDur (LONGLONG timeStamp);
     
   LONGLONG  m_pllASD [NB_ASDSIZE];   // timestamp buffer for average Audio sample duration calculation

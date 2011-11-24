@@ -1315,7 +1315,7 @@ void CTsReaderFilter::ThreadProc()
     }
 
     //File read prefetch
-    if (m_demultiplexer.m_bReadAheadFromFile && (((timeNow - 10) > lastFileReadTime) || (timeNow < lastFileReadTime)))
+    if (m_demultiplexer.m_bReadAheadFromFile && (((timeNow - 5) > lastFileReadTime) || (timeNow < lastFileReadTime)))
     {
       lastFileReadTime = timeNow; 
       m_demultiplexer.ReadAheadFromFile();
@@ -1767,7 +1767,7 @@ void CTsReaderFilter::SetMediaPosition(REFERENCE_TIME MediaPos)
 
 void CTsReaderFilter::BufferingPause(bool longPause)
 {
-// Must be called from CTsReaderFilter::ThreadProc() to allow TsReader to "Pause" itself without deadlock issue.
+  // Must be called from CTsReaderFilter::ThreadProc() to allow TsReader to "Pause" itself without deadlock issue.
 
     if (m_bPauseOnClockTooFast)
       return ;                  // Do not re-enter !
@@ -1783,33 +1783,14 @@ void CTsReaderFilter::BufferingPause(bool longPause)
     if (longPause)
     {
       sleepTime = 195 ;    //Longer pauses at start of play              
-      minDelayTime = 400 ; //Shorter time between pauses at start of play   
+      minDelayTime = 500 ; //Shorter time between pauses at start of play   
     }          
-
-//    DWORD sleepTime = 50; //Pause length
-//    DWORD minDelayTime = 5000; //Min time between pauses
-//    if (((m_MediaPos/10000)-m_absSeekTime.Millisecs()) < (20*1000))
-//    {
-//      sleepTime = 100 ;    //Longer pauses at start of play              
-//      minDelayTime = 1000 ; //Shorter time between pauses at start of play              
-//    }          
     
     //Don't pause too soon after last time
     if ((timeGetTime()- m_lastPause) < minDelayTime)
     {
       return ;                  
     }
-
-//    if (State() == State_Running)
-//    {
-//      m_bPauseOnClockTooFast=true ;
-//      LogDebug("Pause %d mS renderer clock to match provider/RTSP clock...", sleepTime) ; 
-//      DeltaCompensation((REFERENCE_TIME)sleepTime * 10000); 
-//      m_lastPause = timeGetTime();
-//      m_bPauseOnClockTooFast=false ;
-//      m_ShowBufferVideo = 2;
-//      m_ShowBufferAudio = 2;
-//    }
 
     if (State() == State_Running)
     {
@@ -1836,7 +1817,6 @@ void CTsReaderFilter::BufferingPause(bool longPause)
       }
       m_bPauseOnClockTooFast=false ;
     }
-
 }
 
 void CTsReaderFilter::DeltaCompensation(REFERENCE_TIME deltaComp)

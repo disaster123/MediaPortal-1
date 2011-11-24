@@ -234,6 +234,10 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
       {
         Sleep(10);
         buffer=NULL; //Continue looping
+        if (!demux.m_bAudioVideoReady && (m_nNextASD != 0))
+        {
+          ClearAverageSampleDur();
+        }
       }
       else
       {
@@ -328,7 +332,7 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
         if (m_dRateSeeking == 1.0)
         {
           m_sampleDuration = GetAverageSampleDur(lastAudio.GetUnits());
-          m_sampleSleepTime = min(50, max(1, m_sampleDuration/40000));
+          m_sampleSleepTime = min(20, max(1, m_sampleDuration/40000));
         }
         else
         {
@@ -456,6 +460,19 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
   return NOERROR;
 }
 
+void CAudioPin::ClearAverageSampleDur()
+{
+  m_sampleSleepTime = 1;
+  m_sampleDuration = 10000; //1 ms
+
+  m_llLastComp = 0;
+  m_llLastASDts = 0;
+  m_nNextASD = 0;
+	m_fASDMean = 0;
+	m_llASDSumAvg = 0;
+  ZeroMemory((void*)&m_pllASD, sizeof(LONGLONG) * NB_ASDSIZE);
+}
+
 // Calculate rolling average audio sample duration
 LONGLONG CAudioPin::GetAverageSampleDur(LONGLONG timeStamp)
 {
@@ -549,16 +566,8 @@ HRESULT CAudioPin::OnThreadStartPlay()
   m_bDiscontinuity = TRUE;
   m_bPresentSample = false;
   
-  m_sampleSleepTime = 1;
-  m_sampleDuration = 10000; //1 ms
-
-  m_llLastComp = 0;
-  m_llLastASDts = 0;
-  m_nNextASD = 0;
-	m_fASDMean = 0;
-	m_llASDSumAvg = 0;
-  ZeroMemory((void*)&m_pllASD, sizeof(LONGLONG) * NB_ASDSIZE);
-
+  ClearAverageSampleDur();
+  
   LogDebug("aud:OnThreadStartPlay(%f) %02.2f", (float)m_rtStart.Millisecs()/1000.0f, m_dRateSeeking);
 
   //start playing
