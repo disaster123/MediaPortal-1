@@ -569,10 +569,10 @@ CBuffer* CDeMultiplexer::GetVideo()
     m_filter.WakeThread();
   }
 
-    if (m_vecVideoBuffers.size()==0) 
-    {
-      return NULL;
-    }
+  if (m_vecVideoBuffers.size()==0)
+  {
+    return NULL;
+  }
 
   //We should have a video packet available
   CAutoLock lock (&m_sectionVideo);
@@ -626,9 +626,9 @@ CBuffer* CDeMultiplexer::GetAudio()
   // when there are no audio packets at the moment
   // then try to read some from the current file
   if (!m_bAudioVideoReady && (m_vecAudioBuffers.size()>0))
-    {
-    // Goal is to start with at least 200mS audio and 200mS video ahead. ( LiveTv and RTSP as TsReader cannot go ahead by itself)
-    if (m_LastAudioSample.Millisecs() - m_FirstAudioSample.Millisecs() < 310) return NULL ;       // Not enough audio to start.
+  {
+    // Goal is to start with at least 500mS audio and 300mS video ahead. ( LiveTv and RTSP as TsReader cannot go ahead by itself)
+    if (m_LastAudioSample.Millisecs() - m_FirstAudioSample.Millisecs() < 510) return NULL ;       // Not enough audio to start.
 
     if (m_filter.GetVideoPin()->IsConnected())
     {

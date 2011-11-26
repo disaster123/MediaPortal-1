@@ -173,7 +173,7 @@ CTsReaderFilter::CTsReaderFilter(IUnknown *pUnk, HRESULT *phr):
   LogDebug("----- Graph rebuild patch -----");
   LogDebug("--------------- v0.4.14 -------------------");
   LogDebug("--- Buffer-empty rate control testing ----");
-  LogDebug("---------- v0.4.32 XXX -------------------");
+  LogDebug("---------- v0.4.33 XXX -------------------");
 
   m_fileReader=NULL;
   m_fileDuration=NULL;
