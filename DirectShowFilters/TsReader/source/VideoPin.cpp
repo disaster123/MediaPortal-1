@@ -487,7 +487,18 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
           demux.EraseVideoBuff();
           buffer = NULL;
         }
-        Sleep(1); // Avoid excessive video Fill buffer preemption
+         
+        // Avoid excessive video Fill buffer preemption
+        DWORD sleepTime;
+        if (demux.GetVideoBufferCnt(&sleepTime) < 3)
+        {
+          // Getting low on buffered data
+          Sleep(sleepTime);
+        }
+        else
+        {
+          Sleep(1);
+        }
       }
     } while (buffer == NULL);
     return NOERROR;

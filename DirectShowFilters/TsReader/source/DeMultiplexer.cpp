@@ -2009,6 +2009,20 @@ void CDeMultiplexer::FillTeletext(CTsHeader& header, byte* tsPacket)
   }
 }
 
+int CDeMultiplexer::GetVideoBufferCnt(DWORD* sleepTime)
+{
+  int fps = m_mpegPesParser->basicVideoInfo.fps;
+  if ((fps > 20) && (fps < 100))
+  {
+    *sleepTime = (DWORD)(250/fps);
+  }
+  else
+  {
+    *sleepTime = 1;
+  }
+  return m_vecVideoBuffers.size();
+}
+
 int CDeMultiplexer::GetVideoBufferPts(CRefTime& First, CRefTime& Last)
 {
   First = m_FirstVideoSample;

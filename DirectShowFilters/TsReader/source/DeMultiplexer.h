@@ -86,6 +86,7 @@ public:
 
   int        GetAudioBufferPts(CRefTime& First, CRefTime& Last, DWORD& SampleCount) ;
   int        GetVideoBufferPts(CRefTime& First, CRefTime& Last) ;
+  int        GetVideoBufferCnt(DWORD* sleepTime);
 
   bool       SetAudioStream(__int32 stream);
   bool       GetAudioStream(__int32 &stream);
