@@ -1836,7 +1836,7 @@ namespace TvPlugin
       if (guiControl != null)
       {
         height = guiControl.YPosition;
-        height -= GetControl((int)Controls.IMG_CHAN1).YPosition;
+      height -= GetControl((int)Controls.IMG_CHAN1).YPosition;
       }
       else
       {
@@ -3745,7 +3745,7 @@ namespace TvPlugin
         {
           GuideChannel tvGuidChannel = new GuideChannel();
           tvGuidChannel.channel = new Channel(false, true, 0, DateTime.MinValue, false,
-                                              DateTime.MinValue, 0, true, "", GUILocalizeStrings.Get(911));
+                                              DateTime.MinValue, 0, true, "", GUILocalizeStrings.Get(911), 0);
           for (int i = 0; i < 10; ++i)
           {
             _channelList.Add(tvGuidChannel);
