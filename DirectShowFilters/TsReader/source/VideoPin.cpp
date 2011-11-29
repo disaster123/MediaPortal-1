@@ -452,10 +452,9 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
               if (m_pTsReaderFilter->m_ShowBufferVideo || fTime < 0.030)
               {
                 int cntA, cntV;
-                DWORD  audSampleCount;
                 CRefTime firstAudio, lastAudio;
                 CRefTime firstVideo, lastVideo;
-                cntA = demux.GetAudioBufferPts(firstAudio, lastAudio, audSampleCount); 
+                cntA = demux.GetAudioBufferPts(firstAudio, lastAudio); 
                 cntV = demux.GetVideoBufferPts(firstVideo, lastVideo) + 1;
 
                 LogDebug("Vid/Ref : %03.3f, Late %c-frame(%02d), Compensated = %03.3f ( %0.3f A/V buffers=%02d/%02d), Clk : %f, State %d, TsMeanDiff %0.3f ms", (float)RefTime.Millisecs()/1000.0f,buffer->GetFrameType(),buffer->GetFrameCount(), (float)cRefTime.Millisecs()/1000.0f, fTime, cntA,cntV,clock, m_pTsReaderFilter->State(), (float)m_fMTDMean/10000.0f);
@@ -489,15 +488,25 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
         }
          
         // Avoid excessive video Fill buffer preemption
-        DWORD sleepTime;
-        if (demux.GetVideoBufferCnt(&sleepTime) < 3)
-        {
-          // Getting low on buffered data
-          Sleep(sleepTime);
-        }
-        else
+        double frameTime;
+        int buffCnt = demux.GetVideoBufferCnt(&frameTime);
+        if (buffCnt >= 5)
         {
           Sleep(1);
+        }
+        else if (buffCnt < 1)
+        {
+          Sleep(5);
+        }
+        else if (buffCnt < 3)
+        {
+          // Getting very low on buffered data - slow down emptying rate
+          Sleep(max(1,(DWORD)frameTime));
+        }
+        else // < 5
+        {
+          // Getting low on buffered data - slow down emptying rate
+          Sleep(max(1,(DWORD)(frameTime/2.0)));
         }
       }
     } while (buffer == NULL);

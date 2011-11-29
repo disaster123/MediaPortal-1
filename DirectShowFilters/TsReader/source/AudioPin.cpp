@@ -245,10 +245,9 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
         DWORD sampSleepTime = 1;
         
         int cntA,cntV ;
-        DWORD  audSampleCount;
         CRefTime firstAudio, lastAudio;
         CRefTime firstVideo, lastVideo;
-        cntA = demux.GetAudioBufferPts(firstAudio, lastAudio, audSampleCount); // this one...
+        cntA = demux.GetAudioBufferPts(firstAudio, lastAudio); // this one...
         cntV = demux.GetVideoBufferPts(firstVideo, lastVideo);
         #define PRESENT_DELAY 0000000
         

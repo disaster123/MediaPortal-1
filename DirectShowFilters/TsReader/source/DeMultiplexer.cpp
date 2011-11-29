@@ -104,7 +104,6 @@ CDeMultiplexer::CDeMultiplexer(CTsDuration& duration,CTsReaderFilter& filter)
   m_AudioPrevCC = -1;
   m_FirstAudioSample = 0x7FFFFFFF00000000LL;
   m_LastAudioSample = 0;
-  m_AudioSampleCount = 0;
 
   m_WaitHeaderPES=-1 ;
   m_VideoPrevCC = -1;
@@ -448,7 +447,6 @@ void CDeMultiplexer::FlushAudio()
   m_AudioPrevCC = -1;
   m_FirstAudioSample = 0x7FFFFFFF00000000LL;
   m_LastAudioSample = 0;
-  m_AudioSampleCount = 0;
   m_lastAudioPTS.IsValid = false;
   m_AudioValidPES = false;
   m_pCurrentAudioBuffer = new CBuffer();
@@ -1140,7 +1138,6 @@ void CDeMultiplexer::FillAudio(CTsHeader& header, byte* tsPacket)
             if (Ref < m_FirstAudioSample) m_FirstAudioSample = Ref;
             if (Ref > m_LastAudioSample) m_LastAudioSample = Ref;
           }
-          m_AudioSampleCount++;
           
           m_vecAudioBuffers.push_back(*it);
           m_t_vecAudioBuffers.erase(it);
@@ -2009,18 +2006,24 @@ void CDeMultiplexer::FillTeletext(CTsHeader& header, byte* tsPacket)
   }
 }
 
-int CDeMultiplexer::GetVideoBufferCnt(DWORD* sleepTime)
+int CDeMultiplexer::GetVideoBufferCnt(double* frameTime)
 {
   int fps = m_mpegPesParser->basicVideoInfo.fps;
   if ((fps > 20) && (fps < 100))
   {
-    *sleepTime = (DWORD)(250/fps);
+    *frameTime = (1000.0/fps);
   }
   else
   {
-    *sleepTime = 1;
+    *frameTime = 10.0;
   }
   return m_vecVideoBuffers.size();
+}
+
+void CDeMultiplexer::GetBufferCounts(int* ACnt, int* VCnt)
+{
+  *ACnt = m_vecAudioBuffers.size();
+  *VCnt = m_vecVideoBuffers.size();
 }
 
 int CDeMultiplexer::GetVideoBufferPts(CRefTime& First, CRefTime& Last)
@@ -2030,11 +2033,10 @@ int CDeMultiplexer::GetVideoBufferPts(CRefTime& First, CRefTime& Last)
   return m_vecVideoBuffers.size();
 }
 
-int CDeMultiplexer::GetAudioBufferPts(CRefTime& First, CRefTime& Last, DWORD& SampleCount)
+int CDeMultiplexer::GetAudioBufferPts(CRefTime& First, CRefTime& Last)
 {
   First = m_FirstAudioSample;
   Last = m_LastAudioSample;
-  SampleCount = m_AudioSampleCount;
   return m_vecAudioBuffers.size();
 }
 
