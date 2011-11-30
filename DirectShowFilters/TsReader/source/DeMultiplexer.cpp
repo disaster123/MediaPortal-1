@@ -560,7 +560,7 @@ CBuffer* CDeMultiplexer::GetVideo()
     return NULL;
   }
 
-  if ((m_vecVideoBuffers.size() < 8) || !m_bAudioVideoReady)
+  if ((m_vecVideoBuffers.size() < 12) || (m_vecAudioBuffers.size() < 2) || !m_bAudioVideoReady)
   {
     //Prefetch some data
     m_bReadAheadFromFile = true;
@@ -614,7 +614,7 @@ CBuffer* CDeMultiplexer::GetAudio()
     return NULL;
   }
 
-  if ((m_vecAudioBuffers.size() < 2) || !m_bAudioVideoReady)
+  if ((m_vecVideoBuffers.size() < 12) || (m_vecAudioBuffers.size() < 2) || !m_bAudioVideoReady)
   {
     //Prefetch some data
     m_bReadAheadFromFile = true;

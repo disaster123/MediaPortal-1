@@ -488,26 +488,42 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
         }
          
         // Avoid excessive video Fill buffer preemption
+        // and slow down emptying rate when data gets really low
         double frameTime;
         int buffCnt = demux.GetVideoBufferCnt(&frameTime);
-        if (buffCnt >= 5)
+        DWORD sampSleepTime = max(1,(DWORD)(frameTime/4.0));
+        
+        switch (buffCnt)
         {
-          Sleep(1);
+          case 8 :
+      	    sampSleepTime = 5;
+            break;
+          case 7 :
+      	    sampSleepTime = 5;
+            break;
+          case 6 :
+      	    sampSleepTime = 5;
+            break;
+          case 5 :
+      	    sampSleepTime = min(10,sampSleepTime);
+            break;
+          case 4 :
+      	    sampSleepTime = min(10,sampSleepTime);
+            break;
+          case 3 :
+      	    sampSleepTime = min(10,sampSleepTime);
+            break;
+          case 2 :
+      	    sampSleepTime = min(10,sampSleepTime);
+            break;
+          case 1 :
+      	    sampSleepTime = min(10,sampSleepTime);
+            break;
+          default :
+       	    sampSleepTime = 1;
         }
-        else if (buffCnt < 1)
-        {
-          Sleep(5);
-        }
-        else if (buffCnt < 3)
-        {
-          // Getting very low on buffered data - slow down emptying rate
-          Sleep(max(1,(DWORD)frameTime));
-        }
-        else // < 5
-        {
-          // Getting low on buffered data - slow down emptying rate
-          Sleep(max(1,(DWORD)(frameTime/2.0)));
-        }
+        
+        Sleep(sampSleepTime);           
       }
     } while (buffer == NULL);
     return NOERROR;

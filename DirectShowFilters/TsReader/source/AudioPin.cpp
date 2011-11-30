@@ -360,7 +360,7 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
           if ((cRefTime.m_time >= m_pTsReaderFilter->m_ClockOnStart) && (fTime > -0.2) && (fTime < 2.0))
           {
             double stallPoint;
-            if (m_nNextASD < 300)
+            if (m_nNextASD < 200)
             {
               //Slowly increase stall point threshold from start (1 ms per sample)
               stallPoint = 0.2 + ((double)m_nNextASD * 0.001);
