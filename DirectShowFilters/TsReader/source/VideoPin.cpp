@@ -350,7 +350,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
       {
         m_bPresentSample = true ;
         
-        CRefTime RefTime, cRefTime, compTemp;
+        CRefTime RefTime, cRefTime;
         bool HasTimestamp;
         double fTime = 0.0;
         double clock = 0.0;
@@ -358,7 +358,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
         if ((HasTimestamp=buffer->MediaTime(RefTime)))
         {
           bool ForcePresent = false;
-          compTemp = m_pTsReaderFilter->GetCompensation();
+          CRefTime compTemp = m_pTsReaderFilter->GetCompensation();
           if (m_pTsReaderFilter->m_bFastSyncFFDShow && (compTemp != m_llLastComp))
           {
             m_bDiscontinuity = true;
@@ -369,38 +369,59 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
           //adjust the timestamp with the compensation
           cRefTime -= compTemp;
 
-          // 'fast start' timestamp modification (at start of play)
-          CRefTime AddOffset=m_pTsReaderFilter->AddVideoComp;
-          cRefTime -= AddOffset;
+          // 'fast start' timestamp modification (during first 2 sec of play)
+          //CRefTime AddOffset=m_pTsReaderFilter->AddVideoComp;
           cRefTime -= m_pTsReaderFilter->m_ClockOnStart.m_time;
-          if (!m_pTsReaderFilter->m_bFastSyncVideo && (cRefTime.m_time < (REFERENCE_TIME)((double)m_pTsReaderFilter->AddVideoComp.m_time * DRIFT_RATE)) )
+          if (!m_pTsReaderFilter->m_bFastSyncVideo && (cRefTime.m_time < (2*1000*10000)) )
           {
-            // Ambass : try to stretch video after zapping
-            AddOffset = (REFERENCE_TIME)((double)cRefTime.m_time / DRIFT_RATE);
+            float startCref = (float)cRefTime.m_time/(1000*10000);
+            //Assume desired timestamp span is zero to 2 sec, actual span is AddVideoComp to 2 sec
+            double offsetRatio = (2*1000*10000)/((2*1000*10000) - (double)m_pTsReaderFilter->AddVideoComp.m_time);
+            double currOffset = (2*1000*10000) - (double)cRefTime.m_time;
+            double newOffset = currOffset * offsetRatio;
+            cRefTime = (REFERENCE_TIME)((2*1000*10000) - newOffset);   
             ForcePresent = true;
+            //LogDebug("VFS cOfs %03.3f, nOfs %03.3f, cRefTimeS %03.3f, cRefTimeN %03.3f", (float)currOffset/(1000*10000), (float)newOffset/(1000*10000), startCref, (float)cRefTime.m_time/(1000*10000));         
             if (m_pTsReaderFilter->m_bFastSyncFFDShow)
             {
-              m_bDiscontinuity = true;
+              m_delayedDiscont = 2; //Force I-frame timestamp updates for FFDShow
             }
-            // LogDebug("%03.3f, %03.3f, %03.3f", (float)AddOffset.Millisecs()/1000.0f,(float)cRefTime.Millisecs()/1000.0f, (float)m_pTsReaderFilter->AddVideoComp.Millisecs()/1000.0f);
-            // m_pTsReaderFilter->AddVideoComp.m_time =0;
-          }
-          cRefTime += AddOffset;
+          }          
           cRefTime += m_pTsReaderFilter->m_ClockOnStart.m_time;
+
+
+          //          // 'fast start' timestamp modification (at start of play)
+          //          CRefTime AddOffset=m_pTsReaderFilter->AddVideoComp;
+          //          cRefTime -= AddOffset;
+          //          cRefTime -= m_pTsReaderFilter->m_ClockOnStart.m_time;
+          //          if (!m_pTsReaderFilter->m_bFastSyncVideo && (cRefTime.m_time < (REFERENCE_TIME)((double)m_pTsReaderFilter->AddVideoComp.m_time * DRIFT_RATE)) )
+          //          {
+          //            // Ambass : try to stretch video after zapping
+          //            AddOffset = (REFERENCE_TIME)((double)cRefTime.m_time / DRIFT_RATE);
+          //            ForcePresent = true;
+          //            if (m_pTsReaderFilter->m_bFastSyncFFDShow)
+          //            {
+          //              m_bDiscontinuity = true;
+          //            }
+          //            // LogDebug("%03.3f, %03.3f, %03.3f", (float)AddOffset.Millisecs()/1000.0f,(float)cRefTime.Millisecs()/1000.0f, (float)m_pTsReaderFilter->AddVideoComp.Millisecs()/1000.0f);
+          //            // m_pTsReaderFilter->AddVideoComp.m_time =0;
+          //          }
+          //          cRefTime += AddOffset;
+          //          cRefTime += m_pTsReaderFilter->m_ClockOnStart.m_time;
 
           REFERENCE_TIME RefClock = 0;
           m_pTsReaderFilter->GetMediaPosition(&RefClock) ;
           clock = (double)(RefClock-m_rtStart.m_time)/10000000.0 ;
           fTime = (double)cRefTime.Millisecs()/1000.0f - clock ;
                                                                       
-          if (!ForcePresent && (m_dRateSeeking == 1.0))
+          if (m_dRateSeeking == 1.0)
           {
             //Discard late samples at start of play,
             //and samples outside a sensible timing window during play 
             //(helps with signal corruption recovery)
-            if ((fTime > -0.5) && (fTime < 3.5))
+            if ((ForcePresent || (fTime > -0.5)) && (fTime < 3.0))
             {
-              if (fTime > 2.5)
+              if (fTime > 1.5)
               {
                 //Too early - stall for a while to avoid over-filling of video pipeline buffers
                 Sleep(10);
