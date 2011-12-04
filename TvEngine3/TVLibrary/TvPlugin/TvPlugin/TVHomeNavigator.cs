@@ -368,15 +368,6 @@ namespace TvPlugin
 
     #region Public methods
 
-    /// <summary>
-    /// Sets last failed channel
-    /// </summary>
-    /// <param name="failedChannel"></param>
-    public void SetFailingChannel(Channel failedChannel)
-    {
-      m_currentChannel = failedChannel;
-    }
-
     public void ZapNow()
     {
       m_zaptime = DateTime.Now.AddSeconds(-1);
@@ -630,10 +621,10 @@ namespace TvPlugin
             {
               Log.Debug("find channel: iCounter {0}, chan.ChannelNumber {1}, chan.DisplayName {2}, channels.Count {3}",
                         iCounter, chan.ChannelNumber, chan.DisplayName, channels.Count);
-              found = true;
-              ZapToChannel(iCounter + 1, useZapDelay);
+                found = true;
+                ZapToChannel(iCounter + 1, useZapDelay);
+              }
             }
-          }
           iCounter++;
         }
         if (found)
