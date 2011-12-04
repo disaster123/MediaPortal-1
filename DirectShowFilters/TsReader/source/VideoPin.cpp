@@ -354,6 +354,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
         bool HasTimestamp;
         double fTime = 0.0;
         double clock = 0.0;
+        double stallPoint = 1.0;
         //check if it has a timestamp
         if ((HasTimestamp=buffer->MediaTime(RefTime)))
         {
@@ -416,12 +417,15 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
                                                                       
           if (m_dRateSeeking == 1.0)
           {
+            //Slowly increase stall point threshold over the first 8 seconds of play
+            stallPoint = min(1.5, (1.0 + (((double)(cRefTime.m_time - m_pTsReaderFilter->m_ClockOnStart))/160000000.0)));
+            
             //Discard late samples at start of play,
             //and samples outside a sensible timing window during play 
             //(helps with signal corruption recovery)
-            if ((ForcePresent || (fTime > -0.5)) && (fTime < 3.0))
+            if ((fTime > (ForcePresent ? -1.0 : -0.5)) && (fTime < 3.0))
             {
-              if (fTime > 1.5)
+              if (fTime > stallPoint)
               {
                 //Too early - stall for a while to avoid over-filling of video pipeline buffers
                 Sleep(10);
@@ -496,7 +500,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
                 cntA = demux.GetAudioBufferPts(firstAudio, lastAudio); 
                 cntV = demux.GetVideoBufferPts(firstVideo, lastVideo) + 1;
 
-                LogDebug("Vid/Ref : %03.3f, Late %c-frame(%02d), Compensated = %03.3f ( %0.3f A/V buffers=%02d/%02d), Clk : %f, State %d, TsMeanDiff %0.3f ms", (float)RefTime.Millisecs()/1000.0f,buffer->GetFrameType(),buffer->GetFrameCount(), (float)cRefTime.Millisecs()/1000.0f, fTime, cntA,cntV,clock, m_pTsReaderFilter->State(), (float)m_fMTDMean/10000.0f);
+                LogDebug("Vid/Ref : %03.3f, Late %c-frame(%02d), Compensated = %03.3f ( %0.3f A/V buffers=%02d/%02d), Clk : %f, State %d, stallPt %03.3f", (float)RefTime.Millisecs()/1000.0f,buffer->GetFrameType(),buffer->GetFrameCount(), (float)cRefTime.Millisecs()/1000.0f, fTime, cntA,cntV,clock, m_pTsReaderFilter->State(), (float)stallPoint);
               }
               
               if (m_pTsReaderFilter->m_ShowBufferVideo) m_pTsReaderFilter->m_ShowBufferVideo--;
