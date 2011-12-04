@@ -214,7 +214,7 @@ public:
 
   CLSID           m_videoDecoderCLSID;
   bool            m_bFastSyncFFDShow;
-  bool            m_bFastSyncVideo;
+  bool            m_EnableSlowMotionOnZapping;
 
   CLSID           GetCLSIDFromPin(IPin* pPin);
 

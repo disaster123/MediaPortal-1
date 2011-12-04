@@ -133,30 +133,25 @@ HRESULT CVideoPin::CompleteConnect(IPin *pReceivePin)
   HRESULT hr = CBaseOutputPin::CompleteConnect(pReceivePin);
   if (SUCCEEDED(hr))
   {
-    m_pTsReaderFilter->m_bFastSyncFFDShow=false;
-    m_pTsReaderFilter->m_bFastSyncVideo=false;
+    m_pTsReaderFilter->m_bFastSyncFFDShow = false;
     
     CLSID &ref=m_pTsReaderFilter->GetCLSIDFromPin(pReceivePin);
     m_pTsReaderFilter->m_videoDecoderCLSID = ref;
     if (m_pTsReaderFilter->m_videoDecoderCLSID == CLSID_FFDSHOWVIDEO)
     {
       m_pTsReaderFilter->m_bFastSyncFFDShow=true;
-      //m_pTsReaderFilter->m_bFastSyncVideo=true;    
       LogDebug("vid:CompleteConnect() FFDShow Video Decoder connected");
     }
     else if (m_pTsReaderFilter->m_videoDecoderCLSID == CLSID_LAVCUVID)
     {
-      //m_pTsReaderFilter->m_bFastSyncVideo=true;
       LogDebug("vid:CompleteConnect() LAV CUVID Video Decoder connected");
     }
     else if (m_pTsReaderFilter->m_videoDecoderCLSID == CLSID_LAVVIDEO)
     {
-      //m_pTsReaderFilter->m_bFastSyncVideo=true;    
       LogDebug("vid:CompleteConnect() LAV Video Decoder connected");
     }
     else if (m_pTsReaderFilter->m_videoDecoderCLSID == CLSID_FFDSHOWDXVA)
     {
-      //m_pTsReaderFilter->m_bFastSyncVideo=true;
       LogDebug("vid:CompleteConnect() FFDShow DXVA Video Decoder connected");
     }
     
@@ -282,11 +277,6 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
     CDeMultiplexer& demux = m_pTsReaderFilter->GetDemultiplexer();
     CBuffer* buffer = NULL;
 
-//    if (!demux.m_bAudioVideoReady)
-//    {
-//      LogDebug("Video FillBuffer, not m_bAudioVideoReady ");
-//    }
-
     do
     {
       //get file-duration and set m_rtDuration
@@ -295,7 +285,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
       //if the filter is currently seeking to a new position
       //or this pin is currently seeking to a new position then
       //we dont try to read any packets, but simply return...
-      if (m_pTsReaderFilter->IsSeeking() || m_pTsReaderFilter->IsStopping()) //|| m_bSeeking*/ || m_pTsReaderFilter->IsSeekingToEof())
+      if (m_pTsReaderFilter->IsSeeking() || m_pTsReaderFilter->IsStopping())
       {
         //if (m_pTsReaderFilter->m_ShowBufferVideo) LogDebug("vid:isseeking:%d %d",m_pTsReaderFilter->IsSeeking() ,m_bSeeking);
         Sleep(5);
@@ -371,16 +361,16 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
           cRefTime -= compTemp;
 
           // 'fast start' timestamp modification (during first 2 sec of play)
-          //CRefTime AddOffset=m_pTsReaderFilter->AddVideoComp;
+          #define FS_TIM_LIM (2*1000*10000) //2 seconds in hns units
           cRefTime -= m_pTsReaderFilter->m_ClockOnStart.m_time;
-          if (!m_pTsReaderFilter->m_bFastSyncVideo && (cRefTime.m_time < (2*1000*10000)) )
+          if (m_pTsReaderFilter->m_EnableSlowMotionOnZapping && (cRefTime.m_time < FS_TIM_LIM) )
           {
-            float startCref = (float)cRefTime.m_time/(1000*10000);
-            //Assume desired timestamp span is zero to 2 sec, actual span is AddVideoComp to 2 sec
-            double offsetRatio = (2*1000*10000)/((2*1000*10000) - (double)m_pTsReaderFilter->AddVideoComp.m_time);
-            double currOffset = (2*1000*10000) - (double)cRefTime.m_time;
+            //float startCref = (float)cRefTime.m_time/(1000*10000); //used in LogDebug below only
+            //Assume desired timestamp span is zero to FS_TIM_LIM, actual span is AddVideoComp to FS_TIM_LIM
+            double offsetRatio = FS_TIM_LIM/(FS_TIM_LIM - (double)m_pTsReaderFilter->AddVideoComp.m_time);
+            double currOffset = FS_TIM_LIM - (double)cRefTime.m_time;
             double newOffset = currOffset * offsetRatio;
-            cRefTime = (REFERENCE_TIME)((2*1000*10000) - newOffset);   
+            cRefTime = (REFERENCE_TIME)(FS_TIM_LIM - newOffset);   
             ForcePresent = true;
             //LogDebug("VFS cOfs %03.3f, nOfs %03.3f, cRefTimeS %03.3f, cRefTimeN %03.3f", (float)currOffset/(1000*10000), (float)newOffset/(1000*10000), startCref, (float)cRefTime.m_time/(1000*10000));         
             if (m_pTsReaderFilter->m_bFastSyncFFDShow)
@@ -389,26 +379,6 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
             }
           }          
           cRefTime += m_pTsReaderFilter->m_ClockOnStart.m_time;
-
-
-          //          // 'fast start' timestamp modification (at start of play)
-          //          CRefTime AddOffset=m_pTsReaderFilter->AddVideoComp;
-          //          cRefTime -= AddOffset;
-          //          cRefTime -= m_pTsReaderFilter->m_ClockOnStart.m_time;
-          //          if (!m_pTsReaderFilter->m_bFastSyncVideo && (cRefTime.m_time < (REFERENCE_TIME)((double)m_pTsReaderFilter->AddVideoComp.m_time * DRIFT_RATE)) )
-          //          {
-          //            // Ambass : try to stretch video after zapping
-          //            AddOffset = (REFERENCE_TIME)((double)cRefTime.m_time / DRIFT_RATE);
-          //            ForcePresent = true;
-          //            if (m_pTsReaderFilter->m_bFastSyncFFDShow)
-          //            {
-          //              m_bDiscontinuity = true;
-          //            }
-          //            // LogDebug("%03.3f, %03.3f, %03.3f", (float)AddOffset.Millisecs()/1000.0f,(float)cRefTime.Millisecs()/1000.0f, (float)m_pTsReaderFilter->AddVideoComp.Millisecs()/1000.0f);
-          //            // m_pTsReaderFilter->AddVideoComp.m_time =0;
-          //          }
-          //          cRefTime += AddOffset;
-          //          cRefTime += m_pTsReaderFilter->m_ClockOnStart.m_time;
 
           REFERENCE_TIME RefClock = 0;
           m_pTsReaderFilter->GetMediaPosition(&RefClock) ;
