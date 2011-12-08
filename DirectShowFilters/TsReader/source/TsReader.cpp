@@ -1454,7 +1454,7 @@ void CTsReaderFilter::ThreadProc()
         if (m_pAudioPin->IsConnected())
         {
           audSampleDur = ((float)m_pAudioPin->m_sampleDuration)/10000.0;
-          audSampleSleep = m_pAudioPin->m_sampleSleepTime;
+          audSampleSleep = m_pAudioPin->m_FillBuffSleepTime;
         }
         
         LogDebug("Buffers : A/V = %d/%d, A last : %03.3f, V Last : %03.3f, ADur : %03.3f ms, ASlp : %d ms", cntA, cntV, (float)lastAudio.Millisecs()/1000.0f,(float)lastVideo.Millisecs()/1000.0f, audSampleDur, audSampleSleep);

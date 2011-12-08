@@ -40,6 +40,7 @@ public:
   HRESULT CheckConnect(IPin *pReceivePin);
   HRESULT FillBuffer(IMediaSample *pSample);
   HRESULT BreakConnect();
+  HRESULT DoBufferProcessingLoop(void);
 
   // CSourceSeeking
   HRESULT ChangeStart();
@@ -56,7 +57,8 @@ public:
   bool IsConnected();
   void SetDiscontinuity(bool onOff);
   LONGLONG m_sampleDuration;
-  DWORD    m_sampleSleepTime;
+  //DWORD    m_sampleSleepTime;
+  DWORD    m_FillBuffSleepTime;
 
 protected:
   void      UpdateFromSeek();
@@ -77,6 +79,8 @@ protected:
 	LONGLONG  m_fASDMean;
 	LONGLONG  m_llASDSumAvg;	
   LONGLONG  m_llLastComp;
+  
+  DWORD m_LastFillBuffTime;
 
 };
 

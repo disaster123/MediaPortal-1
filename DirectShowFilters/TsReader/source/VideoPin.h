@@ -40,8 +40,6 @@ public:
   HRESULT CheckConnect(IPin *pReceivePin);
   HRESULT FillBuffer(IMediaSample *pSample);
   HRESULT BreakConnect();
-
-
   HRESULT DoBufferProcessingLoop(void);
 
   // CSourceSeeking
@@ -58,6 +56,7 @@ public:
   void SetStart(CRefTime rtStartTime);
   bool IsConnected();
   void SetDiscontinuity(bool onOff);
+  DWORD m_FillBuffSleepTime;
 
 protected:
   void      UpdateFromSeek();
@@ -81,6 +80,8 @@ protected:
 	REFERENCE_TIME  m_llMTDSumAvg;	
 
   REFERENCE_TIME  m_llLastComp;
+  
+  DWORD m_LastFillBuffTime;
 
 };
 

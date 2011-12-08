@@ -2007,10 +2007,15 @@ void CDeMultiplexer::FillTeletext(CTsHeader& header, byte* tsPacket)
   }
 }
 
+int CDeMultiplexer::GetAudioBufferCnt()
+{
+  return m_vecAudioBuffers.size();
+}
+
 int CDeMultiplexer::GetVideoBufferCnt(double* frameTime)
 {
   int fps = m_mpegPesParser->basicVideoInfo.fps;
-  if ((fps > 20) && (fps < 100))
+  if ((fps > 23) && (fps < 130))
   {
     *frameTime = (1000.0/fps);
   }
@@ -2092,13 +2097,13 @@ void CDeMultiplexer::OnNewChannel(CChannelInfo& info)
       int PatReqDiff = (info.PatVersion & 0x0F) - (m_ReqPatVersion & 0x0F);
       int PatIDiff = (info.PatVersion & 0x0F) - (m_iPatVersion & 0x0F);
       
-      if (!((PatIDiff == 1) || (PatIDiff == -15) || (PatReqDiff == 0))) //Not (PAT version incremented by 1 || expected PAT)
+      if (!((PatIDiff == 1) || (PatIDiff == -15) || (PatReqDiff == 0))) //Not (PAT version incremented by 1 or expected PAT)
       {      
         //Skipped back in timeshift file or possible RTSP seek accuracy problem ?
         if (!m_bWaitGoodPat)
         {
           m_bWaitGoodPat = true;
-          m_WaitGoodPatTmo = timeTemp + 1200;   // Set timeout to 1.2 sec
+          m_WaitGoodPatTmo = timeTemp + 700;   // Set timeout to 0.7 sec
           LogDebug("OnNewChannel: wait for good PAT");
           return; // wait a while for correct PAT version to arrive
         }

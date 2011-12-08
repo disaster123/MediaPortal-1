@@ -181,6 +181,83 @@ HRESULT CAudioPin::BreakConnect()
   return CSourceStream::BreakConnect();
 }
 
+HRESULT CAudioPin::DoBufferProcessingLoop(void)
+{
+  Command com;
+  OnThreadStartPlay();
+
+  do 
+  {
+    while (!CheckRequest(&com)) 
+    {
+      IMediaSample *pSample;
+      HRESULT hr = GetDeliveryBuffer(&pSample,NULL,NULL,0);
+      if (FAILED(hr)) 
+      {
+        Sleep(1);
+        continue;	// go round again. Perhaps the error will go away
+        // or the allocator is decommited & we will be asked to
+        // exit soon.
+      }
+
+      // Virtual function user will override.
+      hr = FillBuffer(pSample);
+
+      if (hr == S_OK) 
+      {
+        //LogDebug("Vid::DoBufferProcessingLoop() - sample len %d size %d", 
+        //  pSample->GetActualDataLength(), pSample->GetSize());
+        
+        // This is the only change for base class implementation of DoBufferProcessingLoop()
+        // Don't deliver zero length samples
+        if( pSample->GetActualDataLength() > 0)
+        {
+          hr = Deliver(pSample);     
+        }
+		
+        pSample->Release();
+
+        // downstream filter returns S_FALSE if it wants us to
+        // stop or an error if it's reporting an error.
+        if(hr != S_OK)
+        {
+          DbgLog((LOG_TRACE, 2, TEXT("Deliver() returned %08x; stopping"), hr));
+          return S_OK;
+        }
+      } 
+      else if (hr == S_FALSE) 
+      {
+        // derived class wants us to stop pushing data
+        pSample->Release();
+        DeliverEndOfStream();
+        return S_OK;
+      } 
+      else 
+      {
+        // derived class encountered an error
+        pSample->Release();
+        DbgLog((LOG_ERROR, 1, TEXT("Error %08lX from FillBuffer!!!"), hr));
+        DeliverEndOfStream();
+        m_pFilter->NotifyEvent(EC_ERRORABORT, hr, 0);
+        return hr;
+      }
+     // all paths release the sample
+    }
+    // For all commands sent to us there must be a Reply call!
+	  if (com == CMD_RUN || com == CMD_PAUSE) 
+    {
+      Reply(NOERROR);
+	  } 
+    else if (com != CMD_STOP) 
+    {
+      Reply((DWORD) E_UNEXPECTED);
+      DbgLog((LOG_ERROR, 1, TEXT("Unexpected command!!!")));
+	  }
+  } while (com != CMD_STOP);
+
+  return S_FALSE;
+}
+
 
 HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
 {
@@ -194,17 +271,28 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
       //get file-duration and set m_rtDuration
       GetDuration(NULL);
 
+      //Check if we need to wait for a while
+      DWORD timeNow = timeGetTime();
+      while ( !(((timeNow - m_FillBuffSleepTime) > m_LastFillBuffTime) || (timeNow < m_LastFillBuffTime)) )
+      {      
+        Sleep(1);
+        timeNow = timeGetTime();
+      }
+      m_LastFillBuffTime = timeNow;
+
       //if the filter is currently seeking to a new position
       //or this pin is currently seeking to a new position then
       //we dont try to read any packets, but simply return...
       if (m_pTsReaderFilter->IsSeeking() || m_pTsReaderFilter->IsStopping())
       {
         //if (m_pTsReaderFilter->m_ShowBufferAudio) LogDebug("aud:isseeking");
-        Sleep(20);
+        //Sleep(20);
+        m_FillBuffSleepTime = 20;
         pSample->SetTime(NULL,NULL);
         pSample->SetActualDataLength(0);
         pSample->SetSyncPoint(FALSE);
         pSample->SetDiscontinuity(TRUE);
+        m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
         return NOERROR;
       }
 
@@ -232,7 +320,8 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
       //Wait until we have audio (and video, if pin connected) 
       if (!demux.m_bAudioVideoReady || (buffer==NULL))
       {
-        Sleep(10);
+        //Sleep(10);
+        m_FillBuffSleepTime = 10;
         buffer=NULL; //Continue looping
         if (!demux.m_bAudioVideoReady && (m_nNextASD != 0))
         {
@@ -366,7 +455,8 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
             if (fTime > stallPoint)
             {
               //Too early - stall to avoid over-filling of audio decode/renderer buffers
-              Sleep(10);
+              //Sleep(10);
+              m_FillBuffSleepTime = 10;
               buffer = NULL;
               continue;
             }           
@@ -375,18 +465,18 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
           {
             // Sample is too late.
             m_bPresentSample = false ;
-            m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
+            //m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
           }
           
           //Calculate sleep times (average sample duration/4)
           m_sampleDuration = GetAverageSampleDur(RefTime.GetUnits());
-          if (m_dRateSeeking == 1.0)
+          if ((m_dRateSeeking == 1.0) && (demux.GetAudioBufferCnt() < 10))
           {
             sampSleepTime = (DWORD)min(20, max(1, m_sampleDuration/40000));
           }
         }
 
-        if (m_bPresentSample && m_dRateSeeking == 1.0)
+        if (m_bPresentSample && (m_dRateSeeking == 1.0) && (buffer->Length() > 0))
         {
           //do we need to set the discontinuity flag?
           if (m_bDiscontinuity || buffer->GetDiscontinuity())
@@ -430,15 +520,17 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
           //delete the buffer and return
           delete buffer;
           demux.EraseAudioBuff();
-          Sleep(sampSleepTime) ; //Sleep for a time derived from data rate
-          m_sampleSleepTime = sampSleepTime;
+          //Sleep(sampSleepTime) ;
+          m_FillBuffSleepTime = sampSleepTime; //Sleep for a time derived from data rate
         }
         else
         { // Buffer was not displayed because it was out of date, search for next.
           delete buffer;
           demux.EraseAudioBuff();
           buffer=NULL ;
-          Sleep(1) ;
+          m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
+          //Sleep(1) ;
+          m_FillBuffSleepTime = 1;
         }
       }
     } while (buffer==NULL);
@@ -459,7 +551,7 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
 
 void CAudioPin::ClearAverageSampleDur()
 {
-  m_sampleSleepTime = 1;
+  m_FillBuffSleepTime = 1;
   m_sampleDuration = 10000; //1 ms
 
   m_llLastComp = 0;
@@ -562,6 +654,9 @@ HRESULT CAudioPin::OnThreadStartPlay()
   //is not belonging to any previous data
   m_bDiscontinuity = TRUE;
   m_bPresentSample = false;
+
+  m_FillBuffSleepTime = 1;
+  m_LastFillBuffTime = timeGetTime();
   
   ClearAverageSampleDur();
   

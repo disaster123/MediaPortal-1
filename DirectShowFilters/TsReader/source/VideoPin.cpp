@@ -282,14 +282,25 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
       //get file-duration and set m_rtDuration
       GetDuration(NULL);
 
+      //Check if we need to wait for a while
+      DWORD timeNow = timeGetTime();
+      while ( !(((timeNow - m_FillBuffSleepTime) > m_LastFillBuffTime) || (timeNow < m_LastFillBuffTime)) )
+      {      
+        Sleep(1);
+        timeNow = timeGetTime();
+      }
+      m_LastFillBuffTime = timeNow;
+
       //if the filter is currently seeking to a new position
       //or this pin is currently seeking to a new position then
       //we dont try to read any packets, but simply return...
       if (m_pTsReaderFilter->IsSeeking() || m_pTsReaderFilter->IsStopping())
       {
         //if (m_pTsReaderFilter->m_ShowBufferVideo) LogDebug("vid:isseeking:%d %d",m_pTsReaderFilter->IsSeeking() ,m_bSeeking);
-        Sleep(5);
+        //Sleep(5);
+        m_FillBuffSleepTime = 5;
         pSample->SetActualDataLength(0);
+        m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
         return NOERROR;
       }
 
@@ -303,14 +314,15 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
         
         if ((buffCnt < 9) && (buffCnt > 5))
         {
-      	  sampSleepTime = 5;
+      	  sampSleepTime = max(1,(DWORD)(frameTime/8.0));
         }
-        else if (buffCnt == 0)
+        else if ((buffCnt == 0) || (buffCnt > 20))
         {
       	  sampSleepTime = 1;
         }
                         
-        Sleep(min(10,sampSleepTime));
+        //Sleep(min(10,sampSleepTime));
+        m_FillBuffSleepTime = min(10,sampSleepTime);
                  
         CAutoLock flock (&demux.m_sectionFlushVideo);
         // Get next video buffer from demultiplexer
@@ -334,7 +346,8 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
 
       if (buffer == NULL)
       {
-        Sleep(10);
+        //Sleep(10);
+        m_FillBuffSleepTime = 10;
       }
       else
       {
@@ -393,12 +406,13 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
             //Discard late samples at start of play,
             //and samples outside a sensible timing window during play 
             //(helps with signal corruption recovery)
-            if ((fTime > (ForcePresent ? -1.0 : -0.5)) && (fTime < 3.0))
+            if ((fTime > (ForcePresent ? -1.0 : -1.0)) && (fTime < 3.0))
             {
               if (fTime > stallPoint)
               {
                 //Too early - stall for a while to avoid over-filling of video pipeline buffers
-                Sleep(10);
+                //Sleep(10);
+                m_FillBuffSleepTime = 10;
                 buffer = NULL;
                 continue;
               }
@@ -407,13 +421,13 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
             {
               // Sample is too late.
               m_bPresentSample = false ;
-              m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
+              //m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
             }
           }
 
         }
 
-        if (m_bPresentSample)
+        if (m_bPresentSample && (buffer->Length() > 0))
         {
           //do we need to set the discontinuity flag?
           if (m_bDiscontinuity || buffer->GetDiscontinuity())
@@ -497,6 +511,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
         { // Buffer was not displayed because it was out of date, search for next.
           delete buffer;
           demux.EraseVideoBuff();
+          m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
           buffer = NULL;
         }
          
@@ -564,6 +579,8 @@ HRESULT CVideoPin::OnThreadStartPlay()
   m_bDiscontinuity=TRUE;
   m_bPresentSample=false;
   m_delayedDiscont = 0;
+  m_FillBuffSleepTime = 1;
+  m_LastFillBuffTime = timeGetTime();
 
   m_llLastComp = 0;
   m_llLastMTDts = 0;
