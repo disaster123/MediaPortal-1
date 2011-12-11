@@ -82,6 +82,7 @@ protected:
   REFERENCE_TIME  m_llLastComp;
   
   DWORD m_LastFillBuffTime;
+  int       m_sampleCount;
 
 };
 

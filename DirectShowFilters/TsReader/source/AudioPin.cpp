@@ -279,6 +279,7 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
         timeNow = timeGetTime();
       }
       m_LastFillBuffTime = timeNow;
+      m_FillBuffSleepTime = 1;
 
       //if the filter is currently seeking to a new position
       //or this pin is currently seeking to a new position then
@@ -331,7 +332,6 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
       else
       {
         m_bPresentSample = true ;
-        DWORD sampSleepTime = 1;
         
         int cntA,cntV ;
         CRefTime firstAudio, lastAudio;
@@ -447,7 +447,7 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
           //Discard late samples at start of play,
           //and samples outside a sensible timing window during play 
           //(helps with signal corruption recovery)
-          if ((cRefTime.m_time >= m_pTsReaderFilter->m_ClockOnStart) && (fTime > -0.5) && (fTime < 2.0))
+          if ((cRefTime.m_time >= m_pTsReaderFilter->m_ClockOnStart) && (fTime > -0.3) && (fTime < 2.0))
           {
             //Slowly increase stall point threshold over the first 8 seconds of play
             //to allow audio renderer buffer to build up to 0.4s
@@ -472,7 +472,7 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
           m_sampleDuration = GetAverageSampleDur(RefTime.GetUnits());
           if ((m_dRateSeeking == 1.0) && (demux.GetAudioBufferCnt() < 10))
           {
-            sampSleepTime = (DWORD)min(20, max(1, m_sampleDuration/40000));
+            m_FillBuffSleepTime = (DWORD)min(20, max(1, m_sampleDuration/40000));
           }
         }
 
@@ -500,7 +500,7 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
             {
               if (m_pTsReaderFilter->m_ShowBufferAudio || fTime < 0.030)
               {
-                LogDebug("Aud/Ref : %03.3f, Compensated = %03.3f ( %0.3f A/V buffers=%02d/%02d), Clk : %f, State %d, Sleep %d ms, stallPt %03.3f", (float)RefTime.Millisecs()/1000.0f, (float)cRefTime.Millisecs()/1000.0f, fTime,cntA,cntV, clock, m_pTsReaderFilter->State(), sampSleepTime, (float)stallPoint);
+                LogDebug("Aud/Ref : %03.3f, Compensated = %03.3f ( %0.3f A/V buffers=%02d/%02d), Clk : %f, SampCnt %d, Sleep %d ms, stallPt %03.3f", (float)RefTime.Millisecs()/1000.0f, (float)cRefTime.Millisecs()/1000.0f, fTime,cntA,cntV, clock, m_sampleCount, m_FillBuffSleepTime, (float)stallPoint);
               }
               if (m_pTsReaderFilter->m_ShowBufferAudio) m_pTsReaderFilter->m_ShowBufferAudio--;
             }
@@ -521,7 +521,6 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
           delete buffer;
           demux.EraseAudioBuff();
           //Sleep(sampSleepTime) ;
-          m_FillBuffSleepTime = sampSleepTime; //Sleep for a time derived from data rate
         }
         else
         { // Buffer was not displayed because it was out of date, search for next.
@@ -530,8 +529,8 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
           buffer=NULL ;
           m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
           //Sleep(1) ;
-          m_FillBuffSleepTime = 1;
         }
+        m_sampleCount++ ;
       }
     } while (buffer==NULL);
     return NOERROR;
@@ -654,13 +653,16 @@ HRESULT CAudioPin::OnThreadStartPlay()
   //is not belonging to any previous data
   m_bDiscontinuity = TRUE;
   m_bPresentSample = false;
+  m_sampleCount = 0;
 
   m_FillBuffSleepTime = 1;
   m_LastFillBuffTime = timeGetTime();
   
   ClearAverageSampleDur();
+
+  DWORD thrdID = GetCurrentThreadId();
   
-  LogDebug("aud:OnThreadStartPlay(%f) %02.2f", (float)m_rtStart.Millisecs()/1000.0f, m_dRateSeeking);
+  LogDebug("aud:OnThreadStartPlay(%f) %02.2f 0x%x", (float)m_rtStart.Millisecs()/1000.0f, m_dRateSeeking, thrdID);
 
   //start playing
   DeliverNewSegment(m_rtStart, m_rtStop, m_dRateSeeking);

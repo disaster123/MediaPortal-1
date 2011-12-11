@@ -290,6 +290,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
         timeNow = timeGetTime();
       }
       m_LastFillBuffTime = timeNow;
+      m_FillBuffSleepTime = 1;
 
       //if the filter is currently seeking to a new position
       //or this pin is currently seeking to a new position then
@@ -303,7 +304,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
         m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
         return NOERROR;
       }
-
+      
       if (m_pTsReaderFilter->m_bStreamCompensated && !demux.m_bFlushRunning)
       {       
         // Avoid excessive video Fill buffer preemption
@@ -406,7 +407,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
             //Discard late samples at start of play,
             //and samples outside a sensible timing window during play 
             //(helps with signal corruption recovery)
-            if ((fTime > (ForcePresent ? -1.0 : -1.0)) && (fTime < 3.0))
+            if ((fTime > (ForcePresent ? -0.5 : 0.05)) && (fTime < 3.0))
             {
               if (fTime > stallPoint)
               {
@@ -476,7 +477,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
                 }                
               }
               
-              if (m_pTsReaderFilter->m_ShowBufferVideo || fTime < 0.030)
+              if (m_pTsReaderFilter->m_ShowBufferVideo || fTime < 0.150)
               {
                 int cntA, cntV;
                 CRefTime firstAudio, lastAudio;
@@ -484,7 +485,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
                 cntA = demux.GetAudioBufferPts(firstAudio, lastAudio); 
                 cntV = demux.GetVideoBufferPts(firstVideo, lastVideo) + 1;
 
-                LogDebug("Vid/Ref : %03.3f, Late %c-frame(%02d), Compensated = %03.3f ( %0.3f A/V buffers=%02d/%02d), Clk : %f, State %d, stallPt %03.3f", (float)RefTime.Millisecs()/1000.0f,buffer->GetFrameType(),buffer->GetFrameCount(), (float)cRefTime.Millisecs()/1000.0f, fTime, cntA,cntV,clock, m_pTsReaderFilter->State(), (float)stallPoint);
+                LogDebug("Vid/Ref : %03.3f, Late %c-frame(%02d), Compensated = %03.3f ( %0.3f A/V buffers=%02d/%02d), Clk : %f, SampCnt %d, stallPt %03.3f", (float)RefTime.Millisecs()/1000.0f,buffer->GetFrameType(),buffer->GetFrameCount(), (float)cRefTime.Millisecs()/1000.0f, fTime, cntA,cntV,clock, m_sampleCount, (float)stallPoint);
               }
               
               if (m_pTsReaderFilter->m_ShowBufferVideo) m_pTsReaderFilter->m_ShowBufferVideo--;
@@ -514,6 +515,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
           m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
           buffer = NULL;
         }
+        m_sampleCount++ ;
          
       }
     } while (buffer == NULL);
@@ -581,6 +583,7 @@ HRESULT CVideoPin::OnThreadStartPlay()
   m_delayedDiscont = 0;
   m_FillBuffSleepTime = 1;
   m_LastFillBuffTime = timeGetTime();
+  m_sampleCount = 0;
 
   m_llLastComp = 0;
   m_llLastMTDts = 0;
@@ -588,8 +591,10 @@ HRESULT CVideoPin::OnThreadStartPlay()
 	m_fMTDMean = 0;
 	m_llMTDSumAvg = 0;
   ZeroMemory((void*)&m_pllMTD, sizeof(REFERENCE_TIME) * NB_MTDSIZE);
+  
+  DWORD thrdID = GetCurrentThreadId();
 
-  LogDebug("vid:OnThreadStartPlay(%f) %02.2f %d", (float)m_rtStart.Millisecs()/1000.0f,m_dRateSeeking,m_pTsReaderFilter->IsSeeking());
+  LogDebug("vid:OnThreadStartPlay(%f) %02.2f %d 0x%x", (float)m_rtStart.Millisecs()/1000.0f,m_dRateSeeking,m_pTsReaderFilter->IsSeeking(), thrdID);
 
   //start playing
   DeliverNewSegment(m_rtStart, m_rtStop, m_dRateSeeking);
