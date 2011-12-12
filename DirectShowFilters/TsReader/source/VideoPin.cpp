@@ -275,7 +275,8 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
   try
   {
     CDeMultiplexer& demux = m_pTsReaderFilter->GetDemultiplexer();
-    CBuffer* buffer = NULL;
+    CBuffer* buffer = NULL;    
+    bool earlyStall = false;
 
     do
     {
@@ -327,7 +328,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
                  
         CAutoLock flock (&demux.m_sectionFlushVideo);
         // Get next video buffer from demultiplexer
-        buffer=demux.GetVideo();
+        buffer=demux.GetVideo(earlyStall);
       }
       else
       {
@@ -375,7 +376,6 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
           cRefTime -= compTemp;
 
           // 'fast start' timestamp modification (during first 2 sec of play)
-          #define FS_TIM_LIM (2*1000*10000) //2 seconds in hns units
           cRefTime -= m_pTsReaderFilter->m_ClockOnStart.m_time;
           if (m_pTsReaderFilter->m_EnableSlowMotionOnZapping && (cRefTime.m_time < FS_TIM_LIM) )
           {
@@ -392,22 +392,21 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
               m_delayedDiscont = 2; //Force I-frame timestamp updates for FFDShow
             }
           }          
-          cRefTime += m_pTsReaderFilter->m_ClockOnStart.m_time;
 
           REFERENCE_TIME RefClock = 0;
           m_pTsReaderFilter->GetMediaPosition(&RefClock) ;
           clock = (double)(RefClock-m_rtStart.m_time)/10000000.0 ;
-          fTime = (double)cRefTime.Millisecs()/1000.0f - clock ;
+          fTime = ((double)(cRefTime.m_time + m_pTsReaderFilter->m_ClockOnStart.m_time)/10000000.0) - clock ;
                                                                       
           if (m_dRateSeeking == 1.0)
           {
             //Slowly increase stall point threshold over the first 8 seconds of play
-            stallPoint = min(1.5, (1.0 + (((double)(cRefTime.m_time - m_pTsReaderFilter->m_ClockOnStart))/160000000.0)));
+            stallPoint = min(1.5, (1.0 + (((double)cRefTime.m_time)/160000000.0)));
             
             //Discard late samples at start of play,
             //and samples outside a sensible timing window during play 
             //(helps with signal corruption recovery)
-            if ((fTime > (ForcePresent ? -0.5 : 0.05)) && (fTime < 3.0))
+            if ((fTime > (ForcePresent ? -0.5 : 0.005)) && (fTime < 3.0))
             {
               if (fTime > stallPoint)
               {
@@ -415,6 +414,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
                 //Sleep(10);
                 m_FillBuffSleepTime = 10;
                 buffer = NULL;
+                earlyStall = true;
                 continue;
               }
             }
@@ -425,6 +425,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
               //m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
             }
           }
+          cRefTime += m_pTsReaderFilter->m_ClockOnStart.m_time;
 
         }
 
@@ -433,7 +434,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
           //do we need to set the discontinuity flag?
           if (m_bDiscontinuity || buffer->GetDiscontinuity())
           {
-            LogDebug("vid:set discontinuity");
+            LogDebug("vid:set discontinuity L:%d B:%d fTime:%03.3f", m_bDiscontinuity, buffer->GetDiscontinuity(), (float)fTime);
             pSample->SetDiscontinuity(TRUE);
             m_bDiscontinuity=FALSE;
           }
@@ -477,7 +478,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
                 }                
               }
               
-              if (m_pTsReaderFilter->m_ShowBufferVideo || fTime < 0.150)
+              if (m_pTsReaderFilter->m_ShowBufferVideo || fTime < 0.02)
               {
                 int cntA, cntV;
                 CRefTime firstAudio, lastAudio;
@@ -515,9 +516,9 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
           m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
           buffer = NULL;
         }
-        m_sampleCount++ ;
-         
-      }
+        m_sampleCount++ ;         
+      }      
+      earlyStall = false;
     } while (buffer == NULL);
     return NOERROR;
   }

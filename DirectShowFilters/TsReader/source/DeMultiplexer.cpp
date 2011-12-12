@@ -548,7 +548,7 @@ CBuffer* CDeMultiplexer::GetSubtitle()
 ///
 ///Returns the next video packet
 // or NULL if there is none available
-CBuffer* CDeMultiplexer::GetVideo()
+CBuffer* CDeMultiplexer::GetVideo(bool earlyStall)
 {
   if (m_bFlushDelgNow || m_bFlushRunning || m_bStarting) return NULL; //Flush pending or Start() active 
   if (m_filter.GetVideoPin()->IsConnected() && (m_iAudioStream == -1)) return NULL;
@@ -561,7 +561,7 @@ CBuffer* CDeMultiplexer::GetVideo()
     return NULL;
   }
 
-  if (CheckPrefetchState())
+  if (CheckPrefetchState(earlyStall))
   {
     //Prefetch some data
     m_bReadAheadFromFile = true;
@@ -602,7 +602,7 @@ void CDeMultiplexer::EraseVideoBuff()
 ///
 ///Returns the next audio packet
 // or NULL if there is none available
-CBuffer* CDeMultiplexer::GetAudio()
+CBuffer* CDeMultiplexer::GetAudio(bool earlyStall)
 {
   if (m_bFlushDelgNow || m_bFlushRunning || m_bStarting) return NULL; //Flush pending or Start() active
   if ((m_iAudioStream == -1)) return NULL;
@@ -615,7 +615,7 @@ CBuffer* CDeMultiplexer::GetAudio()
     return NULL;
   }
 
-  if (CheckPrefetchState())
+  if (CheckPrefetchState(earlyStall))
   {
     //Prefetch some data
     m_bReadAheadFromFile = true;
@@ -2027,11 +2027,16 @@ int CDeMultiplexer::GetVideoBufferCnt(double* frameTime)
 }
 
 //Decide if we need to prefetch more data
-bool CDeMultiplexer::CheckPrefetchState()
+bool CDeMultiplexer::CheckPrefetchState(bool earlyStall)
 {  
   if (!m_bAudioVideoReady)
   {
     return true;
+  }
+
+  if (earlyStall)
+  {
+    return false;
   }
 
   if (m_filter.GetVideoPin()->IsConnected())

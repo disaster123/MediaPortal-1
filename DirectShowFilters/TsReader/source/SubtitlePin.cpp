@@ -277,7 +277,7 @@ HRESULT CSubtitlePin::FillBuffer(IMediaSample *pSample)
           if (m_bDiscontinuity || buffer->GetDiscontinuity())
           {
             //ifso, set it
-            LogDebug("vid:set discontinuity");
+            LogDebug("sub:set discontinuity");
             pSample->SetDiscontinuity(TRUE);
             m_bDiscontinuity = FALSE;
           }
@@ -308,6 +308,7 @@ HRESULT CSubtitlePin::FillBuffer(IMediaSample *pSample)
         { // Buffer was not displayed because it was out of date, search for next.
           delete buffer;
           buffer=NULL;
+          m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
         }
       }
       m_bInFillBuffer=false;

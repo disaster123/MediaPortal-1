@@ -265,6 +265,7 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
   {
     CDeMultiplexer& demux=m_pTsReaderFilter->GetDemultiplexer();
     CBuffer* buffer=NULL;
+    bool earlyStall = false;
     
     do
     {
@@ -300,7 +301,7 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
       if (!demux.m_bFlushRunning)
       {
         CAutoLock flock (&demux.m_sectionFlushAudio);
-        buffer=demux.GetAudio();
+        buffer=demux.GetAudio(earlyStall);
       }
       else
       {
@@ -442,22 +443,24 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
           REFERENCE_TIME RefClock = 0;
           m_pTsReaderFilter->GetMediaPosition(&RefClock) ;
           clock = (double)(RefClock-m_rtStart.m_time)/10000000.0 ;
-          fTime = (double)cRefTime.Millisecs()/1000.0f - clock ;
+          fTime = ((double)cRefTime.m_time/10000000.0) - clock ;
 
           //Discard late samples at start of play,
           //and samples outside a sensible timing window during play 
           //(helps with signal corruption recovery)
-          if ((cRefTime.m_time >= m_pTsReaderFilter->m_ClockOnStart) && (fTime > -0.3) && (fTime < 2.0))
+          cRefTime -= m_pTsReaderFilter->m_ClockOnStart.m_time;
+          if ((cRefTime.m_time >= 0) && (fTime > ((cRefTime.m_time >= FS_TIM_LIM) ? 0.0 : -0.3)) && (fTime < 2.0))
           {
             //Slowly increase stall point threshold over the first 8 seconds of play
             //to allow audio renderer buffer to build up to 0.4s
-            stallPoint = min(0.4, (0.2 + (((double)(cRefTime.m_time - m_pTsReaderFilter->m_ClockOnStart))/400000000.0)));
+            stallPoint = min(0.4, (0.2 + (((double)cRefTime.m_time)/400000000.0)));
             if (fTime > stallPoint)
             {
               //Too early - stall to avoid over-filling of audio decode/renderer buffers
               //Sleep(10);
               m_FillBuffSleepTime = 10;
               buffer = NULL;
+              earlyStall = true;
               continue;
             }           
           }
@@ -467,6 +470,7 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
             m_bPresentSample = false ;
             //m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
           }
+          cRefTime += m_pTsReaderFilter->m_ClockOnStart.m_time;
           
           //Calculate sleep times (average sample duration/4)
           m_sampleDuration = GetAverageSampleDur(RefTime.GetUnits());
@@ -482,7 +486,7 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
           if (m_bDiscontinuity || buffer->GetDiscontinuity())
           {
             //ifso, set it
-            LogDebug("aud:set discontinuity");
+            LogDebug("aud:set discontinuity L:%d B:%d fTime:%03.3f", m_bDiscontinuity, buffer->GetDiscontinuity(), (float)fTime);
             pSample->SetDiscontinuity(TRUE);
             m_bDiscontinuity=FALSE;
           }
@@ -498,7 +502,7 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
             pSample->SetTime(&refTime,&refTime);
             if (m_dRateSeeking == 1.0)
             {
-              if (m_pTsReaderFilter->m_ShowBufferAudio || fTime < 0.030)
+              if (m_pTsReaderFilter->m_ShowBufferAudio || fTime < 0.02)
               {
                 LogDebug("Aud/Ref : %03.3f, Compensated = %03.3f ( %0.3f A/V buffers=%02d/%02d), Clk : %f, SampCnt %d, Sleep %d ms, stallPt %03.3f", (float)RefTime.Millisecs()/1000.0f, (float)cRefTime.Millisecs()/1000.0f, fTime,cntA,cntV, clock, m_sampleCount, m_FillBuffSleepTime, (float)stallPoint);
               }
@@ -531,7 +535,8 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
           //Sleep(1) ;
         }
         m_sampleCount++ ;
-      }
+      }      
+      earlyStall = false;
     } while (buffer==NULL);
     return NOERROR;
   }

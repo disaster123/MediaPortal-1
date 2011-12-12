@@ -66,8 +66,8 @@ public:
 
   void       Start();
   void       Flush(bool clearAVready);
-  CBuffer*   GetVideo();
-  CBuffer*   GetAudio();
+  CBuffer*   GetVideo(bool earlyStall);
+  CBuffer*   GetAudio(bool earlyStall);
   CBuffer*   GetSubtitle();
   void       EraseAudioBuff();
   void       EraseVideoBuff();
@@ -136,7 +136,7 @@ public:
   bool IsAudioChanging(void);
 
   int  ReadAheadFromFile();
-  bool CheckPrefetchState();
+  bool CheckPrefetchState(bool earlyStall);
 
   bool m_DisableDiscontinuitiesFiltering;
   DWORD m_LastDataFromRtsp;
