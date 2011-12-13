@@ -54,6 +54,7 @@ byte MPEG1AudioFormat[] =
 
 };
 extern void LogDebug(const char *fmt, ...) ;
+extern DWORD m_tGTStartTime;
 
 CAudioPin::CAudioPin(LPUNKNOWN pUnk, CTsReaderFilter *pFilter, HRESULT *phr,CCritSec* section) :
   CSourceStream(NAME("pinAudio"), phr, pFilter, L"Audio"),
@@ -273,11 +274,11 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
       GetDuration(NULL);
 
       //Check if we need to wait for a while
-      DWORD timeNow = timeGetTime();
-      while ( !(((timeNow - m_FillBuffSleepTime) > m_LastFillBuffTime) || (timeNow < m_LastFillBuffTime)) )
+      DWORD timeNow = GET_TIME_NOW();
+      while (timeNow < (m_LastFillBuffTime + m_FillBuffSleepTime))
       {      
         Sleep(1);
-        timeNow = timeGetTime();
+        timeNow = GET_TIME_NOW();
       }
       m_LastFillBuffTime = timeNow;
       m_FillBuffSleepTime = 1;
@@ -309,7 +310,7 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
       }
 
       //did we reach the end of the file
-      if (demux.EndOfFile()) // || ((timeGetTime()-m_LastTickCount > 3000) && !m_pTsReaderFilter->IsTimeShifting()))
+      if (demux.EndOfFile()) // || ((GET_TIME_NOW()-m_LastTickCount > 3000) && !m_pTsReaderFilter->IsTimeShifting()))
       {
         LogDebug("aud:set eof");
         pSample->SetTime(NULL,NULL);
@@ -394,7 +395,7 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
             m_pTsReaderFilter->m_ClockOnStart = RefClock - m_rtStart.m_time ;
             if (m_pTsReaderFilter->m_bLiveTv)
             {
-              LogDebug("Elapsed time from pause to Audio/Video ( total zapping time ) : %d mS",timeGetTime()-m_pTsReaderFilter->m_lastPause);
+              LogDebug("Elapsed time from pause to Audio/Video ( total zapping time ) : %d mS",GET_TIME_NOW()-m_pTsReaderFilter->m_lastPause);
             }
           }
           else
@@ -661,13 +662,12 @@ HRESULT CAudioPin::OnThreadStartPlay()
   m_sampleCount = 0;
 
   m_FillBuffSleepTime = 1;
-  m_LastFillBuffTime = timeGetTime();
+  m_LastFillBuffTime = GET_TIME_NOW();
   
   ClearAverageSampleDur();
 
   DWORD thrdID = GetCurrentThreadId();
-  
-  LogDebug("aud:OnThreadStartPlay(%f) %02.2f 0x%x", (float)m_rtStart.Millisecs()/1000.0f, m_dRateSeeking, thrdID);
+  LogDebug("aud:OnThreadStartPlay(%f), rate:%02.2f, threadID:0x%x, GET_TIME_NOW:0x%x", (float)m_rtStart.Millisecs()/1000.0f, m_dRateSeeking, thrdID, GET_TIME_NOW());
 
   //start playing
   DeliverNewSegment(m_rtStart, m_rtStop, m_dRateSeeking);

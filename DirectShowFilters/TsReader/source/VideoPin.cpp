@@ -40,6 +40,7 @@
 #define DRIFT_RATE 0.5f
 
 extern void LogDebug(const char *fmt, ...) ;
+extern DWORD m_tGTStartTime;
 
 CVideoPin::CVideoPin(LPUNKNOWN pUnk, CTsReaderFilter *pFilter, HRESULT *phr,CCritSec* section) :
   CSourceStream(NAME("pinVideo"), phr, pFilter, L"Video"),
@@ -284,11 +285,11 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
       GetDuration(NULL);
 
       //Check if we need to wait for a while
-      DWORD timeNow = timeGetTime();
-      while ( !(((timeNow - m_FillBuffSleepTime) > m_LastFillBuffTime) || (timeNow < m_LastFillBuffTime)) )
+      DWORD timeNow = GET_TIME_NOW();
+      while (timeNow < (m_LastFillBuffTime + m_FillBuffSleepTime))
       {      
         Sleep(1);
-        timeNow = timeGetTime();
+        timeNow = GET_TIME_NOW();
       }
       m_LastFillBuffTime = timeNow;
       m_FillBuffSleepTime = 1;
@@ -583,7 +584,7 @@ HRESULT CVideoPin::OnThreadStartPlay()
   m_bPresentSample=false;
   m_delayedDiscont = 0;
   m_FillBuffSleepTime = 1;
-  m_LastFillBuffTime = timeGetTime();
+  m_LastFillBuffTime = GET_TIME_NOW();
   m_sampleCount = 0;
 
   m_llLastComp = 0;
@@ -594,8 +595,7 @@ HRESULT CVideoPin::OnThreadStartPlay()
   ZeroMemory((void*)&m_pllMTD, sizeof(REFERENCE_TIME) * NB_MTDSIZE);
   
   DWORD thrdID = GetCurrentThreadId();
-
-  LogDebug("vid:OnThreadStartPlay(%f) %02.2f %d 0x%x", (float)m_rtStart.Millisecs()/1000.0f,m_dRateSeeking,m_pTsReaderFilter->IsSeeking(), thrdID);
+  LogDebug("vid:OnThreadStartPlay(%f), rate:%02.2f, threadID:0x%x, GET_TIME_NOW:0x%x", (float)m_rtStart.Millisecs()/1000.0f, m_dRateSeeking, thrdID, GET_TIME_NOW());
 
   //start playing
   DeliverNewSegment(m_rtStart, m_rtStop, m_dRateSeeking);

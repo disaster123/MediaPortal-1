@@ -52,6 +52,7 @@
 #define VIDEO_CHANGE 0x2
 
 extern void LogDebug(const char *fmt, ...);
+extern DWORD m_tGTStartTime;
 
 // *** UNCOMMENT THE NEXT LINE TO ENABLE DYNAMIC VIDEO PIN HANDLING!!!! ******
 #define USE_DYNAMIC_PINS
@@ -112,7 +113,7 @@ CDeMultiplexer::CDeMultiplexer(CTsDuration& duration,CTsReaderFilter& filter)
   m_bFrame0Found = false;
   m_FirstVideoSample = 0x7FFFFFFF00000000LL;
   m_LastVideoSample = 0;
-  m_LastDataFromRtsp = timeGetTime();
+  m_LastDataFromRtsp = GET_TIME_NOW();
   m_mpegPesParser = new CMpegPesParser();
 }
 
@@ -486,7 +487,7 @@ void CDeMultiplexer::Flush(bool clearAVready)
   m_bFlushRunning = true; //Stall GetVideo()/GetAudio()/GetSubtitle() calls from pins 
 
   m_iAudioReadCount = 0;
-  m_LastDataFromRtsp = timeGetTime();
+  m_LastDataFromRtsp = GET_TIME_NOW();
   bool holdAudio = HoldAudio();
   bool holdVideo = HoldVideo();
   bool holdSubtitle = HoldSubtitle();
@@ -696,8 +697,8 @@ void CDeMultiplexer::Start()
   m_bAudioVideoReady=false;
   m_filter.m_bStreamCompensated=false ;
   DWORD dwBytesProcessed=0;
-  DWORD m_Time = timeGetTime();
-  while((timeGetTime() - m_Time) < 10000)
+  DWORD m_Time = GET_TIME_NOW();
+  while((GET_TIME_NOW() - m_Time) < 10000)
   {
     m_bEndOfFile = false;  //reset eof every time through to ignore a false eof due to slow rtsp startup
     int BytesRead =ReadFromFile(false,false);
@@ -803,16 +804,16 @@ int CDeMultiplexer::ReadFromFile(bool isAudio, bool isVideo)
         //yes, then process the raw data
         result=true;
         OnRawData2(buffer,(int)dwReadBytes);
-        m_LastDataFromRtsp = timeGetTime();
+        m_LastDataFromRtsp = GET_TIME_NOW();
       }
     }
     else
     {
       if (!m_filter.IsTimeShifting())
       {
-        //LogDebug("demux:endoffile...%d",timeGetTime()-m_LastDataFromRtsp );
+        //LogDebug("demux:endoffile...%d",GET_TIME_NOW()-m_LastDataFromRtsp );
         //set EOF flag and return
-        if (timeGetTime()-m_LastDataFromRtsp > 2000 && m_filter.State() != State_Paused ) // A bit crappy, but no better idea...
+        if (((GET_TIME_NOW()-m_LastDataFromRtsp) > 2000) && (m_filter.State() != State_Paused) ) // A bit crappy, but no better idea...
         {
           LogDebug("demux:endoffile");
           m_bEndOfFile=true;
@@ -890,9 +891,9 @@ void CDeMultiplexer::OnTsPacket(byte* tsPacket)
     if (m_ReqPatVersion==-1)                    
     {                                     // Now, unless channel change, 
        m_ReqPatVersion = m_iPatVersion;    // Initialize Pat Request.
-       m_WaitNewPatTmo = timeGetTime();   // Now, unless channel change request,timeout will be always true. 
+       m_WaitNewPatTmo = GET_TIME_NOW();   // Now, unless channel change request,timeout will be always true. 
     }
-    if (timeGetTime() < m_WaitNewPatTmo) 
+    if (GET_TIME_NOW() < m_WaitNewPatTmo) 
     {
       // Timeout not reached.
       return;
@@ -2098,7 +2099,7 @@ void CDeMultiplexer::OnNewChannel(CChannelInfo& info)
     
     if (m_filter.m_bLiveTv && (m_iPatVersion!=-1)) //Live TV channel change only
     {
-      DWORD timeTemp = timeGetTime();
+      DWORD timeTemp = GET_TIME_NOW();
       int PatReqDiff = (info.PatVersion & 0x0F) - (m_ReqPatVersion & 0x0F);
       int PatIDiff = (info.PatVersion & 0x0F) - (m_iPatVersion & 0x0F);
       
@@ -2369,7 +2370,7 @@ void CDeMultiplexer::SetMediaChanging(bool onOff)
   CAutoLock lock (&m_sectionMediaChanging);
   LogDebug("demux:Wait for media format change:%d", onOff);
   m_bWaitForMediaChange=onOff;
-  m_tWaitForMediaChange=timeGetTime() ;
+  m_tWaitForMediaChange=GET_TIME_NOW() ;
 }
 
 bool CDeMultiplexer::IsMediaChanging(void)
@@ -2378,7 +2379,7 @@ bool CDeMultiplexer::IsMediaChanging(void)
   if (!m_bWaitForMediaChange) return false ;
   else
   {
-    if (timeGetTime()-m_tWaitForMediaChange > 5000)
+    if (GET_TIME_NOW()-m_tWaitForMediaChange > 5000)
     {
       m_bWaitForMediaChange=false;
       LogDebug("demux: Alert: Wait for Media change cancelled on 5 secs timeout");
@@ -2393,7 +2394,7 @@ void CDeMultiplexer::SetAudioChanging(bool onOff)
   CAutoLock lock (&m_sectionAudioChanging);
   LogDebug("demux:Wait for Audio stream selection :%d", onOff);
   m_bWaitForAudioSelection=onOff;
-  m_tWaitForAudioSelection=timeGetTime();
+  m_tWaitForAudioSelection=GET_TIME_NOW();
 }
 
 bool CDeMultiplexer::IsAudioChanging(void)
@@ -2402,7 +2403,7 @@ bool CDeMultiplexer::IsAudioChanging(void)
   if (!m_bWaitForAudioSelection) return false;
   else
   {
-    if (timeGetTime()-m_tWaitForAudioSelection > 5000)
+    if (GET_TIME_NOW()-m_tWaitForAudioSelection > 5000)
     {
       m_bWaitForAudioSelection=false;
       LogDebug("demux: Alert: Wait for Audio stream selection cancelled on 5 secs timeout");
@@ -2417,7 +2418,7 @@ void CDeMultiplexer::RequestNewPat(void)
   m_ReqPatVersion++;
   m_ReqPatVersion &= 0x0F;
   LogDebug("Request new PAT = %d", m_ReqPatVersion);
-  m_WaitNewPatTmo=timeGetTime()+10000;
+  m_WaitNewPatTmo=GET_TIME_NOW()+10000;
 }
 
 void CDeMultiplexer::ClearRequestNewPat(void)

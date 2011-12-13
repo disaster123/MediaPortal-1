@@ -39,6 +39,11 @@
 
 using namespace std;
 
+//Macro for replacing timeGetTime()
+//The macro is used to avoid having to handle timeGetTime() rollover issues in the body of the code
+//m_tGTStartTime is initialised in CTsReaderFilter::CTsReaderFilter() when filter is loaded
+#define GET_TIME_NOW() (timeGetTime() - m_tGTStartTime)
+
 class CSubtitlePin;
 class CAudioPin;
 class CVideoPin;
@@ -218,7 +223,7 @@ public:
   bool            m_EnableSlowMotionOnZapping;
 
   CLSID           GetCLSIDFromPin(IPin* pPin);
-
+  
 protected:
   void ThreadProc();
 

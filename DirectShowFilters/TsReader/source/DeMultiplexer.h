@@ -271,4 +271,5 @@ private:
   float m_MinVideoDelta;
 
   bool m_bShuttingDown;
+
 };

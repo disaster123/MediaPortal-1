@@ -82,7 +82,7 @@ protected:
   
   DWORD m_LastFillBuffTime;
   int       m_sampleCount;
-
+  
 };
 
 #endif
