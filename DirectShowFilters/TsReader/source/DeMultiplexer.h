@@ -136,7 +136,7 @@ public:
   bool IsAudioChanging(void);
 
   int  ReadAheadFromFile();
-  bool CheckPrefetchState(bool earlyStall);
+  bool CheckPrefetchState(bool isVid, bool isAud);
 
   bool m_DisableDiscontinuitiesFiltering;
   DWORD m_LastDataFromRtsp;

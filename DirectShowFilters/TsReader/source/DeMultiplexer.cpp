@@ -562,7 +562,7 @@ CBuffer* CDeMultiplexer::GetVideo(bool earlyStall)
     return NULL;
   }
 
-  if (CheckPrefetchState(earlyStall))
+  if (CheckPrefetchState(!earlyStall, false))
   {
     //Prefetch some data
     m_bReadAheadFromFile = true;
@@ -616,7 +616,7 @@ CBuffer* CDeMultiplexer::GetAudio(bool earlyStall)
     return NULL;
   }
 
-  if (CheckPrefetchState(earlyStall))
+  if (CheckPrefetchState(false, !earlyStall))
   {
     //Prefetch some data
     m_bReadAheadFromFile = true;
@@ -2028,29 +2028,32 @@ int CDeMultiplexer::GetVideoBufferCnt(double* frameTime)
 }
 
 //Decide if we need to prefetch more data
-bool CDeMultiplexer::CheckPrefetchState(bool earlyStall)
+bool CDeMultiplexer::CheckPrefetchState(bool isVid, bool isAud)
 {  
   if (!m_bAudioVideoReady)
   {
     return true;
   }
 
-  if (earlyStall)
+  if (isAud)
   {
-    return false;
-  }
-
-  if (m_filter.GetVideoPin()->IsConnected())
-  {
-    if (m_vecVideoBuffers.size() < 8)
+    if (m_filter.GetAudioPin()->IsConnected() && (m_vecAudioBuffers.size() < 2))
+    {
+      return true;
+    }
+    if (m_filter.GetVideoPin()->IsConnected() && (m_vecVideoBuffers.size() < 8))
     {
       return true;
     }
   }
 
-  if (m_filter.GetAudioPin()->IsConnected())
+  if (isVid)
   {
-    if (m_vecAudioBuffers.size() < 2)
+    if (m_filter.GetVideoPin()->IsConnected() && (m_vecVideoBuffers.size() < 4))
+    {
+      return true;
+    }
+    if (m_filter.GetAudioPin()->IsConnected() && (m_vecAudioBuffers.size() < 1))
     {
       return true;
     }
@@ -2090,7 +2093,7 @@ void CDeMultiplexer::OnNewChannel(CChannelInfo& info)
   
   //LogDebug("OnNewChannel callback, pat version:%d->%d",m_iPatVersion, info.PatVersion);
 
-  if (info.PatVersion != m_iPatVersion)
+  if ((info.PatVersion != m_iPatVersion) || m_bWaitGoodPat)
   {
     if (!m_bWaitGoodPat)
     {
@@ -2110,10 +2113,10 @@ void CDeMultiplexer::OnNewChannel(CChannelInfo& info)
         {
           m_bWaitGoodPat = true;
           m_WaitGoodPatTmo = timeTemp + 700;   // Set timeout to 0.7 sec
-          LogDebug("OnNewChannel: wait for good PAT");
+          LogDebug("OnNewChannel: wait for good PAT, IDiff:%d, ReqDiff:%d ", PatIDiff, PatReqDiff);
           return; // wait a while for correct PAT version to arrive
         }
-        if ((timeTemp < m_WaitGoodPatTmo) && m_bWaitGoodPat)
+        else if (timeTemp < m_WaitGoodPatTmo)
         {
           return; // wait for correct PAT version
         }
