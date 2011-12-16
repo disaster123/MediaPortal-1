@@ -2100,7 +2100,7 @@ void CDeMultiplexer::OnNewChannel(CChannelInfo& info)
       LogDebug("OnNewChannel: PAT change detected: %d->%d",m_iPatVersion, info.PatVersion);
     }
     
-    if (m_filter.m_bLiveTv && (m_iPatVersion!=-1)) //Live TV channel change only
+    if (m_filter.IsTimeShifting() && (m_iPatVersion!=-1)) //TimeShifting TV channel change only
     {
       DWORD timeTemp = GET_TIME_NOW();
       int PatReqDiff = (info.PatVersion & 0x0F) - (m_ReqPatVersion & 0x0F);
@@ -2112,7 +2112,7 @@ void CDeMultiplexer::OnNewChannel(CChannelInfo& info)
         if (!m_bWaitGoodPat)
         {
           m_bWaitGoodPat = true;
-          m_WaitGoodPatTmo = timeTemp + 700;   // Set timeout to 0.7 sec
+          m_WaitGoodPatTmo = timeTemp + (m_filter.IsRTSP() ? 2500 : 1000);   // Set timeout to 1 sec (2.5 sec for RTSP)
           LogDebug("OnNewChannel: wait for good PAT, IDiff:%d, ReqDiff:%d ", PatIDiff, PatReqDiff);
           return; // wait a while for correct PAT version to arrive
         }
@@ -2120,7 +2120,7 @@ void CDeMultiplexer::OnNewChannel(CChannelInfo& info)
         {
           return; // wait for correct PAT version
         }
-        LogDebug("OnNewChannel: 'Wait for good PAT' timeout, allow PAT update");
+        LogDebug("OnNewChannel: 'Wait for good PAT' timeout, allow PAT update: %d->%d",m_iPatVersion, info.PatVersion);
       }
       
       m_ReqPatVersion = info.PatVersion ;

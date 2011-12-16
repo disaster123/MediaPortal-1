@@ -179,7 +179,7 @@ CTsReaderFilter::CTsReaderFilter(IUnknown *pUnk, HRESULT *phr):
   ::DeleteFile(filename);
   LogDebug("--------------- v0.4.14 -------------------");
   LogDebug("--- Buffer-empty rate control testing ----");
-  LogDebug("---------- v0.0.37 XXX -------------------");
+  LogDebug("---------- v0.0.38 XXX -------------------");
   LogDebug("timeGetTime():0x%x, m_tGTStartTime:0x%x, GET_TIME_NOW:0x%x", timeGetTime(), m_tGTStartTime, GET_TIME_NOW() );
 
   m_fileReader=NULL;
@@ -222,6 +222,7 @@ CTsReaderFilter::CTsReaderFilter(IUnknown *pUnk, HRESULT *phr):
   LogDebug("Wait for seeking to eof - false - constructor");
   m_WaitForSeekToEof=0;
   m_bLiveTv = false;
+  m_bTimeShifting = false;
   m_RandomCompensation = 0;     
   m_bAnalog = false;
   m_bStopping = false;
@@ -567,6 +568,11 @@ STDMETHODIMP CTsReaderFilter::Stop()
 bool CTsReaderFilter::IsTimeShifting()
 {
   return m_bTimeShifting;
+}
+
+bool CTsReaderFilter::IsRTSP()
+{
+  return (m_fileDuration == NULL);
 }
 
 

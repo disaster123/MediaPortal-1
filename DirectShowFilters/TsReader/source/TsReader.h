@@ -175,6 +175,7 @@ public:
   CSubtitlePin*   GetSubtitlePin();
   IDVBSubtitle*   GetSubtitleFilter();
   bool            IsTimeShifting();
+  bool            IsRTSP();
   CTsDuration&    GetDuration();
   FILTER_STATE    State() {return m_State;};
   void            DeltaCompensation(REFERENCE_TIME deltaComp);
