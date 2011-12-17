@@ -1120,7 +1120,8 @@ namespace TvPlugin
         GUIPropertyManager.SetProperty(SkinPropertyPrefix + ".Guide.ChannelName", strChannel);
         if (_showChannelNumber)
         {
-          int channelNum = chan.ChannelNumber;
+          IList<TuningDetail> detail = chan.ReferringTuningDetail();
+          int channelNum = detail[0].ChannelNumber;
           GUIPropertyManager.SetProperty(SkinPropertyPrefix + ".Guide.ChannelNumber", channelNum + "");
         }
         else
@@ -1798,7 +1799,10 @@ namespace TvPlugin
 
       if (!_byIndex)
       {
-        channelNum = channel.ChannelNumber;
+        foreach (TuningDetail detail in channel.ReferringTuningDetail())
+        {
+          channelNum = detail.ChannelNumber;
+        }
       }
       else
       {
@@ -1856,13 +1860,13 @@ namespace TvPlugin
       if (guiControl != null)
       {
         height = guiControl.YPosition;
-      height -= GetControl((int)Controls.IMG_CHAN1).YPosition;
+        height -= GetControl((int)Controls.IMG_CHAN1).YPosition;
       }
       else
       {
         height = GetControl((int)Controls.IMG_CHAN1).Height;
       }
-
+      
 
       foreach (Program program in programs)
       {
@@ -3700,18 +3704,19 @@ namespace TvPlugin
         while (iCounter < _channelList.Count && found == false)
         {
           chan = (Channel)_channelList[iCounter].channel;
-
-          if (chan.ChannelNumber == searchChannel)
+          foreach (TuningDetail detail in chan.ReferringTuningDetail())
+          {
+            if (detail.ChannelNumber == searchChannel)
             {
               iChannelNr = iCounter;
               found = true;
             } //find closest channel number
-          else if ((int)Math.Abs(chan.ChannelNumber - searchChannel) < channelDistance)
+            else if ((int)Math.Abs(detail.ChannelNumber - searchChannel) < channelDistance)
             {
-            channelDistance = (int)Math.Abs(chan.ChannelNumber - searchChannel);
+              channelDistance = (int)Math.Abs(detail.ChannelNumber - searchChannel);
               iChannelNr = iCounter;
             }
-
+          }
           iCounter++;
         }
       }
@@ -3797,7 +3802,8 @@ namespace TvPlugin
                   }
                   else
                   {
-                    tvGuidChannel.channelNum = chan.ChannelNumber;
+                    foreach (TuningDetail detail in tvGuidChannel.channel.ReferringTuningDetail())
+                      tvGuidChannel.channelNum = detail.ChannelNumber;
                   }
                 }
                 tvGuidChannel.strLogo = GetChannelLogo(tvGuidChannel.channel.DisplayName);
@@ -3812,7 +3818,7 @@ namespace TvPlugin
         {
           GuideChannel tvGuidChannel = new GuideChannel();
           tvGuidChannel.channel = new Channel(false, true, 0, DateTime.MinValue, false,
-                                              DateTime.MinValue, 0, true, "", GUILocalizeStrings.Get(911), 0);
+                                              DateTime.MinValue, 0, true, "", GUILocalizeStrings.Get(911));
           for (int i = 0; i < 10; ++i)
           {
             _channelList.Add(tvGuidChannel);

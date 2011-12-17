@@ -51,7 +51,6 @@ namespace TvDatabase
     [TableColumn("externalId", NotNull = true)] private string externalId;
     [TableColumn("displayName", NotNull = true)] private string displayName;
     [TableColumn("epgHasGaps")] private bool epgHasGaps;
-    [TableColumn("channelNumber", NotNull = true)] private int channelNumber;
 
     #endregion
 
@@ -62,7 +61,7 @@ namespace TvDatabase
     /// </summary> 
     public Channel(bool isRadio, bool isTv, int timesWatched, DateTime totalTimeWatched, bool grabEpg,
                    DateTime lastGrabTime, int sortOrder, bool visibleInGuide, string externalId,
-                   string displayName, int channelNumber)
+                   string displayName)
     {
       isChanged = true;
       this.isRadio = isRadio;
@@ -75,7 +74,6 @@ namespace TvDatabase
       this.visibleInGuide = visibleInGuide;
       this.externalId = externalId;
       this.displayName = displayName;
-      this.channelNumber = channelNumber;
       epgHasGaps = false;
     }
 
@@ -85,7 +83,7 @@ namespace TvDatabase
     /// </summary> 
     public Channel(int idChannel, bool isRadio, bool isTv, int timesWatched, DateTime totalTimeWatched,
                    bool grabEpg, DateTime lastGrabTime, int sortOrder, bool visibleInGuide, string externalId,
-                   string displayName, int channelNumber)
+                   string displayName)
     {
       this.idChannel = idChannel;
       this.isRadio = isRadio;
@@ -98,7 +96,6 @@ namespace TvDatabase
       this.visibleInGuide = visibleInGuide;
       this.externalId = externalId;
       this.displayName = displayName;
-      this.channelNumber = channelNumber;
       epgHasGaps = false;
     }
 
@@ -271,16 +268,6 @@ namespace TvDatabase
       {
         isChanged |= epgHasGaps != value;
         epgHasGaps = value;
-      }
-    }
-
-    public int ChannelNumber
-    {
-      get { return channelNumber; }
-      set
-      {
-        isChanged |= channelNumber != value;
-        channelNumber = value;
       }
     }
 

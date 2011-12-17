@@ -183,10 +183,10 @@ namespace TvDatabase
     #region channels
 
     // This is really needed
-    public Channel AddNewChannel(string name, int channelNumber)
+    public Channel AddNewChannel(string name)
     {
       Channel newChannel = new Channel(false, false, 0, new DateTime(2000, 1, 1), false, new DateTime(2000, 1, 1),
-                                       -1, true, "", name, channelNumber);
+                                       -1, true, "", name);
       return newChannel;
     }
 
@@ -2804,7 +2804,7 @@ namespace TvDatabase
             }
             if (newEpisode.IsOverlapping(episode))
             {
-          List<Schedule> overlapping;
+              List<Schedule> overlapping;
               List<Schedule> notViewable;
               AssignSchedulesToCard(episode, cardSchedules, out overlapping, out notViewable);
               break;
