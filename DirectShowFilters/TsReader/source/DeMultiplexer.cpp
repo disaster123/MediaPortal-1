@@ -2035,7 +2035,7 @@ bool CDeMultiplexer::CheckPrefetchState(bool isVid, bool isAud)
     return true;
   }
 
-  if (isAud)
+  if (isAud || isVid)
   {
     if (m_filter.GetAudioPin()->IsConnected() && (m_vecAudioBuffers.size() < 2))
     {
@@ -2047,17 +2047,17 @@ bool CDeMultiplexer::CheckPrefetchState(bool isVid, bool isAud)
     }
   }
 
-  if (isVid)
-  {
-    if (m_filter.GetVideoPin()->IsConnected() && (m_vecVideoBuffers.size() < 4))
-    {
-      return true;
-    }
-    if (m_filter.GetAudioPin()->IsConnected() && (m_vecAudioBuffers.size() < 1))
-    {
-      return true;
-    }
-  }
+  //  if (isVid)
+  //  {
+  //    if (m_filter.GetVideoPin()->IsConnected() && (m_vecVideoBuffers.size() < 4))
+  //    {
+  //      return true;
+  //    }
+  //    if (m_filter.GetAudioPin()->IsConnected() && (m_vecAudioBuffers.size() < 1))
+  //    {
+  //      return true;
+  //    }
+  //  }
 
   return false;
 }
