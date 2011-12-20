@@ -180,7 +180,6 @@ CTsReaderFilter::CTsReaderFilter(IUnknown *pUnk, HRESULT *phr):
   TCHAR filename[1024];
   GetLogFile(filename);
   ::DeleteFile(filename);
-  LogDebug("--------------- v0.4.14 -------------------");
   LogDebug("--- Buffer-empty rate control testing ----");
   LogDebug("---------- v0.0.40 XXX -------------------");
 

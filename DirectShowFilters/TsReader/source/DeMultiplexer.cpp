@@ -1538,18 +1538,6 @@ void CDeMultiplexer::FillVideoH264(CTsHeader& header, byte* tsPacket)
                 else
                   m_filter.OnMediaTypeChanged(VIDEO_CHANGE);
               }
-          {
-              if (m_audioChanged || m_videoChanged)
-              {
-                SetMediaChanging(true);
-                LogDebug("DeMultiplexer: Got GOP after channel change detected, trigger format change, aud %d, vid %d", m_audioChanged, m_videoChanged);
-                if (m_audioChanged && m_videoChanged)
-                  m_filter.OnMediaTypeChanged(VIDEO_CHANGE | AUDIO_CHANGE);
-                else if (m_audioChanged)
-                  m_filter.OnMediaTypeChanged(AUDIO_CHANGE);
-              else
-                  m_filter.OnMediaTypeChanged(VIDEO_CHANGE);
-              }
               else
               {
                 SetMediaChanging(false);
@@ -1557,7 +1545,6 @@ void CDeMultiplexer::FillVideoH264(CTsHeader& header, byte* tsPacket)
               m_mpegParserTriggerFormatChange=false;
             }
           }
-        }
         }
         else
         {
@@ -1894,7 +1881,7 @@ void CDeMultiplexer::FillVideoMPEG2(CTsHeader& header, byte* tsPacket)
               LogDebug("DeMultiplexer: triggering OnVideoFormatChanged");
               m_filter.OnVideoFormatChanged(m_mpegPesParser->basicVideoInfo.streamType,m_mpegPesParser->basicVideoInfo.width,m_mpegPesParser->basicVideoInfo.height,m_mpegPesParser->basicVideoInfo.arx,m_mpegPesParser->basicVideoInfo.ary,15000000,m_mpegPesParser->basicVideoInfo.isInterlaced);
             }
-            else //video resolution is the unchanged, but there may be other format changes
+            else //video resolution is unchanged, but there may be other format changes
             {
               if (m_mpegParserTriggerFormatChange && Gop && !IsAudioChanging())
               {
@@ -1902,17 +1889,6 @@ void CDeMultiplexer::FillVideoMPEG2(CTsHeader& header, byte* tsPacket)
                 if (m_audioChanged || m_videoChanged)
                 {
                   SetMediaChanging(true);
-                  if (m_audioChanged && m_videoChanged)
-                    m_filter.OnMediaTypeChanged(VIDEO_CHANGE | AUDIO_CHANGE);
-                  else if (m_audioChanged)
-                    m_filter.OnMediaTypeChanged(AUDIO_CHANGE);
-                  else
-                    m_filter.OnMediaTypeChanged(VIDEO_CHANGE);
-                }
-                if (m_audioChanged || m_videoChanged)
-                {
-                  SetMediaChanging(true);
-                  LogDebug("DeMultiplexer: Got GOP after channel change detected, trigger format change, aud %d, vid %d", m_audioChanged, m_videoChanged);
                   if (m_audioChanged && m_videoChanged)
                     m_filter.OnMediaTypeChanged(VIDEO_CHANGE | AUDIO_CHANGE);
                   else if (m_audioChanged)
@@ -2244,7 +2220,7 @@ void CDeMultiplexer::OnNewChannel(CChannelInfo& info)
   //did the video format change?
   if (m_pids.videoPids.size() > 0 && oldVideoServiceType != m_pids.videoPids[0].VideoServiceType)
   {
-    //yes, is the audio pin connected?
+    //yes, is the video pin connected?
     if (m_filter.GetVideoPin()->IsConnected())
     {
       changed=true;
