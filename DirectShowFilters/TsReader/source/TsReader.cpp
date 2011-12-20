@@ -167,10 +167,13 @@ CTsReaderFilter::CTsReaderFilter(IUnknown *pUnk, HRESULT *phr):
   m_pCallback(NULL),
   m_pRequestAudioCallback(NULL)
 {
-  //Initialise m_tGTStartTime for GET_TIME_NOW() macro.
-  //The macro is used to avoid having to handle timeGetTime()
-  //rollover issues in the body of the code
-  m_tGTStartTime = (timeGetTime() - 0x40000000); 
+  if (m_tGTStartTime == 0)
+  {
+    //Initialise m_tGTStartTime for GET_TIME_NOW() macro.
+    //The macro is used to avoid having to handle timeGetTime()
+    //rollover issues in the body of the code
+    m_tGTStartTime = (timeGetTime() - 0x40000000); 
+  }
   
   // use the following line if you are having trouble setting breakpoints
   // #pragma comment( lib, "strmbasd" )
@@ -179,8 +182,7 @@ CTsReaderFilter::CTsReaderFilter(IUnknown *pUnk, HRESULT *phr):
   ::DeleteFile(filename);
   LogDebug("--------------- v0.4.14 -------------------");
   LogDebug("--- Buffer-empty rate control testing ----");
-  LogDebug("---------- v0.0.39 XXX -------------------");
-  LogDebug("timeGetTime():0x%x, m_tGTStartTime:0x%x, GET_TIME_NOW:0x%x", timeGetTime(), m_tGTStartTime, GET_TIME_NOW() );
+  LogDebug("---------- v0.0.40 XXX -------------------");
 
   m_fileReader=NULL;
   m_fileDuration=NULL;
@@ -241,8 +243,9 @@ CTsReaderFilter::CTsReaderFilter(IUnknown *pUnk, HRESULT *phr):
   m_MPmainThreadID = GetCurrentThreadId() ;
   m_lastPause = GET_TIME_NOW();
   
-  LogDebug("Start duration thread");
+  LogDebug("CTsReaderFilter::Start duration thread");
   StartThread();
+  LogDebug("CTsReaderFilter::timeGetTime():0x%x, m_tGTStartTime:0x%x, GET_TIME_NOW:0x%x", timeGetTime(), m_tGTStartTime, GET_TIME_NOW() );
 }
 
 CTsReaderFilter::~CTsReaderFilter()
@@ -557,9 +560,10 @@ STDMETHODIMP CTsReaderFilter::Stop()
   m_bStopping = false;
   if (m_bStreamCompensated)
   {
-    m_demultiplexer.Flush(true) ;
-    //m_bStreamCompensated=false;
-    //m_demultiplexer.m_bAudioVideoReady=false;
+    //m_demultiplexer.Flush(true) ;
+    //Flushing is delegated
+    m_demultiplexer.m_bFlushDelgNow = true;
+    m_demultiplexer.WakeThread(); 
   }
   LogDebug("CTsReaderFilter::Stop() done");
   m_bStoppedForUnexpectedSeek=true ;
@@ -623,7 +627,11 @@ STDMETHODIMP CTsReaderFilter::Pause()
             //clear buffers
             LogDebug("  -- Pause()  ->start rtsp from %f", startTime);
             m_buffer.Clear();
-            m_demultiplexer.Flush(false);
+            
+            //m_demultiplexer.Flush(false);
+            //Flushing is delegated
+            m_demultiplexer.m_bFlushDelgNow = true;
+            m_demultiplexer.WakeThread(); 
     
             //start streaming
             m_buffer.Run(true);
@@ -1116,9 +1124,10 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
 
 	  if (!m_bOnZap || !m_demultiplexer.IsNewPatReady() || m_bAnalog) // On zapping, new PAT has occured, we should not flush to avoid loosing data.
 	  {                                                               //             new PAT has not occured, we should flush to avoid restart with old data.							
-	    //m_demultiplexer.FlushAudio() ;
-	    //m_demultiplexer.FlushVideo() ;
-	    m_demultiplexer.Flush(true);
+	    //m_demultiplexer.Flush(true);
+      //Flushing is delegated
+      m_demultiplexer.m_bFlushDelgNow = true;
+      m_demultiplexer.WakeThread(); 
     }
 
     m_bOnZap=false ;
@@ -1218,22 +1227,22 @@ IDVBSubtitle* CTsReaderFilter::GetSubtitleFilter()
 //  are also delegated to this thread.
 void CTsReaderFilter::ThreadProc()
 {
-  LogDebug("CTsReaderFilter::ThreadProc start()");
+  LogDebug("CTsReaderFilter::ThreadProc start(), threadID:0x%x", GetCurrentThreadId());
 
   int  durationUpdateLoop = 1;
   long Old_rtspDuration = -1 ;
   long PauseDuration =0;
   DWORD timeNow = GET_TIME_NOW();
-  DWORD  lastFlushTime = timeNow;
+  //DWORD  lastFlushTime = timeNow;
   DWORD  lastPosnTime = timeNow;
   DWORD  lastDataLowTime = timeNow;
   DWORD  lastDurTime = timeNow - 2000;
-  DWORD  lastFileReadTime = timeNow;
+  //DWORD  lastFileReadTime = timeNow;
   DWORD  pauseWaitTime = 1000;
   long   underRunLimit = 10;
   bool   longPause = true;
 
-  ::SetThreadPriority(GetCurrentThread(),THREAD_PRIORITY_NORMAL);
+  ::SetThreadPriority(GetCurrentThread(),THREAD_PRIORITY_BELOW_NORMAL);
   do
   {
     //if demuxer reached the end of the file, we can skip the loop
@@ -1306,32 +1315,32 @@ void CTsReaderFilter::ThreadProc()
       }
     }
 
-    //Flush delegated to this thread
-    if (m_demultiplexer.m_bFlushDelegated || m_demultiplexer.m_bFlushDelgNow)
-    {
-      if (!m_demultiplexer.m_bFlushDelgNow && ((timeNow - 500) < lastFlushTime)) 
-      { 
-        // Too early for next flush
-        m_demultiplexer.m_bFlushDelegated = false;
-      }
-      else
-      {
-        lastFlushTime = timeNow;
-  
-        LogDebug("CTsReaderFilter::ThreadProc - Flush");     
-        //Flush the internal data
-        m_demultiplexer.Flush(true);
-        m_demultiplexer.m_bFlushDelgNow = false;
-      }
-    }
-
-    //File read prefetch
-    if (m_demultiplexer.m_bReadAheadFromFile && ((timeNow - 5) > lastFileReadTime))
-    {
-      lastFileReadTime = timeNow; 
-      m_demultiplexer.ReadAheadFromFile();
-      m_demultiplexer.m_bReadAheadFromFile = false;
-    }
+    //    //Flush delegated to this thread
+    //    if (m_demultiplexer.m_bFlushDelegated || m_demultiplexer.m_bFlushDelgNow)
+    //    {
+    //      if (!m_demultiplexer.m_bFlushDelgNow && ((timeNow - 500) < lastFlushTime)) 
+    //      { 
+    //        // Too early for next flush
+    //        m_demultiplexer.m_bFlushDelegated = false;
+    //      }
+    //      else
+    //      {
+    //        lastFlushTime = timeNow;
+    //  
+    //        LogDebug("CTsReaderFilter::ThreadProc - Flush");     
+    //        //Flush the internal data
+    //        m_demultiplexer.Flush(true);
+    //        m_demultiplexer.m_bFlushDelgNow = false;
+    //      }
+    //    }
+    //
+    //    //File read prefetch
+    //    if (m_demultiplexer.m_bReadAheadFromFile && ((timeNow - 5) > lastFileReadTime))
+    //    {
+    //      lastFileReadTime = timeNow; 
+    //      m_demultiplexer.ReadAheadFromFile();
+    //      m_demultiplexer.m_bReadAheadFromFile = false;
+    //    }
      
     //Execute this loop approx every second
     if (((timeNow - 1000) > lastDurTime) && IsFilterRunning())
@@ -1815,7 +1824,9 @@ void CTsReaderFilter::BufferingPause(bool longPause)
           LogDebug("Pause %d mS renderer clock to match provider/RTSP clock, A/V = %d/%d ", sleepTime, ACnt, VCnt) ; 
           ptrMediaCtrl->Pause() ;         
           Sleep(sleepTime) ;
-          m_demultiplexer.ReadAheadFromFile(); //File read prefetch
+          //m_demultiplexer.ReadAheadFromFile(); //File read prefetch
+          m_demultiplexer.m_bReadAheadFromFile = true;
+          m_demultiplexer.WakeThread(); //File read prefetch
           if (m_State != State_Stopped)
           {
             ptrMediaCtrl->Run() ;

@@ -58,7 +58,7 @@ public:
 	void SetData(const void* ptr, DWORD len) {SetCount(len); memcpy(GetData(), ptr, len);}
 };
 
-class CDeMultiplexer : public CPacketSync, public IPatParserCallback
+class CDeMultiplexer : public CPacketSync, public IPatParserCallback, public TSThread
 {
 public:
   CDeMultiplexer( CTsDuration& duration,CTsReaderFilter& filter);
