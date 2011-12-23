@@ -302,7 +302,10 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
         //if (m_pTsReaderFilter->m_ShowBufferVideo) LogDebug("vid:isseeking:%d %d",m_pTsReaderFilter->IsSeeking() ,m_bSeeking);
         //Sleep(5);
         m_FillBuffSleepTime = 5;
+        pSample->SetTime(NULL,NULL);
         pSample->SetActualDataLength(0);
+        pSample->SetSyncPoint(FALSE);
+        pSample->SetDiscontinuity(FALSE);
         m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
         return NOERROR;
       }
@@ -407,7 +410,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
             //Discard late samples at start of play,
             //and samples outside a sensible timing window during play 
             //(helps with signal corruption recovery)
-            if ((fTime > (ForcePresent ? -0.5 : 0.005)) && (fTime < 3.0))
+            if ((fTime > (ForcePresent ? -0.5 : -0.3)) && (fTime < 3.0))
             {
               if (fTime > stallPoint)
               {
@@ -521,6 +524,17 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
       }      
       earlyStall = false;
     } while (buffer == NULL);
+
+    if (m_pTsReaderFilter->IsSeeking() || m_pTsReaderFilter->IsStopping())
+    {
+      //Sleep(5);
+      m_FillBuffSleepTime = 5;
+      pSample->SetTime(NULL,NULL);
+      pSample->SetActualDataLength(0);
+      pSample->SetSyncPoint(FALSE);
+      pSample->SetDiscontinuity(FALSE);
+      m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
+    }
     return NOERROR;
   }
 
@@ -528,6 +542,13 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
   {
     LogDebug("vid:fillbuffer exception");
   }
+  m_FillBuffSleepTime = 5;
+  pSample->SetTime(NULL,NULL);
+  pSample->SetActualDataLength(0);
+  pSample->SetSyncPoint(FALSE);
+  pSample->SetDiscontinuity(FALSE);
+  m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
+  
   return NOERROR;
 }
 

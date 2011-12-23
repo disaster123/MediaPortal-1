@@ -176,6 +176,7 @@ public:
   IDVBSubtitle*   GetSubtitleFilter();
   bool            IsTimeShifting();
   bool            IsRTSP();
+  bool            IsUNCfile();
   CTsDuration&    GetDuration();
   FILTER_STATE    State() {return m_State;};
   void            DeltaCompensation(REFERENCE_TIME deltaComp);
@@ -205,7 +206,7 @@ public:
   
   bool            m_bLiveTv;
   bool            m_bStopping;
-  int             m_WaitForSeekToEof;
+  bool            m_WaitForSeekToEof;
 	
   void GetTime(REFERENCE_TIME *Time);
   void GetMediaPosition(REFERENCE_TIME *pMediaTime);
@@ -267,5 +268,6 @@ private:
   bool            m_bStoppedForUnexpectedSeek ;
   bool            m_bPauseOnClockTooFast;
   DWORD           m_MPmainThreadID;
+  bool            m_isUNCfile;
 };
 

@@ -290,11 +290,11 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
       {
         //if (m_pTsReaderFilter->m_ShowBufferAudio) LogDebug("aud:isseeking");
         //Sleep(20);
-        m_FillBuffSleepTime = 20;
+        m_FillBuffSleepTime = 5;
         pSample->SetTime(NULL,NULL);
         pSample->SetActualDataLength(0);
         pSample->SetSyncPoint(FALSE);
-        pSample->SetDiscontinuity(TRUE);
+        pSample->SetDiscontinuity(FALSE);
         m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
         return NOERROR;
       }
@@ -450,7 +450,7 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
           //and samples outside a sensible timing window during play 
           //(helps with signal corruption recovery)
           cRefTime -= m_pTsReaderFilter->m_ClockOnStart.m_time;
-          if ((cRefTime.m_time >= 0) && (fTime > ((cRefTime.m_time >= FS_TIM_LIM) ? 0.0 : -0.3)) && (fTime < 2.0))
+          if ((cRefTime.m_time >= 0) && (fTime > ((cRefTime.m_time >= FS_TIM_LIM) ? -0.3 : -0.5)) && (fTime < 2.0))
           {
             //Slowly increase stall point threshold over the first 8 seconds of play
             //to allow audio renderer buffer to build up to 0.4s
@@ -539,6 +539,18 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
       }      
       earlyStall = false;
     } while (buffer==NULL);
+
+    if (m_pTsReaderFilter->IsSeeking() || m_pTsReaderFilter->IsStopping())
+    {
+      //if (m_pTsReaderFilter->m_ShowBufferAudio) LogDebug("aud:isseeking");
+      //Sleep(20);
+      m_FillBuffSleepTime = 5;
+      pSample->SetTime(NULL,NULL);
+      pSample->SetActualDataLength(0);
+      pSample->SetSyncPoint(FALSE);
+      pSample->SetDiscontinuity(FALSE);
+      m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
+    }
     return NOERROR;
   }
 
@@ -551,6 +563,13 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
   {
     LogDebug("aud:fillbuffer exception ...");
   }
+  m_FillBuffSleepTime = 5;
+  pSample->SetTime(NULL,NULL);
+  pSample->SetActualDataLength(0);
+  pSample->SetSyncPoint(FALSE);
+  pSample->SetDiscontinuity(FALSE);
+  m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
+  
   return NOERROR;
 }
 

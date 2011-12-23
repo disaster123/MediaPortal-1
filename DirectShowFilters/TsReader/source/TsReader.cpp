@@ -221,7 +221,8 @@ CTsReaderFilter::CTsReaderFilter(IUnknown *pUnk, HRESULT *phr):
   }
   
   LogDebug("Wait for seeking to eof - false - constructor");
-  m_WaitForSeekToEof=0;
+  m_WaitForSeekToEof=false;
+  m_isUNCfile = false;
   m_bLiveTv = false;
   m_bTimeShifting = false;
   m_RandomCompensation = 0;     
@@ -578,6 +579,11 @@ bool CTsReaderFilter::IsRTSP()
   return (m_fileDuration == NULL);
 }
 
+bool CTsReaderFilter::IsUNCfile()
+{
+  return m_isUNCfile;
+}
+
 
 STDMETHODIMP CTsReaderFilter::Pause()
 {
@@ -731,8 +737,9 @@ STDMETHODIMP CTsReaderFilter::Load(LPCOLESTR pszFileName,const AM_MEDIA_TYPE *pm
   m_fileDuration = NULL;
   m_seekTime = CRefTime(0L);
   m_absSeekTime = CRefTime(0L);
-  m_WaitForSeekToEof=0;
+  m_WaitForSeekToEof=false;
   m_bRecording=false ;
+  m_isUNCfile = false;
 
   wcscpy(m_fileName, pszFileName);
   char url[MAX_PATH];
@@ -840,6 +847,11 @@ STDMETHODIMP CTsReaderFilter::Load(LPCOLESTR pszFileName,const AM_MEDIA_TYPE *pm
       m_fileReader = new MultiFileReader();
       m_fileDuration = new MultiFileReader();
     }
+    
+    if ((length > 2) && (strnicmp(url, "\\\\",2) == 0))
+    {
+      m_isUNCfile = true;
+    }
 
     //open file
     m_fileReader->SetFileName(m_fileName);
@@ -861,6 +873,11 @@ STDMETHODIMP CTsReaderFilter::Load(LPCOLESTR pszFileName,const AM_MEDIA_TYPE *pm
     LogDebug("start:%x end:%x %f",
       (DWORD)m_duration.StartPcr().PcrReferenceBase, (DWORD) m_duration.EndPcr().PcrReferenceBase, milli);
     m_fileReader->SetFilePointer(0LL, FILE_BEGIN);
+  }
+
+  if (length > 0)
+  {
+    LogDebug("open %s, isTimeshift:%d, isUNC:%d", url, m_bTimeShifting, m_isUNCfile);
   }
 
   //AddGraphToRot(GetFilterGraph());
@@ -1094,7 +1111,7 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
 //    m_demultiplexer.SetHoldAudio(true) ;
 //    m_demultiplexer.SetHoldVideo(true) ;
  
-    m_WaitForSeekToEof=1 ; // 
+    m_WaitForSeekToEof = true ; // 
 
     m_demultiplexer.CallTeletextEventCallback(TELETEXT_EVENT_SEEK_START,TELETEXT_EVENTVALUE_NONE);
  
@@ -1139,7 +1156,7 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
     //tell filter we're done with seeking
 //    m_pTsReaderFilter->SeekDone(rtSeek);
 
-    m_WaitForSeekToEof=0 ; // 
+//    m_WaitForSeekToEof = false ; // 
 
     if (m_fileDuration != NULL)
     {
@@ -1180,6 +1197,8 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
       m_pDVBSubtitle->SetFirstPcr(m_duration.FirstStartPcr().PcrReferenceBase);
       m_pDVBSubtitle->SeekDone(rtSeek);
     }
+    
+    m_WaitForSeekToEof = false ; // 
   }
 
   return ;
@@ -1260,10 +1279,16 @@ void CTsReaderFilter::ThreadProc()
       underRunLimit = 10;
       longPause = true;
     }
+    else if (m_isUNCfile)
+    {
+      pauseWaitTime = 2000;
+      underRunLimit = 15;
+      longPause = false;
+    }
     else
     {
       pauseWaitTime = 2000;
-      underRunLimit = 50;
+      underRunLimit = 30;
       longPause = false;
     }
 
@@ -1703,21 +1728,9 @@ bool CTsReaderFilter::IsStreaming()
 }
 
 
-//void CTsReaderFilter::SetWaitForSeekToEof(bool Audio, bool Video)
-//{
-//  LogDebug("Wait for seeking to eof %d",onOff);
-//  m_WaitForSeekToEof = onOff;
-//}
-
-//int  CTsReaderFilter::SeekingDone()
-//{
-//  if (m_WaitForSeekToEof > 0) m_WaitForSeekToEof--;
-//  return m_WaitForSeekToEof;
-//}
-
 bool CTsReaderFilter::IsSeeking()
 {
-  return (m_WaitForSeekToEof > 0);
+  return m_WaitForSeekToEof;
 }
 
 bool CTsReaderFilter::IsStopping()

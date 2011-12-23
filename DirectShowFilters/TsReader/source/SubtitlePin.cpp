@@ -314,13 +314,26 @@ HRESULT CSubtitlePin::FillBuffer(IMediaSample *pSample)
       }
       m_bInFillBuffer=false;
     } while (buffer==NULL);
+    
+    if (m_pTsReaderFilter->IsSeeking() || m_pTsReaderFilter->IsStopping() || !m_bRunning)
+    {
+      pSample->SetTime(NULL,NULL);
+      pSample->SetActualDataLength(0);
+      pSample->SetSyncPoint(FALSE);
+      pSample->SetDiscontinuity(FALSE);  // TRUE seems to hold sometimes the working thread....( ambass )
+      m_bInFillBuffer = false;
+    }
     return NOERROR;
   }
   catch(...)
   {
     LogDebug("sub:fillbuffer exception");
   }
-
+  
+  pSample->SetTime(NULL,NULL);
+  pSample->SetActualDataLength(0);
+  pSample->SetSyncPoint(FALSE);
+  pSample->SetDiscontinuity(FALSE);
   m_bInFillBuffer=false;
   return NOERROR;
 }

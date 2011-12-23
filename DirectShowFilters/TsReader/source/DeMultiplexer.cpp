@@ -44,9 +44,13 @@
 
 #define MAX_BUF_SIZE 1000
 #define BUFFER_LENGTH 0x1000
-#define READ_SIZE (1316*30)
-#define MIN_READ_SIZE 564
-#define INITIAL_READ_SIZE (READ_SIZE * 1024)
+//#define READ_SIZE (1316*32)
+//#define MIN_READ_SIZE 564
+#define READ_SIZE (65536)
+#define MIN_READ_SIZE (READ_SIZE/8)
+#define MIN_READ_SIZE_UNC (READ_SIZE/4)
+//#define INITIAL_READ_SIZE (READ_SIZE * 1024)
+#define INITIAL_READ_SIZE (READ_SIZE * 512)
 
 #define AUDIO_CHANGE 0x1
 #define VIDEO_CHANGE 0x2
@@ -715,8 +719,8 @@ void CDeMultiplexer::Start()
   while((GET_TIME_NOW() - m_Time) < 10000)
   {
     m_bEndOfFile = false;  //reset eof every time through to ignore a false eof due to slow rtsp startup
-    int BytesRead =ReadFromFile(false,false);
-    if (BytesRead==0) Sleep(10);
+    int BytesRead = max(0, ReadFromFile(false,false));
+    if (BytesRead == 0) Sleep(10);
 	  // LogDebug("demux:Start() BytesRead:%d, BytesProcessed:%d", BytesRead, dwBytesProcessed);
     if (dwBytesProcessed>INITIAL_READ_SIZE || GetAudioStreamCount()>0)
     {
@@ -761,15 +765,13 @@ int CDeMultiplexer::ReadAheadFromFile()
   //if filter is stopped or
   //end of file has been reached or
   //demuxer should stop getting video packets
-  //then return zero
-  if (!m_filter.IsFilterRunning()) return 0;
-  if (m_filter.m_bStopping) return 0;
-  if (m_bEndOfFile) return 0;
+  //then return an error
+  if (!m_filter.IsFilterRunning() || m_filter.m_bStopping || m_bEndOfFile) return -1;
   
 	//LogDebug("demux:ReadAheadFromFile");
   int SizeRead = ReadFromFile(false,false) ;
   
-  if ((SizeRead < MIN_READ_SIZE) && m_bAudioVideoReady)
+  if (m_bAudioVideoReady && (SizeRead >= 0) && (SizeRead < (m_filter.IsUNCfile() ? MIN_READ_SIZE_UNC : MIN_READ_SIZE)))
   {
     // No buffer and nothing to read....
     if ((m_vecAudioBuffers.size()==0) || (m_vecVideoBuffers.size()==0))
@@ -777,7 +779,6 @@ int CDeMultiplexer::ReadAheadFromFile()
       //Running very low on data
       InterlockedIncrement(&m_AVDataLowCount);   
     }           
-    return -1;
   }
 
   return SizeRead;
@@ -789,12 +790,10 @@ int CDeMultiplexer::ReadAheadFromFile()
 //  which in its turn deals with the packet
 int CDeMultiplexer::ReadFromFile(bool isAudio, bool isVideo)
 {
-//  if (m_bWeos) return 0 ;
-//  if (IsAudioChanging()) return 0 ;          // Do not read any data during stream selection from MP C#
-  if (m_filter.IsSeeking() || m_bFlushDelgNow || m_bFlushRunning) return 0; // Don't read if flush pending/running
+   // Don't read if flush pending/running or no reader....
+  if (m_filter.IsSeeking() || m_bFlushDelgNow || m_bFlushRunning || (m_reader==NULL)) return -1;
     
   CAutoLock lock (&m_sectionRead);
-  if (m_reader==NULL) return false;
   byte buffer[READ_SIZE];
   int dwReadBytes=0;
   bool result=false;
@@ -834,7 +833,7 @@ int CDeMultiplexer::ReadFromFile(bool isAudio, bool isVideo)
         {
           LogDebug("demux:endoffile");
           m_bEndOfFile=true;
-          return 0;
+          return -1;
         }
       }
     }
@@ -864,7 +863,7 @@ int CDeMultiplexer::ReadFromFile(bool isAudio, bool isVideo)
           //set EOF flag and return
           LogDebug("demux:endoffile");
           m_bEndOfFile=true;
-          return 0;
+          return -1;
         }
       }
 
@@ -878,11 +877,6 @@ int CDeMultiplexer::ReadFromFile(bool isAudio, bool isVideo)
     }
   }
   //Failed to read any data
-//  if ( (isAudio && m_bHoldAudio) || (isVideo && m_bHoldVideo) )
-//  {
-    //LogDebug("demux:paused %d %d",m_bHoldAudio,m_bHoldVideo);
-//    return 0;
-//  }
   return 0;
 }
 /// This method gets called via ReadFile() when a new TS packet has been received
@@ -2030,11 +2024,11 @@ bool CDeMultiplexer::CheckPrefetchState(bool isVid, bool isAud)
 
   if (isAud || isVid)
   {
-    if (m_filter.GetAudioPin()->IsConnected() && (m_vecAudioBuffers.size() < 2))
+    if (m_filter.GetAudioPin()->IsConnected() && (m_vecAudioBuffers.size() < 3))
     {
       return true;
     }
-    if (m_filter.GetVideoPin()->IsConnected() && (m_vecVideoBuffers.size() < 8))
+    if (m_filter.GetVideoPin()->IsConnected() && (m_vecVideoBuffers.size() < 12))
     {
       return true;
     }
@@ -2496,7 +2490,7 @@ void CDeMultiplexer::ThreadProc()
     }
 
     //File read prefetch
-    if (m_bReadAheadFromFile && ((timeNow - 5) > lastFileReadTime))
+    if (m_bReadAheadFromFile && (timeNow > (lastFileReadTime + (m_filter.IsUNCfile() ? 10 : 5))) )
     {
       lastFileReadTime = timeNow; 
       ReadAheadFromFile();
@@ -2506,7 +2500,7 @@ void CDeMultiplexer::ThreadProc()
      
     Sleep(1);
   }
-  while (!ThreadIsStopping(55)) ;
+  while (!ThreadIsStopping(11)) ;
   LogDebug("CDeMultiplexer::ThreadProc stopped()");
 }
 
