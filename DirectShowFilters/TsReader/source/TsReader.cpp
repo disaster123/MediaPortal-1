@@ -181,7 +181,7 @@ CTsReaderFilter::CTsReaderFilter(IUnknown *pUnk, HRESULT *phr):
   GetLogFile(filename);
   ::DeleteFile(filename);
   LogDebug("--- Buffer-empty rate control testing ----");
-  LogDebug("---------- v0.0.40 XXX -------------------");
+  LogDebug("---------- v0.0.41 XXX -------------------");
 
   m_fileReader=NULL;
   m_fileDuration=NULL;
@@ -488,7 +488,14 @@ STDMETHODIMP CTsReaderFilter::Run(REFERENCE_TIME tStart)
 
   CAutoLock cObjectLock(m_pLock);
 
+  //Wait for seeking to finish
+  while (IsSeeking()) 
+  {
+    Sleep(1);
+  }
+
   m_bSeekAfterRcDone = false;
+
 
   if(m_pSubtitlePin) m_pSubtitlePin->SetRunningStatus(true);
 	
@@ -503,9 +510,6 @@ STDMETHODIMP CTsReaderFilter::Run(REFERENCE_TIME tStart)
       m_rtspClient.Continue();
       LogDebug(" CTsReaderFilter::Run()  --> rtsp running");
     }
-//    m_demultiplexer.SetHoldAudio(false);
-//    m_demultiplexer.SetHoldVideo(false);
-//    m_demultiplexer.SetHoldSubtitle(false);
   }
 
   m_demultiplexer.m_LastDataFromRtsp=GET_TIME_NOW();
@@ -529,6 +533,12 @@ STDMETHODIMP CTsReaderFilter::Stop()
   //guarantees that audio/video/subtitle pins dont block in the fillbuffer() method
   //m_bSeeking = true;
   m_bStopping = true;
+
+  //Wait for output pin data sample delivery and seeking to finish
+  while (GetAudioPin()->IsInFillBuffer() || GetVideoPin()->IsInFillBuffer() || GetSubtitlePin()->IsInFillBuffer() || IsSeeking()) 
+  {
+    Sleep(1);
+  }
 
   if (m_pSubtitlePin)
   {
@@ -1024,6 +1034,7 @@ bool CTsReaderFilter::IsFilterRunning()
 
 void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
 {
+  
   bool doSeek = true;
   CTsDuration tsduration=GetDuration();
 
@@ -1063,6 +1074,7 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
       m_bStoppedForUnexpectedSeek=false ;
       m_seekTime = rtSeek ;
       m_absSeekTime = rtAbsSeek ;
+      SetSeeking(false);
       return ;
     }
   }
@@ -1106,25 +1118,21 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
     m_seekTime=rtSeek ;
     m_absSeekTime = rtAbsSeek ;
 
-    if (!doSeek && !m_bOnZap) return ;
-
-//    m_demultiplexer.SetHoldAudio(true) ;
-//    m_demultiplexer.SetHoldVideo(true) ;
+    if (!doSeek && !m_bOnZap) 
+    {
+      SetSeeking(false);
+      return ;
+    }
  
-    m_WaitForSeekToEof = true ; // 
+    SetSeeking(true); //Just in case...normally set already by calling method
+    //m_WaitForSeekToEof = true ; // 
+
+    //LogDebug("CTsReaderFilter::--SeekPreStart() Wait pins start"); 
 
     m_demultiplexer.CallTeletextEventCallback(TELETEXT_EVENT_SEEK_START,TELETEXT_EVENTVALUE_NONE);
  
     // Stop threads ////
-
-    if (GetAudioPin()->IsConnected())
-    {
-      //deliver a begin-flush to the codec filter so it stops asking for data
-      GetAudioPin()->DeliverBeginFlush();
-
-      //stop the thread
-      GetAudioPin()->Stop();
-    }
+    //LogDebug("CTsReaderFilter::--SeekPreStart() DeliverBeginFlush"); 
 
     if (GetVideoPin()->IsConnected())
     {
@@ -1133,6 +1141,15 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
 
       //stop the thread
       GetVideoPin()->Stop();
+    }
+  
+    if (GetAudioPin()->IsConnected())
+    {
+      //deliver a begin-flush to the codec filter so it stops asking for data
+      GetAudioPin()->DeliverBeginFlush();
+
+      //stop the thread
+      GetAudioPin()->Stop();
     }
 
     m_bStreamCompensated=false ;
@@ -1144,20 +1161,17 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
       //Flushing is delegated
       m_demultiplexer.m_bFlushDelgNow = true;
       m_demultiplexer.WakeThread(); 
+      while (m_demultiplexer.m_bFlushDelgNow) 
+      {
+        Sleep(1);
+      }
     }
 
     m_bOnZap=false ;
-//    m_demultiplexer.SetHoldAudio(false) ;
-//    m_demultiplexer.SetHoldVideo(false) ;
 
     //do the seek...
     if (doSeek && !m_demultiplexer.IsMediaChanging()&& !m_demultiplexer.IsAudioChanging()) Seek(rtSeek, true);
-
-    //tell filter we're done with seeking
-//    m_pTsReaderFilter->SeekDone(rtSeek);
-
-//    m_WaitForSeekToEof = false ; // 
-
+    
     if (m_fileDuration != NULL)
     {
       if (rtSeek >= m_duration.Duration())
@@ -1166,8 +1180,16 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
       }
     }
 
+    m_ShowBufferVideo = 2;
+    m_ShowBufferAudio = 2;
+    
+    //LogDebug("CTsReaderFilter::--SeekPreStart() DeliverEndFlush"); 
+    
     if (GetAudioPin()->IsConnected())
     {
+      //LogDebug("CTsReaderFilter::--SeekPreStart() Aud Run"); 
+      GetAudioPin()->SetDiscontinuity(true);
+      
       // deliver a end-flush to the codec filter so it will start asking for data again
       GetAudioPin()->DeliverEndFlush();
 
@@ -1180,6 +1202,9 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
 
     if (GetVideoPin()->IsConnected())
     {
+      //LogDebug("CTsReaderFilter::--SeekPreStart() Vid Run"); 
+      GetVideoPin()->SetDiscontinuity(true);
+
       //deliver a end-flush to the codec filter so it will start asking for data again
       GetVideoPin()->DeliverEndFlush();
 
@@ -1188,6 +1213,15 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
 
       // and restart the thread
       GetVideoPin()->Run();
+    }
+  
+    if (GetSubtitlePin()->IsConnected())
+    {
+      //LogDebug("CTsReaderFilter::--SeekPreStart() Sub Run"); 
+      GetVideoPin()->SetDiscontinuity(true);
+
+      // Update m_rtStart in case of has not seeked yet
+      GetSubtitlePin()->SetStart(rtAbsSeek) ;
     }
 
     m_demultiplexer.CallTeletextEventCallback(TELETEXT_EVENT_SEEK_END,TELETEXT_EVENTVALUE_NONE);
@@ -1198,9 +1232,12 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
       m_pDVBSubtitle->SeekDone(rtSeek);
     }
     
-    m_WaitForSeekToEof = false ; // 
+    //m_WaitForSeekToEof = false ; //     
+    
+    LogDebug("CTsReaderFilter::--SeekPreStart() End"); 
   }
 
+  SetSeeking(false);
   return ;
 }
 
@@ -1727,6 +1764,29 @@ bool CTsReaderFilter::IsStreaming()
   return (m_fileDuration==NULL);
 }
 
+bool CTsReaderFilter::SetSeeking(bool onOff)
+{
+  CAutoLock lock (&m_sectionSeeking);
+  
+  //LogDebug("CTsReaderFilter: SetSeeking :%d", onOff);
+  
+  if (m_WaitForSeekToEof == onOff)
+  {
+    return false;
+  }
+  
+  m_WaitForSeekToEof = onOff;
+  
+  if (m_WaitForSeekToEof)
+  {
+    //Wait for output pin data sample delivery to stop
+    while (GetAudioPin()->IsInFillBuffer() || GetVideoPin()->IsInFillBuffer() || GetSubtitlePin()->IsInFillBuffer()) 
+    {
+      Sleep(1);
+    }
+  }
+  return true; //state changed
+}
 
 bool CTsReaderFilter::IsSeeking()
 {

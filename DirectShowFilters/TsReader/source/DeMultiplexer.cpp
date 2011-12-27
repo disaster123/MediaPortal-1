@@ -81,9 +81,6 @@ CDeMultiplexer::CDeMultiplexer(CTsDuration& duration,CTsReaderFilter& filter)
   m_audioPid = 0;
   m_currentSubtitlePid = 0;
   m_bEndOfFile = false;
-  m_bHoldAudio = false;
-  m_bHoldVideo = false;
-  m_bHoldSubtitle = false;
   m_bShuttingDown = false;
   m_iAudioIdx = -1;
   m_iPatVersion = -1;
@@ -506,18 +503,9 @@ void CDeMultiplexer::Flush(bool clearAVready)
 
   m_iAudioReadCount = 0;
   m_LastDataFromRtsp = GET_TIME_NOW();
-  bool holdAudio = HoldAudio();
-  bool holdVideo = HoldVideo();
-  bool holdSubtitle = HoldSubtitle();
-  SetHoldAudio(true);
-  SetHoldVideo(true);
-  SetHoldSubtitle(true);
   FlushAudio();
   FlushVideo();
   FlushSubtitle();
-  SetHoldAudio(holdAudio);
-  SetHoldVideo(holdVideo);
-  SetHoldSubtitle(holdSubtitle);
   m_bFlushDelegated = false;
   // m_bFlushDelgNow = false;
   m_bReadAheadFromFile = false;  
@@ -548,7 +536,6 @@ CBuffer* CDeMultiplexer::GetSubtitle()
   //if there is no subtitle pid, then simply return NULL
   if (m_currentSubtitlePid==0) return NULL;
   if (m_bEndOfFile) return NULL;
-  if (m_bHoldSubtitle) return NULL;
   
   //are there subtitle packets in the buffer?
   if (m_vecSubtitleBuffers.size()!=0 )
@@ -704,8 +691,6 @@ void CDeMultiplexer::Start()
   m_videoChanged=false;
   m_audioChanged=false;
   m_bEndOfFile=false;
-  m_bHoldAudio=false;
-  m_bHoldVideo=false;
   m_iPatVersion=-1;
   m_ReqPatVersion=-1;
   m_bWaitGoodPat = false;
@@ -2316,44 +2301,6 @@ void CDeMultiplexer::OnNewChannel(CChannelInfo& info)
   }
 }
 
-///Returns whether the demuxer is allowed to block in GetAudio() or not
-bool CDeMultiplexer::HoldAudio()
-{
-  return m_bHoldAudio;
-}
-
-///Sets whether the demuxer may block in GetAudio() or not
-void CDeMultiplexer::SetHoldAudio(bool onOff)
-{
-  LogDebug("demux:set hold audio:%d", onOff);
-  m_bHoldAudio=onOff;
-}
-
-///Returns whether the demuxer is allowed to block in GetVideo() or not
-bool CDeMultiplexer::HoldVideo()
-{
-  return m_bHoldVideo;
-}
-
-///Sets whether the demuxer may block in GetVideo() or not
-void CDeMultiplexer::SetHoldVideo(bool onOff)
-{
-  LogDebug("demux:set hold video:%d", onOff);
-  m_bHoldVideo=onOff;
-}
-
-///Returns whether the demuxer is allowed to block in GetSubtitle() or not
-bool CDeMultiplexer::HoldSubtitle()
-{
-  return m_bHoldSubtitle;
-}
-
-///Sets whether the demuxer may block in GetSubtitle() or not
-void CDeMultiplexer::SetHoldSubtitle(bool onOff)
-{
-  LogDebug("demux:set hold subtitle:%d", onOff);
-  m_bHoldSubtitle=onOff;
-}
 
 void CDeMultiplexer::SetMediaChanging(bool onOff)
 {

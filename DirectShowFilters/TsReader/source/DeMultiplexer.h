@@ -107,12 +107,12 @@ public:
   bool       SetSubtitleResetCallback( int (CALLBACK *pSubUpdateCallback)(int c, void* opts, int* select));
 
   bool       EndOfFile();
-  bool       HoldAudio();
-  void       SetHoldAudio(bool onOff);
-  bool       HoldVideo();
-  void       SetHoldVideo(bool onOff);
-  bool       HoldSubtitle();
-  void       SetHoldSubtitle(bool onOff);
+  //  bool       HoldAudio();
+  //  void       SetHoldAudio(bool onOff);
+  //  bool       HoldVideo();
+  //  void       SetHoldVideo(bool onOff);
+  //  bool       HoldSubtitle();
+  //  void       SetHoldSubtitle(bool onOff);
   void       ThreadProc();
   void       FlushVideo();
   void       FlushAudio();
@@ -219,9 +219,9 @@ private:
 
   unsigned int m_iAudioReadCount;
 
-  bool m_bHoldAudio;
-  bool m_bHoldVideo;
-  bool m_bHoldSubtitle;
+  //  bool m_bHoldAudio;
+  //  bool m_bHoldVideo;
+  //  bool m_bHoldSubtitle;
   int m_iAudioIdx;
   int m_iPatVersion;
   int m_ReqPatVersion;

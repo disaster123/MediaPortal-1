@@ -55,6 +55,7 @@ public:
   HRESULT OnThreadStartPlay();
   void SetStart(CRefTime rtStartTime);
   bool IsConnected();
+  bool IsInFillBuffer();
   void SetDiscontinuity(bool onOff);
   LONGLONG m_sampleDuration;
   //DWORD    m_sampleSleepTime;
@@ -69,6 +70,7 @@ protected:
   CCritSec* m_section;
   bool      m_bPresentSample;
   bool      m_bSubtitleCompensationSet;
+  bool      m_bInFillBuffer;
   
   void     ClearAverageSampleDur();
   LONGLONG GetAverageSampleDur (LONGLONG timeStamp);

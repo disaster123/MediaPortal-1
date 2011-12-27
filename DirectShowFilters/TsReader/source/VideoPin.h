@@ -55,6 +55,7 @@ public:
   HRESULT OnThreadStartPlay();
   void SetStart(CRefTime rtStartTime);
   bool IsConnected();
+  bool IsInFillBuffer();
   void SetDiscontinuity(bool onOff);
   DWORD m_FillBuffSleepTime;
 
@@ -66,6 +67,7 @@ protected:
   BOOL      m_bDiscontinuity;
   CCritSec* m_section;
   bool      m_bPresentSample;
+  bool      m_bInFillBuffer;
 
   FILTER_INFO m_filterInfo;
   

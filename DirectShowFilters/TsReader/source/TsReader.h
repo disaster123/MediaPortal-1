@@ -166,9 +166,10 @@ public:
   bool            IsFilterRunning();
   CDeMultiplexer& GetDemultiplexer();
   void            Seek(CRefTime&  seekTime, bool seekInFile);
-  void            SeekDone(CRefTime& refTime);
-  void            SeekStart();
+//  void            SeekDone(CRefTime& refTime);
+//  void            SeekStart();
   void            SeekPreStart(CRefTime& rtSeek);
+  bool            SetSeeking(bool onOff);
   double          UpdateDuration();
   CAudioPin*      GetAudioPin();
   CVideoPin*      GetVideoPin();
@@ -269,5 +270,6 @@ private:
   bool            m_bPauseOnClockTooFast;
   DWORD           m_MPmainThreadID;
   bool            m_isUNCfile;
+  CCritSec        m_sectionSeeking;
 };
 
