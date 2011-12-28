@@ -525,9 +525,9 @@ void CDeMultiplexer::Flush(bool clearAVready)
 CBuffer* CDeMultiplexer::GetSubtitle()
 {
   if (m_bFlushDelgNow || m_bFlushRunning || m_bStarting) return NULL; //Flush pending or Start() active
-  if (m_filter.GetSubtitlePin()->IsConnected() && (m_iAudioStream == -1)) return NULL;
+  if (m_filter.GetSubtitlePin()->IsConnected() && (m_iAudioStream == -1) || IsAudioChanging()) return NULL;
 
-  if ((m_pids.subtitlePids.size() > 0 && m_pids.subtitlePids[0].Pid==0) || IsMediaChanging() || IsAudioChanging())
+  if ((m_pids.subtitlePids.size() > 0 && m_pids.subtitlePids[0].Pid==0) || IsMediaChanging())
   {
     m_bReadAheadFromFile = true;
     WakeThread();
@@ -557,10 +557,10 @@ CBuffer* CDeMultiplexer::GetSubtitle()
 CBuffer* CDeMultiplexer::GetVideo(bool earlyStall)
 {
   if (m_bFlushDelgNow || m_bFlushRunning || m_bStarting) return NULL; //Flush pending or Start() active 
-  if (m_filter.GetVideoPin()->IsConnected() && (m_iAudioStream == -1)) return NULL;
+  if (m_filter.GetVideoPin()->IsConnected() && (m_iAudioStream == -1) || IsAudioChanging()) return NULL;
 
   //if there is no video pid, then simply return NULL
-  if ((m_pids.videoPids.size() > 0 && m_pids.videoPids[0].Pid==0) || IsMediaChanging() || IsAudioChanging())
+  if ((m_pids.videoPids.size() > 0 && m_pids.videoPids[0].Pid==0) || IsMediaChanging())
   {
     m_bReadAheadFromFile = true;
     WakeThread();
@@ -611,10 +611,10 @@ void CDeMultiplexer::EraseVideoBuff()
 CBuffer* CDeMultiplexer::GetAudio(bool earlyStall)
 {
   if (m_bFlushDelgNow || m_bFlushRunning || m_bStarting) return NULL; //Flush pending or Start() active
-  if ((m_iAudioStream == -1)) return NULL;
+  if ((m_iAudioStream == -1) || IsAudioChanging()) return NULL;
 
   // if there is no audio pid, then simply return NULL
-  if ((m_audioPid==0) || IsMediaChanging() || IsAudioChanging())
+  if ((m_audioPid==0) || IsMediaChanging())
   {
     m_bReadAheadFromFile = true;
     WakeThread();
@@ -1499,6 +1499,10 @@ void CDeMultiplexer::FillVideoH264(CTsHeader& header, byte* tsPacket)
                 m_filter.OnMediaTypeChanged(VIDEO_CHANGE); //Video only
               m_mpegParserTriggerFormatChange=false;
             }
+            else if (m_mpegParserTriggerFormatChange)
+            {
+              m_videoChanged = true;
+            }
             LogDebug("DeMultiplexer: triggering OnVideoFormatChanged");
             m_filter.OnVideoFormatChanged(m_mpegPesParser->basicVideoInfo.streamType,m_mpegPesParser->basicVideoInfo.width,m_mpegPesParser->basicVideoInfo.height,m_mpegPesParser->basicVideoInfo.arx,m_mpegPesParser->basicVideoInfo.ary,15000000,m_mpegPesParser->basicVideoInfo.isInterlaced);
           }
@@ -1857,6 +1861,10 @@ void CDeMultiplexer::FillVideoMPEG2(CTsHeader& header, byte* tsPacket)
                   m_filter.OnMediaTypeChanged(VIDEO_CHANGE); //Video only
                 m_mpegParserTriggerFormatChange=false;
               }
+              else if (m_mpegParserTriggerFormatChange)
+              {
+                m_videoChanged = true;
+              }
               LogDebug("DeMultiplexer: triggering OnVideoFormatChanged");
               m_filter.OnVideoFormatChanged(m_mpegPesParser->basicVideoInfo.streamType,m_mpegPesParser->basicVideoInfo.width,m_mpegPesParser->basicVideoInfo.height,m_mpegPesParser->basicVideoInfo.arx,m_mpegPesParser->basicVideoInfo.ary,15000000,m_mpegPesParser->basicVideoInfo.isInterlaced);
             }
@@ -2100,6 +2108,14 @@ void CDeMultiplexer::OnNewChannel(CChannelInfo& info)
     }
     
     m_bWaitGoodPat = false;
+    
+    if ((info.PatVersion == m_iPatVersion) && (m_pids == pids)) 
+    {
+      //Fix for RTSP 'infinite loop' channel change with multiple audio streams problem 
+      LogDebug("OnNewChannel: PAT change already processed: %d", info.PatVersion);
+      return;
+    }
+
     m_iPatVersion=info.PatVersion;
     m_bSetAudioDiscontinuity=true;
     m_bSetVideoDiscontinuity=true;
