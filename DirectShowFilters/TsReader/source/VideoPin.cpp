@@ -209,6 +209,7 @@ HRESULT CVideoPin::DoBufferProcessingLoop(void)
   {
     while (!CheckRequest(&com)) 
     {
+      m_bInFillBuffer = false;
       IMediaSample *pSample;
       HRESULT hr = GetDeliveryBuffer(&pSample,NULL,NULL,0);
       if (FAILED(hr)) 
@@ -220,21 +221,19 @@ HRESULT CVideoPin::DoBufferProcessingLoop(void)
       }
 
       // Virtual function user will override.
+      // m_bInFillBuffer will be true for valid samples
       hr = FillBuffer(pSample);
 
       if (hr == S_OK) 
       {
-        //LogDebug("vidPin::DoBufferProcessingLoop() - sample len %d size %d", 
-        //  pSample->GetActualDataLength(), pSample->GetSize());
-        
-        // This is the only change for base class implementation of DoBufferProcessingLoop()
-        // Cyberlink H.264 decoder seems to crash when we provide empty samples for it 
-        if( pSample->GetActualDataLength() > 0)
+        // Some decoders seem to crash when we provide empty samples 
+        if (m_bInFillBuffer && !m_pTsReaderFilter->IsSeeking() && !m_pTsReaderFilter->IsStopping())
         {
           hr = Deliver(pSample);     
         }
 		
         pSample->Release();
+        m_bInFillBuffer = false;
 
         // downstream filter returns S_FALSE if it wants us to
         // stop or an error if it's reporting an error.
@@ -248,6 +247,7 @@ HRESULT CVideoPin::DoBufferProcessingLoop(void)
       {
         // derived class wants us to stop pushing data
         pSample->Release();
+        m_bInFillBuffer = false;
         DeliverEndOfStream();
         return S_OK;
       } 
@@ -255,6 +255,7 @@ HRESULT CVideoPin::DoBufferProcessingLoop(void)
       {
         // derived class encountered an error
         pSample->Release();
+        m_bInFillBuffer = false;
         DbgLog((LOG_ERROR, 1, TEXT("Error %08lX from FillBuffer!!!"), hr));
         DeliverEndOfStream();
         m_pFilter->NotifyEvent(EC_ERRORABORT, hr, 0);
@@ -273,6 +274,8 @@ HRESULT CVideoPin::DoBufferProcessingLoop(void)
       DbgLog((LOG_ERROR, 1, TEXT("Unexpected command!!!")));
 	  }
   } while (com != CMD_STOP);
+  
+  m_bInFillBuffer = false;
 
   return S_FALSE;
 }
@@ -308,20 +311,13 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
       //we dont try to read any packets, but simply return...
       if (m_pTsReaderFilter->IsSeeking() || m_pTsReaderFilter->IsStopping())
       {
-        //if (m_pTsReaderFilter->m_ShowBufferVideo) LogDebug("vidPin:isseeking:%d %d",m_pTsReaderFilter->IsSeeking() ,m_bSeeking);
         //Sleep(5);
         m_FillBuffSleepTime = 5;
-        pSample->SetTime(NULL,NULL);
-        pSample->SetActualDataLength(0);
-        pSample->SetSyncPoint(FALSE);
-        pSample->SetDiscontinuity(FALSE);
         m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
         m_bInFillBuffer = false;
         return NOERROR;
       }
-      
-      //CAutoLock slock (&demux.m_sectionSeekVideo); //Lock for seeking
-      
+            
       if (m_pTsReaderFilter->m_bStreamCompensated && !demux.m_bFlushRunning)
       {       
         // Avoid excessive video Fill buffer preemption
@@ -355,10 +351,6 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
       if (demux.EndOfFile())
       {
         LogDebug("vidPin:set eof");
-        pSample->SetTime(NULL,NULL);
-        pSample->SetActualDataLength(0);
-        pSample->SetSyncPoint(FALSE);
-        pSample->SetDiscontinuity(TRUE);
         m_bInFillBuffer = false;
         return S_FALSE; //S_FALSE will notify the graph that end of file has been reached
       }
@@ -451,11 +443,15 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
 
         if (m_bPresentSample && (buffer->Length() > 0))
         {
+          
           //do we need to set the discontinuity flag?
           if (m_bDiscontinuity || buffer->GetDiscontinuity())
           {
             LogDebug("vidPin:set discontinuity L:%d B:%d fTime:%03.3f", m_bDiscontinuity, buffer->GetDiscontinuity(), (float)fTime);
-            pSample->SetDiscontinuity(TRUE);
+            pSample->SetDiscontinuity(TRUE);           
+            CMediaType mt; 
+            demux.GetVideoStreamType(mt);
+            pSample->SetMediaType(&mt);            
             m_bDiscontinuity=FALSE;
           }
 
@@ -476,6 +472,9 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
               if (stsDiscon || (pSample->IsDiscontinuity()==S_OK))
               {
                 pSample->SetDiscontinuity(TRUE);
+                CMediaType mt; 
+                demux.GetVideoStreamType(mt);
+                pSample->SetMediaType(&mt);
                 m_delayedDiscont = 2;
               }
 
@@ -486,6 +485,9 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
                 {
                    //Use delayed discontinuity
                    pSample->SetDiscontinuity(TRUE);
+                   CMediaType mt; 
+                   demux.GetVideoStreamType(mt);
+                   pSample->SetMediaType(&mt);
                    m_delayedDiscont--;
                    LogDebug("vidPin:set I-frame discontinuity");
                 }
@@ -538,17 +540,6 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
       earlyStall = false;
     } while (buffer == NULL);
 
-    if (m_pTsReaderFilter->IsSeeking() || m_pTsReaderFilter->IsStopping())
-    {
-      //Sleep(5);
-      m_FillBuffSleepTime = 5;
-      pSample->SetTime(NULL,NULL);
-      pSample->SetActualDataLength(0);
-      pSample->SetSyncPoint(FALSE);
-      pSample->SetDiscontinuity(FALSE);
-      m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
-    }
-    m_bInFillBuffer = false;
     return NOERROR;
   }
 
@@ -557,10 +548,6 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
     LogDebug("vidPin:fillbuffer exception");
   }
   m_FillBuffSleepTime = 5;
-  pSample->SetTime(NULL,NULL);
-  pSample->SetActualDataLength(0);
-  pSample->SetSyncPoint(FALSE);
-  pSample->SetDiscontinuity(FALSE);
   m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
   m_bInFillBuffer = false;
   

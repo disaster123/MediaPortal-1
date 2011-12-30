@@ -212,6 +212,7 @@ HRESULT CSubtitlePin::DoBufferProcessingLoop(void)
   {
     while (!CheckRequest(&com)) 
     {
+      m_bInFillBuffer = false;
       IMediaSample *pSample;
       HRESULT hr = GetDeliveryBuffer(&pSample,NULL,NULL,0);
       if (FAILED(hr)) 
@@ -223,18 +224,19 @@ HRESULT CSubtitlePin::DoBufferProcessingLoop(void)
       }
 
       // Virtual function user will override.
+      // m_bInFillBuffer will be true for valid samples
       hr = FillBuffer(pSample);
 
       if (hr == S_OK) 
-      {          
-        // This is the only change for base class implementation of DoBufferProcessingLoop()
-        // Don't deliver zero length samples
-        if( pSample->GetActualDataLength() > 0)
+      {
+        // Some decoders seem to crash when we provide empty samples 
+        if (m_bInFillBuffer && !m_pTsReaderFilter->IsSeeking() && !m_pTsReaderFilter->IsStopping())
         {
           hr = Deliver(pSample);     
         }
 		
         pSample->Release();
+        m_bInFillBuffer = false;
 
         // downstream filter returns S_FALSE if it wants us to
         // stop or an error if it's reporting an error.
@@ -248,6 +250,7 @@ HRESULT CSubtitlePin::DoBufferProcessingLoop(void)
       {
         // derived class wants us to stop pushing data
         pSample->Release();
+        m_bInFillBuffer = false;
         DeliverEndOfStream();
         return S_OK;
       } 
@@ -255,6 +258,7 @@ HRESULT CSubtitlePin::DoBufferProcessingLoop(void)
       {
         // derived class encountered an error
         pSample->Release();
+        m_bInFillBuffer = false;
         DbgLog((LOG_ERROR, 1, TEXT("Error %08lX from FillBuffer!!!"), hr));
         DeliverEndOfStream();
         m_pFilter->NotifyEvent(EC_ERRORABORT, hr, 0);
@@ -273,9 +277,12 @@ HRESULT CSubtitlePin::DoBufferProcessingLoop(void)
       DbgLog((LOG_ERROR, 1, TEXT("Unexpected command!!!")));
 	  }
   } while (com != CMD_STOP);
+  
+  m_bInFillBuffer = false;
 
   return S_FALSE;
 }
+
 
 HRESULT CSubtitlePin::FillBuffer(IMediaSample *pSample)
 {
@@ -296,12 +303,8 @@ HRESULT CSubtitlePin::FillBuffer(IMediaSample *pSample)
       //we dont try to read any packets, but simply return...
       if (m_pTsReaderFilter->IsSeeking() || m_pTsReaderFilter->IsStopping() || !m_bRunning)
       {
-        //LogDebug("subPin:isseeking:%d %d",m_pTsReaderFilter->IsSeeking() ,m_bSeeking);
-        pSample->SetTime(NULL,NULL);
-        pSample->SetActualDataLength(0);
-        pSample->SetSyncPoint(FALSE);
-        pSample->SetDiscontinuity(FALSE);  // TRUE seems to hold sometimes the working thread....( ambass )
         m_bInFillBuffer = false;
+        m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
         Sleep(5);
         return NOERROR;
       }
@@ -324,17 +327,12 @@ HRESULT CSubtitlePin::FillBuffer(IMediaSample *pSample)
       if (demux.EndOfFile())
       {
         LogDebug("subPin:set eof");
-        pSample->SetTime(NULL,NULL);
-        pSample->SetActualDataLength(0);
-        pSample->SetSyncPoint(FALSE);
-        pSample->SetDiscontinuity(TRUE);
         m_bInFillBuffer=false;
         return S_FALSE; //S_FALSE will notify the graph that end of file has been reached
       }
 
       if (buffer == NULL)
       {
-        m_bInFillBuffer = false;
         Sleep(10);
       }
       else
@@ -399,14 +397,6 @@ HRESULT CSubtitlePin::FillBuffer(IMediaSample *pSample)
       }
     } while (buffer==NULL);
     
-    if (m_pTsReaderFilter->IsSeeking() || m_pTsReaderFilter->IsStopping() || !m_bRunning)
-    {
-      pSample->SetTime(NULL,NULL);
-      pSample->SetActualDataLength(0);
-      pSample->SetSyncPoint(FALSE);
-      pSample->SetDiscontinuity(FALSE);  // TRUE seems to hold sometimes the working thread....( ambass )
-    }
-    m_bInFillBuffer = false;
     return NOERROR;
   }
   catch(...)
@@ -414,11 +404,9 @@ HRESULT CSubtitlePin::FillBuffer(IMediaSample *pSample)
     LogDebug("subPin:fillbuffer exception");
   }
   
-  pSample->SetTime(NULL,NULL);
-  pSample->SetActualDataLength(0);
-  pSample->SetSyncPoint(FALSE);
-  pSample->SetDiscontinuity(FALSE);
+  m_bDiscontinuity = TRUE; //Next good sample will be discontinuous  
   m_bInFillBuffer=false;
+  
   return NOERROR;
 }
 

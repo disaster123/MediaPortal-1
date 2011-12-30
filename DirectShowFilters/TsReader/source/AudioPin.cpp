@@ -193,6 +193,7 @@ HRESULT CAudioPin::DoBufferProcessingLoop(void)
   {
     while (!CheckRequest(&com)) 
     {
+      m_bInFillBuffer = false;
       IMediaSample *pSample;
       HRESULT hr = GetDeliveryBuffer(&pSample,NULL,NULL,0);
       if (FAILED(hr)) 
@@ -204,21 +205,19 @@ HRESULT CAudioPin::DoBufferProcessingLoop(void)
       }
 
       // Virtual function user will override.
+      // m_bInFillBuffer will be true for valid samples
       hr = FillBuffer(pSample);
 
       if (hr == S_OK) 
       {
-        //LogDebug("Vid::DoBufferProcessingLoop() - sample len %d size %d", 
-        //  pSample->GetActualDataLength(), pSample->GetSize());
-        
-        // This is the only change for base class implementation of DoBufferProcessingLoop()
-        // Don't deliver zero length samples
-        if( pSample->GetActualDataLength() > 0)
+        // Some decoders seem to crash when we provide empty samples 
+        if (m_bInFillBuffer && !m_pTsReaderFilter->IsSeeking() && !m_pTsReaderFilter->IsStopping())
         {
           hr = Deliver(pSample);     
         }
 		
         pSample->Release();
+        m_bInFillBuffer = false;
 
         // downstream filter returns S_FALSE if it wants us to
         // stop or an error if it's reporting an error.
@@ -232,6 +231,7 @@ HRESULT CAudioPin::DoBufferProcessingLoop(void)
       {
         // derived class wants us to stop pushing data
         pSample->Release();
+        m_bInFillBuffer = false;
         DeliverEndOfStream();
         return S_OK;
       } 
@@ -239,6 +239,7 @@ HRESULT CAudioPin::DoBufferProcessingLoop(void)
       {
         // derived class encountered an error
         pSample->Release();
+        m_bInFillBuffer = false;
         DbgLog((LOG_ERROR, 1, TEXT("Error %08lX from FillBuffer!!!"), hr));
         DeliverEndOfStream();
         m_pFilter->NotifyEvent(EC_ERRORABORT, hr, 0);
@@ -257,6 +258,8 @@ HRESULT CAudioPin::DoBufferProcessingLoop(void)
       DbgLog((LOG_ERROR, 1, TEXT("Unexpected command!!!")));
 	  }
   } while (com != CMD_STOP);
+  
+  m_bInFillBuffer = false;
 
   return S_FALSE;
 }
@@ -292,13 +295,8 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
       //we dont try to read any packets, but simply return...
       if (m_pTsReaderFilter->IsSeeking() || m_pTsReaderFilter->IsStopping())
       {
-        //if (m_pTsReaderFilter->m_ShowBufferAudio) LogDebug("audPin:isseeking");
         //Sleep(20);
         m_FillBuffSleepTime = 5;
-        pSample->SetTime(NULL,NULL);
-        pSample->SetActualDataLength(0);
-        pSample->SetSyncPoint(FALSE);
-        pSample->SetDiscontinuity(FALSE);
         m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
         m_bInFillBuffer = false;
         return NOERROR;
@@ -320,10 +318,6 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
       if (demux.EndOfFile()) // || ((GET_TIME_NOW()-m_LastTickCount > 3000) && !m_pTsReaderFilter->IsTimeShifting()))
       {
         LogDebug("audPin:set eof");
-        pSample->SetTime(NULL,NULL);
-        pSample->SetActualDataLength(0);
-        pSample->SetSyncPoint(FALSE);
-        pSample->SetDiscontinuity(TRUE);
         m_bInFillBuffer = false;
         return S_FALSE; //S_FALSE will notify the graph that end of file has been reached
       }
@@ -545,18 +539,6 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
       earlyStall = false;
     } while (buffer==NULL);
 
-    if (m_pTsReaderFilter->IsSeeking() || m_pTsReaderFilter->IsStopping())
-    {
-      //if (m_pTsReaderFilter->m_ShowBufferAudio) LogDebug("audPin:isseeking");
-      //Sleep(20);
-      m_FillBuffSleepTime = 5;
-      pSample->SetTime(NULL,NULL);
-      pSample->SetActualDataLength(0);
-      pSample->SetSyncPoint(FALSE);
-      pSample->SetDiscontinuity(FALSE);
-      m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
-    }
-    m_bInFillBuffer = false;
     return NOERROR;
   }
 
@@ -570,13 +552,9 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
     LogDebug("audPin:fillbuffer exception ...");
   }
   m_FillBuffSleepTime = 5;
-  pSample->SetTime(NULL,NULL);
-  pSample->SetActualDataLength(0);
-  pSample->SetSyncPoint(FALSE);
-  pSample->SetDiscontinuity(FALSE);
-  m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
-  
+  m_bDiscontinuity = TRUE; //Next good sample will be discontinuous  
   m_bInFillBuffer = false;
+  
   return NOERROR;
 }
 

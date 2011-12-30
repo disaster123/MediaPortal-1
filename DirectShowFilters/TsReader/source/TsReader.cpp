@@ -181,7 +181,7 @@ CTsReaderFilter::CTsReaderFilter(IUnknown *pUnk, HRESULT *phr):
   GetLogFile(filename);
   ::DeleteFile(filename);
   LogDebug("--- Buffer-empty rate control testing ----");
-  LogDebug("---------- v0.0.41 XXX -------------------");
+  LogDebug("---------- v0.0.42 XXX -------------------");
 
   m_fileReader=NULL;
   m_fileDuration=NULL;
@@ -534,10 +534,16 @@ STDMETHODIMP CTsReaderFilter::Stop()
   //m_bSeeking = true;
   m_bStopping = true;
 
-  //Wait for output pin data sample delivery and seeking to finish
-  while (GetAudioPin()->IsInFillBuffer() || GetVideoPin()->IsInFillBuffer() || GetSubtitlePin()->IsInFillBuffer() || IsSeeking()) 
+  int i=0;
+  //Wait for output pin data sample delivery and seeking to finish - timeout after 400 loop iterations in case pin delivery threads are stalled
+  while ((i < 400) && (GetAudioPin()->IsInFillBuffer() || GetVideoPin()->IsInFillBuffer() || GetSubtitlePin()->IsInFillBuffer() || IsSeeking()) )
   {
     Sleep(1);
+    i++;
+  }
+  if (i >= 400)
+  {
+    LogDebug("CTsReaderFilter: Stop: InFillBuffer() wait timeout");
   }
 
   if (m_pSubtitlePin)
@@ -1134,24 +1140,27 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
     // Stop threads ////
     //LogDebug("CTsReaderFilter::--SeekPreStart() DeliverBeginFlush"); 
 
-    if (GetVideoPin()->IsConnected())
-    {
-      //deliver a begin-flush to the codec filter so it stops asking for data
-      GetVideoPin()->DeliverBeginFlush();
-
-      //stop the thread
-      GetVideoPin()->Stop();
-    }
-  
     if (GetAudioPin()->IsConnected())
     {
       //deliver a begin-flush to the codec filter so it stops asking for data
       GetAudioPin()->DeliverBeginFlush();
 
       //stop the thread
+      LogDebug("CTsReaderFilter::--SeekPreStart() Aud Stop"); 
       GetAudioPin()->Stop();
     }
 
+    if (GetVideoPin()->IsConnected())
+    {
+      //deliver a begin-flush to the codec filter so it stops asking for data
+      LogDebug("CTsReaderFilter::--SeekPreStart() Vid DeliverBeginFlush"); 
+      GetVideoPin()->DeliverBeginFlush();
+
+      //stop the thread
+      LogDebug("CTsReaderFilter::--SeekPreStart() Vid Stop"); 
+      GetVideoPin()->Stop();
+    }
+  
     m_bStreamCompensated=false ;
     m_demultiplexer.m_bAudioVideoReady=false ;
 
@@ -1170,7 +1179,11 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
     m_bOnZap=false ;
 
     //do the seek...
-    if (doSeek && !m_demultiplexer.IsMediaChanging()&& !m_demultiplexer.IsAudioChanging()) Seek(rtSeek, true);
+    if (doSeek && !m_demultiplexer.IsMediaChanging()&& !m_demultiplexer.IsAudioChanging()) 
+    {
+      LogDebug("CTsReaderFilter::--SeekPreStart() Do Seek"); 
+      Seek(rtSeek, true);
+    }
     
     if (m_fileDuration != NULL)
     {
@@ -1183,36 +1196,22 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
     m_ShowBufferVideo = 2;
     m_ShowBufferAudio = 2;
     
-    //LogDebug("CTsReaderFilter::--SeekPreStart() DeliverEndFlush"); 
+    LogDebug("CTsReaderFilter::--SeekPreStart() DeliverEndFlush"); 
     
-    if (GetAudioPin()->IsConnected())
-    {
-      //LogDebug("CTsReaderFilter::--SeekPreStart() Aud Run"); 
-      GetAudioPin()->SetDiscontinuity(true);
-      
-      // deliver a end-flush to the codec filter so it will start asking for data again
-      GetAudioPin()->DeliverEndFlush();
-
-      // Update m_rtStart in case of has not seeked yet
-      GetAudioPin()->SetStart(rtAbsSeek) ;
-
-      // and restart the thread
-      GetAudioPin()->Run();
-    }
-
     if (GetVideoPin()->IsConnected())
     {
-      //LogDebug("CTsReaderFilter::--SeekPreStart() Vid Run"); 
-      GetVideoPin()->SetDiscontinuity(true);
-
-      //deliver a end-flush to the codec filter so it will start asking for data again
-      GetVideoPin()->DeliverEndFlush();
-
       // Update m_rtStart in case of has not seeked yet
       GetVideoPin()->SetStart(rtAbsSeek) ;
 
+      GetVideoPin()->SetDiscontinuity(true);
+
       // and restart the thread
+      LogDebug("CTsReaderFilter::--SeekPreStart() Vid Run"); 
       GetVideoPin()->Run();
+
+      //deliver a end-flush to the codec filter so it will start asking for data again
+      LogDebug("CTsReaderFilter::--SeekPreStart() Vid DeliverEndFlush"); 
+      GetVideoPin()->DeliverEndFlush();      
     }
   
     if (GetSubtitlePin()->IsConnected())
@@ -1231,6 +1230,21 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
       m_pDVBSubtitle->SetFirstPcr(m_duration.FirstStartPcr().PcrReferenceBase);
       m_pDVBSubtitle->SeekDone(rtSeek);
     }
+
+    if (GetAudioPin()->IsConnected())
+    {
+      GetAudioPin()->SetDiscontinuity(true);
+      
+      // deliver a end-flush to the codec filter so it will start asking for data again
+      GetAudioPin()->DeliverEndFlush();
+
+      // Update m_rtStart in case of has not seeked yet
+      GetAudioPin()->SetStart(rtAbsSeek) ;
+
+      // and restart the thread
+      LogDebug("CTsReaderFilter::--SeekPreStart() Aud Run"); 
+      GetAudioPin()->Run();
+    }
     
     //m_WaitForSeekToEof = false ; //     
     
@@ -1238,6 +1252,19 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
   }
 
   SetSeeking(false);
+    
+  //  if (GetVideoPin()->IsConnected())
+  //  {
+  //
+  //    //stop the thread
+  //    LogDebug("CTsReaderFilter::--SeekPreStart() Vid Stop"); 
+  //    GetVideoPin()->Stop();
+  //    
+  //    // and restart the thread
+  //    LogDebug("CTsReaderFilter::--SeekPreStart() Vid Run"); 
+  //    GetVideoPin()->Run();
+  //  }
+
   return ;
 }
 
@@ -1779,10 +1806,16 @@ bool CTsReaderFilter::SetSeeking(bool onOff)
   
   if (m_WaitForSeekToEof)
   {
-    //Wait for output pin data sample delivery to stop
-    while (GetAudioPin()->IsInFillBuffer() || GetVideoPin()->IsInFillBuffer() || GetSubtitlePin()->IsInFillBuffer()) 
+    int i = 0;
+    //Wait for output pin data sample delivery to stop - timeout after 400 loop iterations in case pin delivery threads are stalled
+    while ((i < 400) && (GetAudioPin()->IsInFillBuffer() || GetVideoPin()->IsInFillBuffer() || GetSubtitlePin()->IsInFillBuffer()) )
     {
       Sleep(1);
+      i++;
+    }
+    if (i >= 400)
+    {
+      LogDebug("CTsReaderFilter: SetSeeking: InFillBuffer() wait timeout");
     }
   }
   return true; //state changed
