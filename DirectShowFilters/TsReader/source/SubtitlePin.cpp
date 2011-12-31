@@ -438,11 +438,13 @@ HRESULT CSubtitlePin::OnThreadStartPlay()
 // CMediaSeeking
 HRESULT CSubtitlePin::ChangeStart()
 {
+  m_pTsReaderFilter->SetSeeking(true);
   UpdateFromSeek();
   return S_OK;
 }
 HRESULT CSubtitlePin::ChangeStop()
 {
+  m_pTsReaderFilter->SetSeeking(true);
   UpdateFromSeek();
   return S_OK;
 }

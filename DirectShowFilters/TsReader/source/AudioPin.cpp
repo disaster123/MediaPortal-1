@@ -491,6 +491,13 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
             //ifso, set it
             LogDebug("audPin:set discontinuity L:%d B:%d fTime:%03.3f", m_bDiscontinuity, buffer->GetDiscontinuity(), (float)fTime);
             pSample->SetDiscontinuity(TRUE);
+
+            CMediaType mt; 
+            int audioIndex = 0;
+            demux.GetAudioStream(audioIndex);
+            demux.GetAudioStreamType(audioIndex, mt);
+            pSample->SetMediaType(&mt);            
+
             m_bDiscontinuity=FALSE;
           }
 
@@ -625,12 +632,14 @@ bool CAudioPin::IsConnected()
 
 HRESULT CAudioPin::ChangeStart()
 {
+  m_pTsReaderFilter->SetSeeking(true);
   UpdateFromSeek();
   return S_OK;
 }
 
 HRESULT CAudioPin::ChangeStop()
 {
+  m_pTsReaderFilter->SetSeeking(true);
   UpdateFromSeek();
   return S_OK;
 }

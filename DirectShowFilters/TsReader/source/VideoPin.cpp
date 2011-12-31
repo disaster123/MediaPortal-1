@@ -449,9 +449,11 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
           {
             LogDebug("vidPin:set discontinuity L:%d B:%d fTime:%03.3f", m_bDiscontinuity, buffer->GetDiscontinuity(), (float)fTime);
             pSample->SetDiscontinuity(TRUE);           
+
             CMediaType mt; 
             demux.GetVideoStreamType(mt);
             pSample->SetMediaType(&mt);            
+
             m_bDiscontinuity=FALSE;
           }
 
@@ -472,9 +474,6 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
               if (stsDiscon || (pSample->IsDiscontinuity()==S_OK))
               {
                 pSample->SetDiscontinuity(TRUE);
-                CMediaType mt; 
-                demux.GetVideoStreamType(mt);
-                pSample->SetMediaType(&mt);
                 m_delayedDiscont = 2;
               }
 
@@ -485,9 +484,6 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
                 {
                    //Use delayed discontinuity
                    pSample->SetDiscontinuity(TRUE);
-                   CMediaType mt; 
-                   demux.GetVideoStreamType(mt);
-                   pSample->SetMediaType(&mt);
                    m_delayedDiscont--;
                    LogDebug("vidPin:set I-frame discontinuity");
                 }
@@ -629,11 +625,13 @@ HRESULT CVideoPin::OnThreadStartPlay()
 // CSourceSeeking
 HRESULT CVideoPin::ChangeStart()
 {
+  m_pTsReaderFilter->SetSeeking(true);
   UpdateFromSeek();
   return S_OK;
 }
 HRESULT CVideoPin::ChangeStop()
 {
+  m_pTsReaderFilter->SetSeeking(true);
   UpdateFromSeek();
   return S_OK;
 }

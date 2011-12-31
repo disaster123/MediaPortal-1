@@ -1131,7 +1131,6 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
     }
  
     SetSeeking(true); //Just in case...normally set already by calling method
-    //m_WaitForSeekToEof = true ; // 
 
     //LogDebug("CTsReaderFilter::--SeekPreStart() Wait pins start"); 
 
@@ -1203,8 +1202,6 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
       // Update m_rtStart in case of has not seeked yet
       GetVideoPin()->SetStart(rtAbsSeek) ;
 
-      GetVideoPin()->SetDiscontinuity(true);
-
       // and restart the thread
       LogDebug("CTsReaderFilter::--SeekPreStart() Vid Run"); 
       GetVideoPin()->Run();
@@ -1217,7 +1214,6 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
     if (GetSubtitlePin()->IsConnected())
     {
       //LogDebug("CTsReaderFilter::--SeekPreStart() Sub Run"); 
-      GetVideoPin()->SetDiscontinuity(true);
 
       // Update m_rtStart in case of has not seeked yet
       GetSubtitlePin()->SetStart(rtAbsSeek) ;
@@ -1233,38 +1229,22 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
 
     if (GetAudioPin()->IsConnected())
     {
-      GetAudioPin()->SetDiscontinuity(true);
-      
-      // deliver a end-flush to the codec filter so it will start asking for data again
-      GetAudioPin()->DeliverEndFlush();
-
       // Update m_rtStart in case of has not seeked yet
       GetAudioPin()->SetStart(rtAbsSeek) ;
 
       // and restart the thread
       LogDebug("CTsReaderFilter::--SeekPreStart() Aud Run"); 
       GetAudioPin()->Run();
+
+      // deliver a end-flush to the codec filter so it will start asking for data again
+      GetAudioPin()->DeliverEndFlush();
     }
-    
-    //m_WaitForSeekToEof = false ; //     
-    
+        
     LogDebug("CTsReaderFilter::--SeekPreStart() End"); 
   }
 
   SetSeeking(false);
     
-  //  if (GetVideoPin()->IsConnected())
-  //  {
-  //
-  //    //stop the thread
-  //    LogDebug("CTsReaderFilter::--SeekPreStart() Vid Stop"); 
-  //    GetVideoPin()->Stop();
-  //    
-  //    // and restart the thread
-  //    LogDebug("CTsReaderFilter::--SeekPreStart() Vid Run"); 
-  //    GetVideoPin()->Run();
-  //  }
-
   return ;
 }
 
