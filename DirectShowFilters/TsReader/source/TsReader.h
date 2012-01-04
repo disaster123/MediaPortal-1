@@ -170,6 +170,7 @@ public:
 //  void            SeekStart();
   void            SeekPreStart(CRefTime& rtSeek);
   bool            SetSeeking(bool onOff);
+  void            SetWaitDataAfterSeek(bool onOff);
   double          UpdateDuration();
   CAudioPin*      GetAudioPin();
   CVideoPin*      GetVideoPin();
@@ -193,7 +194,7 @@ public:
   bool            IsSeeking();
   int             SeekingDone();
   bool            IsStopping();
-  //bool            IsSeekingToEof();
+  bool            IsWaitDataAfterSeek();
 
   DWORD           m_lastPause;
   bool            m_bStreamCompensated;
@@ -271,5 +272,6 @@ private:
   DWORD           m_MPmainThreadID;
   bool            m_isUNCfile;
   CCritSec        m_sectionSeeking;
+  bool            m_WaitDataAfterSeek;
 };
 

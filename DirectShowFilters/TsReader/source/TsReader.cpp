@@ -222,6 +222,7 @@ CTsReaderFilter::CTsReaderFilter(IUnknown *pUnk, HRESULT *phr):
   
   LogDebug("Wait for seeking to eof - false - constructor");
   m_WaitForSeekToEof=false;
+  m_WaitDataAfterSeek=false;
   m_isUNCfile = false;
   m_bLiveTv = false;
   m_bTimeShifting = false;
@@ -483,9 +484,6 @@ STDMETHODIMP CTsReaderFilter::Run(REFERENCE_TIME tStart)
     LogDebug("Elapsed time from pause to Audio/Video ( total zapping time ) : %d mS",GET_TIME_NOW()-m_lastPause);
   }
  
-  //  m_ShowBufferVideo = INIT_SHOWBUFFERVIDEO;
-  //  m_ShowBufferAudio = INIT_SHOWBUFFERAUDIO;
-
   CAutoLock cObjectLock(m_pLock);
 
   //Wait for seeking to finish
@@ -531,7 +529,6 @@ STDMETHODIMP CTsReaderFilter::Stop()
   CAutoLock cObjectLock(m_pLock);
 
   //guarantees that audio/video/subtitle pins dont block in the fillbuffer() method
-  //m_bSeeking = true;
   m_bStopping = true;
 
   int i=0;
@@ -551,15 +548,12 @@ STDMETHODIMP CTsReaderFilter::Stop()
     m_pSubtitlePin->SetRunningStatus(false);
   }
 
-  //stop duration thread
-  //StopThread();
 
   LogDebug("CTsReaderFilter::Stop()  -stop source");
   //stop filter
   HRESULT hr = CSource::Stop();
   LogDebug("CTsReaderFilter::Stop()  -stop source done");
 
-//  SetMediaPosition(0) ;
 
   //are we using rtsp?
   if (m_fileDuration == NULL)
@@ -754,6 +748,7 @@ STDMETHODIMP CTsReaderFilter::Load(LPCOLESTR pszFileName,const AM_MEDIA_TYPE *pm
   m_seekTime = CRefTime(0L);
   m_absSeekTime = CRefTime(0L);
   m_WaitForSeekToEof=false;
+  m_WaitDataAfterSeek=false;
   m_bRecording=false ;
   m_isUNCfile = false;
 
@@ -986,9 +981,9 @@ void CTsReaderFilter::Seek(CRefTime& seekTime, bool seekInfile)
     m_buffer.Run(true);
     //start rtsp stream from the seek-time
 
-  long Old_rtspDuration = m_rtspClient.Duration();
-	if (m_rtspClient.Play(startTime, m_duration.Duration().Millisecs()/1000.0))
-	{
+    long Old_rtspDuration = m_rtspClient.Duration();
+  	if (m_rtspClient.Play(startTime, m_duration.Duration().Millisecs()/1000.0))
+  	{
       int loop = 0;
       while (m_buffer.Size() == 0 && loop++ <= 50 ) // lets exit the loop if no data received for 5 secs.
       {
@@ -996,38 +991,38 @@ void CTsReaderFilter::Seek(CRefTime& seekTime, bool seekInfile)
         Sleep(100);
       }
      
-	  if (loop >=50)
-	  {
+  	  if (loop >=50)
+  	  {
         LogDebug("CTsReaderFilter::  Seek->start aborted");
-		return ;
-	  }
+  		  return ;
+  	  }
 
-    //update the duration of the stream
-    CPcr pcrStart, pcrEnd, pcrMax ;
-    double duration = m_rtspClient.Duration() / 1000.0f ;
-
-    if (m_bTimeShifting)
-    {
-      // EndPcr is continuously increasing ( until ~26 hours for rollover that will fail ! )
-      // So, we refer duration to End, and just update start.
-      pcrEnd   = m_duration.EndPcr() ;
-      double start  = pcrEnd.ToClock() - duration;
-      if (start<0) start=0 ;
-      pcrStart.FromClock(start) ;
-      m_duration.Set( pcrStart, pcrEnd, pcrMax) ;     // Seek()-RTSP
-    }
-    else
-    {
-      // It's a record, eventually end can increase if recording is in progress, let the end virtually updated by ThreadProc()
-      //m_bRecording = (Old_rtspDuration != m_rtspClient.Duration()) ;
-      m_bRecording = true; // duration may have not increased in such a short time
-    }
-    LogDebug("CTsReaderFilter:: Rtsp seek :Timeshift %d, Recording %d, StartPCR %f, EndPcr %f, Duration %f",m_bTimeShifting,m_bRecording,m_duration.StartPcr().ToClock(),m_duration.EndPcr().ToClock(),(float)m_duration.Duration().Millisecs()/1000.0f) ;
-	}
-	else
-	{
-      LogDebug("CTsReaderFilter::  Seek->start aborted");
-	}
+      //update the duration of the stream
+      CPcr pcrStart, pcrEnd, pcrMax ;
+      double duration = m_rtspClient.Duration() / 1000.0f ;
+  
+      if (m_bTimeShifting)
+      {
+        // EndPcr is continuously increasing ( until ~26 hours for rollover that will fail ! )
+        // So, we refer duration to End, and just update start.
+        pcrEnd   = m_duration.EndPcr() ;
+        double start  = pcrEnd.ToClock() - duration;
+        if (start<0) start=0 ;
+        pcrStart.FromClock(start) ;
+        m_duration.Set( pcrStart, pcrEnd, pcrMax) ;     // Seek()-RTSP
+      }
+      else
+      {
+        // It's a record, eventually end can increase if recording is in progress, let the end virtually updated by ThreadProc()
+        //m_bRecording = (Old_rtspDuration != m_rtspClient.Duration()) ;
+        m_bRecording = true; // duration may have not increased in such a short time
+      }
+      LogDebug("CTsReaderFilter:: Rtsp seek :Timeshift %d, Recording %d, StartPCR %f, EndPcr %f, Duration %f",m_bTimeShifting,m_bRecording,m_duration.StartPcr().ToClock(),m_duration.EndPcr().ToClock(),(float)m_duration.Duration().Millisecs()/1000.0f) ;
+  	}
+  	else
+  	{
+        LogDebug("CTsReaderFilter::  Seek->start aborted");
+  	}
   }
 }
 
@@ -1040,9 +1035,24 @@ bool CTsReaderFilter::IsFilterRunning()
 
 void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
 {
+  //  if (IsWaitDataAfterSeek())
+  //  {
+  //    return;
+  //  }
   
   bool doSeek = true;
   CTsDuration tsduration=GetDuration();
+
+  REFERENCE_TIME MediaTime;
+  GetMediaPosition(&MediaTime);
+  
+  //Are we seeking to the same place in the file ?
+  bool isSamePosn = false;  
+  if (MediaTime == rtAbsSeek.m_time)
+  {
+    //LogDebug("CTsReaderFilter::--SeekPreStart() isSamePosn"); 
+    isSamePosn = true;
+  }
 
   SetMediaPosnUpdate(rtAbsSeek.m_time) ;
 
@@ -1075,7 +1085,7 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
   {   
     if ((m_bStoppedForUnexpectedSeek || (m_absSeekTime==rtAbsSeek)) && !m_bForceSeekOnStop && !m_bForceSeekAfterRateChange)
     {
-//      LogDebug("CTsReaderFilter::--SeekStart() Stopped state -- No new seek %f", 
+//      LogDebug("CTsReaderFilter::--SeekPreStart() Stopped state -- No new seek %f", 
 //      (float)rtSeek.Millisecs()/1000.0f);
       m_bStoppedForUnexpectedSeek=false ;
       m_seekTime = rtSeek ;
@@ -1085,18 +1095,20 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
     }
   }
 
-  if (((m_absSeekTime==rtAbsSeek) && !m_bStreamCompensated && !m_bForceSeekAfterRateChange) || (m_demultiplexer.IsMediaChanging() && !m_bOnZap && !m_bForceSeekOnStop && !m_bForceSeekAfterRateChange))  
+  //if (((m_absSeekTime==rtAbsSeek) && !m_bForceSeekAfterRateChange) || (m_demultiplexer.IsMediaChanging() && !m_bOnZap && !m_bForceSeekOnStop && !m_bForceSeekAfterRateChange))  
+  if ((isSamePosn && !m_bForceSeekAfterRateChange) || (m_demultiplexer.IsMediaChanging() && !m_bOnZap && !m_bForceSeekOnStop && !m_bForceSeekAfterRateChange))  
   {
     doSeek = false;
-    LogDebug("CTsReaderFilter::--SeekStart()-- No new seek %f ( Abs %f / %f ) - Stream compensated: %d, OnZap: %d, Force %d, Media changing: %d", 
-		(float)rtSeek.Millisecs()/1000.0f, (float)rtAbsSeek.Millisecs()/1000.0f, (float)m_duration.EndPcr().ToClock(),m_bStreamCompensated,m_bOnZap,m_bForceSeekOnStop, m_demultiplexer.IsMediaChanging());
+    LogDebug("CTsReaderFilter::--SeekPreStart()-- No new seek %f ( Abs %f / %f ) - isSamePosn: %d, OnZap: %d, Force %d, Media changing: %d", 
+		(float)rtSeek.Millisecs()/1000.0f, (float)rtAbsSeek.Millisecs()/1000.0f, (float)m_duration.EndPcr().ToClock(),isSamePosn,m_bOnZap,m_bForceSeekOnStop, m_demultiplexer.IsMediaChanging());
 //	  m_bStreamCompensated=false ;
     m_bForceSeekOnStop = false ;
+    SetSeeking(false);
   }
   else
   {
-    LogDebug("CTsReaderFilter::--SeekStart()-- LiveTv : %d, TimeShifting: %d %3.3f ( Abs %f / %f ), OnZap: %d, Force %d, ForceRC %d, Media changing %d",
-		m_bLiveTv,m_bTimeShifting,(float)rtSeek.Millisecs()/1000.0,(float)rtAbsSeek.Millisecs()/1000.0f, (float)m_duration.EndPcr().ToClock(),m_bOnZap,m_bForceSeekOnStop,m_bForceSeekAfterRateChange,m_demultiplexer.IsMediaChanging());
+    LogDebug("CTsReaderFilter::--SeekPreStart()-- LiveTv : %d, TimeShifting: %d %3.3f ( Abs %f / %f )- isSamePosn: %d, OnZap: %d, Force %d, ForceRC %d, Media changing %d",
+		m_bLiveTv,m_bTimeShifting,(float)rtSeek.Millisecs()/1000.0,(float)rtAbsSeek.Millisecs()/1000.0f, (float)m_duration.EndPcr().ToClock(),isSamePosn,m_bOnZap,m_bForceSeekOnStop,m_bForceSeekAfterRateChange,m_demultiplexer.IsMediaChanging());
 
     m_bForceSeekOnStop = false ;
     
@@ -1145,18 +1157,18 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
       GetAudioPin()->DeliverBeginFlush();
 
       //stop the thread
-      LogDebug("CTsReaderFilter::--SeekPreStart() Aud Stop"); 
+      //LogDebug("CTsReaderFilter::--SeekPreStart() Aud Stop"); 
       GetAudioPin()->Stop();
     }
 
     if (GetVideoPin()->IsConnected())
     {
       //deliver a begin-flush to the codec filter so it stops asking for data
-      LogDebug("CTsReaderFilter::--SeekPreStart() Vid DeliverBeginFlush"); 
+      //LogDebug("CTsReaderFilter::--SeekPreStart() Vid DeliverBeginFlush"); 
       GetVideoPin()->DeliverBeginFlush();
 
       //stop the thread
-      LogDebug("CTsReaderFilter::--SeekPreStart() Vid Stop"); 
+      //LogDebug("CTsReaderFilter::--SeekPreStart() Vid Stop"); 
       GetVideoPin()->Stop();
     }
   
@@ -1180,7 +1192,7 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
     //do the seek...
     if (doSeek && !m_demultiplexer.IsMediaChanging()&& !m_demultiplexer.IsAudioChanging()) 
     {
-      LogDebug("CTsReaderFilter::--SeekPreStart() Do Seek"); 
+      //LogDebug("CTsReaderFilter::--SeekPreStart() Do Seek"); 
       Seek(rtSeek, true);
     }
     
@@ -1195,7 +1207,7 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
     m_ShowBufferVideo = 2;
     m_ShowBufferAudio = 2;
     
-    LogDebug("CTsReaderFilter::--SeekPreStart() DeliverEndFlush"); 
+    //LogDebug("CTsReaderFilter::--SeekPreStart() DeliverEndFlush"); 
     
     if (GetVideoPin()->IsConnected())
     {
@@ -1203,11 +1215,13 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
       GetVideoPin()->SetStart(rtAbsSeek) ;
 
       // and restart the thread
-      LogDebug("CTsReaderFilter::--SeekPreStart() Vid Run"); 
+      //LogDebug("CTsReaderFilter::--SeekPreStart() Vid Run"); 
       GetVideoPin()->Run();
+      
+      Sleep(50);
 
       //deliver a end-flush to the codec filter so it will start asking for data again
-      LogDebug("CTsReaderFilter::--SeekPreStart() Vid DeliverEndFlush"); 
+      //LogDebug("CTsReaderFilter::--SeekPreStart() Vid DeliverEndFlush"); 
       GetVideoPin()->DeliverEndFlush();      
     }
   
@@ -1232,18 +1246,58 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
       // Update m_rtStart in case of has not seeked yet
       GetAudioPin()->SetStart(rtAbsSeek) ;
 
-      // and restart the thread
-      LogDebug("CTsReaderFilter::--SeekPreStart() Aud Run"); 
-      GetAudioPin()->Run();
-
       // deliver a end-flush to the codec filter so it will start asking for data again
       GetAudioPin()->DeliverEndFlush();
-    }
-        
-    LogDebug("CTsReaderFilter::--SeekPreStart() End"); 
-  }
 
-  SetSeeking(false);
+      // and restart the thread
+      //LogDebug("CTsReaderFilter::--SeekPreStart() Aud Run"); 
+      GetAudioPin()->Run();
+    }
+ 
+    SetWaitDataAfterSeek(true);  
+    
+    SetSeeking(false); //Unblock the pins - allow sample delivery to downstream
+    
+    //Wait until enough stream has been read
+    while (!m_bStreamCompensated && !m_demultiplexer.IsAudioChanging() && !m_demultiplexer.IsMediaChanging() && !m_bStopping && (m_State != State_Stopped))
+    {
+      Sleep(1);
+    }
+
+    if (GetVideoPin()->IsConnected())
+    {  
+      //LogDebug("CTsReaderFilter::--SeekPreStart() Wait vid sample delivery"); 
+      int i=0;
+      //Wait for video pin sample delivery
+      while ((i < 500) && !m_demultiplexer.IsAudioChanging() && !m_demultiplexer.IsMediaChanging() && !m_bStopping && (m_State != State_Stopped) && !GetVideoPin()->HasDeliveredSample())
+      {
+        Sleep(1);
+        i++;
+      }
+      if ((i >= 500) && !m_demultiplexer.IsAudioChanging() && !m_demultiplexer.IsMediaChanging() && !m_bStopping && (m_State != State_Stopped))
+      {
+        LogDebug("CTsReaderFilter: SeekPreStart: NotDeliveredSample retry start");       
+        GetVideoPin()->DeliverBeginFlush();
+        Sleep(50);
+        LogDebug("CTsReaderFilter: SeekPreStart: NotDeliveredSample retry Stop");       
+        GetVideoPin()->Stop();
+        Sleep(50);
+        LogDebug("CTsReaderFilter: SeekPreStart: NotDeliveredSample retry Run");       
+        GetVideoPin()->Run();
+        Sleep(50);
+        LogDebug("CTsReaderFilter: SeekPreStart: NotDeliveredSample retry DeliverEndFlush");       
+        GetVideoPin()->DeliverEndFlush();      
+        Sleep(50);
+        LogDebug("CTsReaderFilter: SeekPreStart: NotDeliveredSample retry SetDiscontinuity");       
+        GetVideoPin()->SetDiscontinuity(true);
+        LogDebug("CTsReaderFilter: SeekPreStart: NotDeliveredSample retry end");
+      }
+    }
+    
+    LogDebug("CTsReaderFilter::--SeekPreStart() End");       
+  }  
+  
+  SetWaitDataAfterSeek(false);  
     
   return ;
 }
@@ -1295,11 +1349,9 @@ void CTsReaderFilter::ThreadProc()
   long Old_rtspDuration = -1 ;
   long PauseDuration =0;
   DWORD timeNow = GET_TIME_NOW();
-  //DWORD  lastFlushTime = timeNow;
   DWORD  lastPosnTime = timeNow;
   DWORD  lastDataLowTime = timeNow;
   DWORD  lastDurTime = timeNow - 2000;
-  //DWORD  lastFileReadTime = timeNow;
   DWORD  pauseWaitTime = 1000;
   long   underRunLimit = 10;
   bool   longPause = true;
@@ -1382,33 +1434,6 @@ void CTsReaderFilter::ThreadProc()
         ptrMediaPos->Release();     
       }
     }
-
-    //    //Flush delegated to this thread
-    //    if (m_demultiplexer.m_bFlushDelegated || m_demultiplexer.m_bFlushDelgNow)
-    //    {
-    //      if (!m_demultiplexer.m_bFlushDelgNow && ((timeNow - 500) < lastFlushTime)) 
-    //      { 
-    //        // Too early for next flush
-    //        m_demultiplexer.m_bFlushDelegated = false;
-    //      }
-    //      else
-    //      {
-    //        lastFlushTime = timeNow;
-    //  
-    //        LogDebug("CTsReaderFilter::ThreadProc - Flush");     
-    //        //Flush the internal data
-    //        m_demultiplexer.Flush(true);
-    //        m_demultiplexer.m_bFlushDelgNow = false;
-    //      }
-    //    }
-    //
-    //    //File read prefetch
-    //    if (m_demultiplexer.m_bReadAheadFromFile && ((timeNow - 5) > lastFileReadTime))
-    //    {
-    //      lastFileReadTime = timeNow; 
-    //      m_demultiplexer.ReadAheadFromFile();
-    //      m_demultiplexer.m_bReadAheadFromFile = false;
-    //    }
      
     //Execute this loop approx every second
     if (((timeNow - 1000) > lastDurTime) && IsFilterRunning())
@@ -1547,7 +1572,10 @@ void CTsReaderFilter::ThreadProc()
           audSampleSleep = m_pAudioPin->m_FillBuffSleepTime;
         }
         
-        LogDebug("Buffers : A/V = %d/%d, A last : %03.3f, V Last : %03.3f, ADur : %03.3f ms, ASlp : %d ms", cntA, cntV, (float)lastAudio.Millisecs()/1000.0f,(float)lastVideo.Millisecs()/1000.0f, audSampleDur, audSampleSleep);
+        if ((cntA < 1) || (cntV < 1) || (cntA > 100) || (cntV > 100))
+        {
+          LogDebug("Buffers : A/V = %d/%d, A last : %03.3f, V Last : %03.3f, ADur : %03.3f ms, ASlp : %d ms", cntA, cntV, (float)lastAudio.Millisecs()/1000.0f,(float)lastVideo.Millisecs()/1000.0f, audSampleDur, audSampleSleep);
+        }
       }
                         
     }
@@ -1771,6 +1799,17 @@ bool CTsReaderFilter::IsStreaming()
   return (m_fileDuration==NULL);
 }
 
+void CTsReaderFilter::SetWaitDataAfterSeek(bool onOff)
+{
+  CAutoLock lock (&m_sectionSeeking);  
+  m_WaitDataAfterSeek = onOff;
+}
+
+bool CTsReaderFilter::IsWaitDataAfterSeek()
+{
+  return m_WaitDataAfterSeek;
+}
+
 bool CTsReaderFilter::SetSeeking(bool onOff)
 {
   CAutoLock lock (&m_sectionSeeking);
@@ -1795,7 +1834,7 @@ bool CTsReaderFilter::SetSeeking(bool onOff)
     }
     if (i >= 400)
     {
-      LogDebug("CTsReaderFilter: SetSeeking: InFillBuffer() wait timeout");
+      LogDebug("CTsReaderFilter: SetSeeking: InFillBuffer() wait timeout, %d %d %d", GetAudioPin()->IsInFillBuffer(), GetVideoPin()->IsInFillBuffer(), GetSubtitlePin()->IsInFillBuffer());
     }
   }
   return true; //state changed
@@ -1824,49 +1863,8 @@ void CTsReaderFilter::SetMediaPosnUpdate(REFERENCE_TIME MediaPos)
 
 void CTsReaderFilter::SetMediaPosition(REFERENCE_TIME MediaPos)
 {
-//  {
-//    CAutoLock cObjectLock(&m_GetTimeLock);
-//    m_MediaPos = MediaPos ;
-//    m_BaseTime = (REFERENCE_TIME)GET_TIME_NOW() * 10000 ; // m_pClock->GetTime(&m_BaseTime) ;
-//    m_LastTime=m_BaseTime ;
-//  }
-  //  LogDebug("SetMediaPos : %f %f",(float)MediaPos/10000,(float)m_LastTime/10000) ; 
-
-// This is not really the right place, but this is the only method called by "MPmain" that could allow
-// TsReader to "Pause" itself without deadlock issue.
-// This is also here to allow compatibility with previous releases, avoiding a new callback from MP.
-
-//  if (m_bRenderingClockTooFast)
-//  {
-//    if (m_bPauseOnClockTooFast)
-//      return ;                  // Do not re-enter !
-//    if (GetCurrentThreadId()!=m_MPmainThreadID) 
-//      return ;                  // Only MPmain can do that !
-//    if (((m_MediaPos/10000)-m_absSeekTime.Millisecs()) < 30*1000)
-//    {
-//      return ;                  
-//    }
-//
-//    m_bPauseOnClockTooFast=true ;
-//    if (State() == State_Running)
-//    {
-//      IMediaControl * ptrMediaCtrl;
-//      if (SUCCEEDED(GetFilterGraph()->QueryInterface(IID_IMediaControl, (void**)&ptrMediaCtrl)))
-//      {
-//        LogDebug("Pause 200mS renderer clock to match provider/RTSP clock...") ; 
-//        ptrMediaCtrl->Pause() ;
-//        Sleep(200) ;
-////        m_TestTime = GET_TIME_NOW() ;
-//        ptrMediaCtrl->Run() ;
-//        ptrMediaCtrl->Release() ;
-//        m_bRenderingClockTooFast=false ;
-//      }
-//      else
-//        LogDebug("Pause failed...") ; 
-//    }
-//    m_bPauseOnClockTooFast=false ;
-//  }
-
+  //Empty method kept for backward compatibility (MP player code calls this)
+  //Functionality now internal to TsReader
 }
 
 void CTsReaderFilter::BufferingPause(bool longPause)
@@ -1959,33 +1957,12 @@ void CTsReaderFilter::GetMediaPosition(REFERENCE_TIME *pMediaPos)
   REFERENCE_TIME Time=0 ;
   if (State() == State_Running)
   {
-    m_LastTime = (REFERENCE_TIME)GET_TIME_NOW() * 10000 ; // m_pClock->GetTime(&m_LastTime) ;      LogDebug("GetMediaPos : %f %d",(float)m_LastTime,GET_TIME_NOW()) ;
+    m_LastTime = (REFERENCE_TIME)GET_TIME_NOW() * 10000 ; 
   }
   *pMediaPos = (m_MediaPos + m_LastTime - m_BaseTime) ;
   return ; 
 }
 
-//void CTsReaderFilter::GetMediaPosition(REFERENCE_TIME *pMediaPos)
-//{
-//  CAutoLock cObjectLock(&m_GetTimeLock);
-//  REFERENCE_TIME Time=0 ;
-//  if (State() == State_Stopped)
-//  {
-//    //m_MediaPos=0 ;
-//    m_BaseTime = (REFERENCE_TIME)GET_TIME_NOW() * 10000 ; // m_pClock->GetTime(&m_BaseTime) ;
-//    m_LastTime=m_BaseTime ;
-//    // LogDebug("GetMediaPosition on stop...") ; 
-//  }
-//  else
-//  {
-//    if (State() == State_Running)
-//    {
-//      m_LastTime = (REFERENCE_TIME)GET_TIME_NOW() * 10000 ; // m_pClock->GetTime(&m_LastTime) ;      LogDebug("GetMediaPos : %f %d",(float)m_LastTime,GET_TIME_NOW()) ;
-//    }
-//	}
-//  *pMediaPos = (m_MediaPos + m_LastTime - m_BaseTime) ;
-//  return ; 
-//}
 
 //----------------------------------------------------
 // Derived from FFDShow code

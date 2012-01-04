@@ -184,6 +184,19 @@ HRESULT CAudioPin::BreakConnect()
   return CSourceStream::BreakConnect();
 }
 
+void CAudioPin::CreateEmptySample(IMediaSample *pSample)
+{
+  if (pSample)
+  {
+    pSample->SetTime(NULL, NULL);
+    pSample->SetActualDataLength(0);
+    pSample->SetSyncPoint(false);
+    pSample->SetDiscontinuity(false);
+  }
+  else
+    LogDebug("audPin: CreateEmptySample() invalid sample!");
+}
+
 HRESULT CAudioPin::DoBufferProcessingLoop(void)
 {
   Command com;
@@ -193,7 +206,6 @@ HRESULT CAudioPin::DoBufferProcessingLoop(void)
   {
     while (!CheckRequest(&com)) 
     {
-      m_bInFillBuffer = false;
       IMediaSample *pSample;
       HRESULT hr = GetDeliveryBuffer(&pSample,NULL,NULL,0);
       if (FAILED(hr)) 
@@ -205,19 +217,17 @@ HRESULT CAudioPin::DoBufferProcessingLoop(void)
       }
 
       // Virtual function user will override.
-      // m_bInFillBuffer will be true for valid samples
       hr = FillBuffer(pSample);
 
       if (hr == S_OK) 
       {
         // Some decoders seem to crash when we provide empty samples 
-        if (m_bInFillBuffer && !m_pTsReaderFilter->IsSeeking() && !m_pTsReaderFilter->IsStopping())
+        if ((pSample->GetActualDataLength() > 0) && !m_pTsReaderFilter->IsSeeking() && !m_pTsReaderFilter->IsStopping())
         {
           hr = Deliver(pSample);     
         }
 		
         pSample->Release();
-        m_bInFillBuffer = false;
 
         // downstream filter returns S_FALSE if it wants us to
         // stop or an error if it's reporting an error.
@@ -231,7 +241,6 @@ HRESULT CAudioPin::DoBufferProcessingLoop(void)
       {
         // derived class wants us to stop pushing data
         pSample->Release();
-        m_bInFillBuffer = false;
         DeliverEndOfStream();
         return S_OK;
       } 
@@ -239,7 +248,6 @@ HRESULT CAudioPin::DoBufferProcessingLoop(void)
       {
         // derived class encountered an error
         pSample->Release();
-        m_bInFillBuffer = false;
         DbgLog((LOG_ERROR, 1, TEXT("Error %08lX from FillBuffer!!!"), hr));
         DeliverEndOfStream();
         m_pFilter->NotifyEvent(EC_ERRORABORT, hr, 0);
@@ -259,8 +267,6 @@ HRESULT CAudioPin::DoBufferProcessingLoop(void)
 	  }
   } while (com != CMD_STOP);
   
-  m_bInFillBuffer = false;
-
   return S_FALSE;
 }
 
@@ -297,6 +303,7 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
       {
         //Sleep(20);
         m_FillBuffSleepTime = 5;
+        CreateEmptySample(pSample);
         m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
         m_bInFillBuffer = false;
         return NOERROR;
@@ -318,6 +325,7 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
       if (demux.EndOfFile()) // || ((GET_TIME_NOW()-m_LastTickCount > 3000) && !m_pTsReaderFilter->IsTimeShifting()))
       {
         LogDebug("audPin:set eof");
+        CreateEmptySample(pSample);
         m_bInFillBuffer = false;
         return S_FALSE; //S_FALSE will notify the graph that end of file has been reached
       }
@@ -492,11 +500,12 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
             LogDebug("audPin:set discontinuity L:%d B:%d fTime:%03.3f", m_bDiscontinuity, buffer->GetDiscontinuity(), (float)fTime);
             pSample->SetDiscontinuity(TRUE);
 
-            CMediaType mt; 
-            int audioIndex = 0;
-            demux.GetAudioStream(audioIndex);
-            demux.GetAudioStreamType(audioIndex, mt);
-            pSample->SetMediaType(&mt);            
+            //  Adding the pmt seems to cause hangs with LAV Audio....
+            //  CMediaType mt; 
+            //  int audioIndex = 0;
+            //  demux.GetAudioStream(audioIndex);
+            //  demux.GetAudioStreamType(audioIndex, mt);
+            //  pSample->SetMediaType(&mt);            
 
             m_bDiscontinuity=FALSE;
           }
@@ -546,6 +555,7 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
       earlyStall = false;
     } while (buffer==NULL);
 
+    m_bInFillBuffer = false;
     return NOERROR;
   }
 
@@ -559,9 +569,9 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
     LogDebug("audPin:fillbuffer exception ...");
   }
   m_FillBuffSleepTime = 5;
+  CreateEmptySample(pSample);
   m_bDiscontinuity = TRUE; //Next good sample will be discontinuous  
-  m_bInFillBuffer = false;
-  
+  m_bInFillBuffer = false; 
   return NOERROR;
 }
 
@@ -653,7 +663,7 @@ HRESULT CAudioPin::ChangeRate()
   }
   
   LogDebug("audPin: ChangeRate, m_dRateSeeking %f, Force seek done %d, IsSeeking %d",(float)m_dRateSeeking, m_pTsReaderFilter->m_bSeekAfterRcDone, m_pTsReaderFilter->IsSeeking());
-  if (!m_pTsReaderFilter->m_bSeekAfterRcDone && !m_pTsReaderFilter->IsSeeking()) //Don't force seek if another pin has already triggered it
+  if (!m_pTsReaderFilter->m_bSeekAfterRcDone && !m_pTsReaderFilter->IsSeeking() && !m_pTsReaderFilter->IsWaitDataAfterSeek()) //Don't force seek if another pin has already triggered it
   {
     m_pTsReaderFilter->m_bForceSeekAfterRateChange = true;
     m_pTsReaderFilter->SetSeeking(true);
@@ -700,7 +710,7 @@ void CAudioPin::SetStart(CRefTime rtStartTime)
 }
 STDMETHODIMP CAudioPin::SetPositions(LONGLONG *pCurrent, DWORD CurrentFlags, LONGLONG *pStop, DWORD StopFlags)
 {
-  if (m_pTsReaderFilter->SetSeeking(true)) //We're not already seeking
+  if (m_pTsReaderFilter->SetSeeking(true) && !m_pTsReaderFilter->IsWaitDataAfterSeek()) //We're not already seeking
   {
     return CSourceSeeking::SetPositions(pCurrent, CurrentFlags, pStop,  StopFlags);
   }

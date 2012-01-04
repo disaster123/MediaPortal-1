@@ -63,6 +63,7 @@ public:
 
 protected:
   void      UpdateFromSeek();
+  void      CreateEmptySample(IMediaSample *pSample);
   
   CTsReaderFilter * const m_pTsReaderFilter;
   bool      m_bConnected;

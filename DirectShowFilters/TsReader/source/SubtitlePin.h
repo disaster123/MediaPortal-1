@@ -60,6 +60,7 @@ public:
 protected:
   void LogCurrentPosition();
   void UpdateFromSeek();
+  void CreateEmptySample(IMediaSample *pSample);
 
   CTsReaderFilter * const m_pTsReaderFilter;
   bool      m_bConnected;

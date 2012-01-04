@@ -56,11 +56,13 @@ public:
   void SetStart(CRefTime rtStartTime);
   bool IsConnected();
   bool IsInFillBuffer();
+  bool HasDeliveredSample();
   void SetDiscontinuity(bool onOff);
   DWORD m_FillBuffSleepTime;
 
 protected:
   void      UpdateFromSeek();
+  void      CreateEmptySample(IMediaSample *pSample);
   
   CTsReaderFilter * const m_pTsReaderFilter;
   bool      m_bConnected;
@@ -84,7 +86,7 @@ protected:
   REFERENCE_TIME  m_llLastComp;
   
   DWORD m_LastFillBuffTime;
-  int       m_sampleCount;
+  int   m_sampleCount;
 
 };
 
