@@ -179,6 +179,7 @@ private:
   CCritSec m_sectionRead;
   CCritSec m_sectionAudioChanging;
   CCritSec m_sectionMediaChanging;
+  CCritSec m_sectionSetAudioStream;
   FileReader* m_reader;
   CPatParser m_patParser;
   CMpegPesParser *m_mpegPesParser;
@@ -231,6 +232,7 @@ private:
   int m_receivedPackets;
 
   bool m_bFirstGopFound;
+  bool m_bSecondGopFound;
   bool m_bFrame0Found;
 
   bool  m_bWaitForMediaChange;
@@ -271,5 +273,8 @@ private:
   float m_MinVideoDelta;
 
   bool m_bShuttingDown;
+  
+  int m_lastVidResX;
+  int m_lastVidResY;
 
 };
