@@ -365,8 +365,8 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
         //      	  sampSleepTime = 1;
         //        }
 
-        DWORD sampSleepTime = max(1,(DWORD)(frameTime/8.0));       
-        if ((buffCnt == 0) || (buffCnt > 4) || (m_dRateSeeking != 1.0))
+        DWORD sampSleepTime = max(1,(DWORD)(frameTime/4.0));       
+        if ((buffCnt == 0) || (buffCnt > 5) || (m_dRateSeeking != 1.0))
         {
       	  sampSleepTime = 1;
         }
