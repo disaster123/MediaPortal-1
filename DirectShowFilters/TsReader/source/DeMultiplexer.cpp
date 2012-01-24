@@ -142,6 +142,7 @@ CDeMultiplexer::~CDeMultiplexer()
 
   m_subtitleStreams.clear();
   m_audioStreams.clear();
+  LogDebug("CDeMultiplexer::dtor - finished");
 }
 
 int CDeMultiplexer::GetVideoServiceType()
@@ -708,20 +709,27 @@ void CDeMultiplexer::Start()
   m_bReadAheadFromFile = false;
   m_bAudioVideoReady=false;
   m_filter.m_bStreamCompensated=false ;
-  DWORD dwBytesProcessed=0;
+  int dwBytesProcessed=0;
   DWORD m_Time = GET_TIME_NOW();
   while((GET_TIME_NOW() - m_Time) < 10000)
   {
     m_bEndOfFile = false;  //reset eof every time through to ignore a false eof due to slow rtsp startup
-    int BytesRead = max(0, ReadFromFile(false,false));
-    if (BytesRead == 0) Sleep(10);
+    int BytesRead = ReadFromFile(false,false);    
+    if (BytesRead <= 0)
+    {
+      BytesRead = 0;
+      Sleep(10);
+    }      
 	  // LogDebug("demux:Start() BytesRead:%d, BytesProcessed:%d", BytesRead, dwBytesProcessed);
     if (dwBytesProcessed>INITIAL_READ_SIZE || GetAudioStreamCount()>0)
     {
       #ifdef USE_DYNAMIC_PINS
-      if ((!m_mpegPesParser->basicVideoInfo.isValid &&  m_pids.videoPids.size() > 0 && 
-        m_pids.videoPids[0].Pid>1) && dwBytesProcessed<INITIAL_READ_SIZE)
+      if ((m_pids.videoPids.size() > 0 && m_pids.videoPids[0].Pid > 1) && 
+           !m_mpegPesParser->basicVideoInfo.isValid && !m_bFirstGopParsed &&
+           dwBytesProcessed<INITIAL_READ_SIZE)
       {
+        //We are waiting for the first video GOP header to be parsed
+        //so that OnVideoFormatChanged() can be triggered if necessary
         dwBytesProcessed+=BytesRead;
         continue;
       }
@@ -2157,7 +2165,7 @@ void CDeMultiplexer::OnNewChannel(CChannelInfo& info)
         if (!m_bWaitGoodPat)
         {
           m_bWaitGoodPat = true;
-          m_WaitGoodPatTmo = timeTemp + (m_filter.IsRTSP() ? 2500 : 1000);   // Set timeout to 1 sec (2.5 sec for RTSP)
+          m_WaitGoodPatTmo = timeTemp + ((m_filter.IsRTSP() && m_filter.IsLiveTV()) ? 2500 : 1000);   // Set timeout to 1 sec (2.5 sec for live RTSP)
           LogDebug("OnNewChannel: wait for good PAT, IDiff:%d, ReqDiff:%d ", PatIDiff, PatReqDiff);
           return; // wait a while for correct PAT version to arrive
         }
