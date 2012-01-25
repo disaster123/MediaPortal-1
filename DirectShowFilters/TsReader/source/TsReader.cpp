@@ -884,6 +884,7 @@ STDMETHODIMP CTsReaderFilter::Load(LPCOLESTR pszFileName,const AM_MEDIA_TYPE *pm
     //get file duration
     m_duration.SetFileReader(m_fileDuration);
     m_duration.UpdateDuration(true);
+    m_bRecording = true; //Force duration thread to update
 
     float milli = m_duration.Duration().Millisecs();
     milli /= 1000.0;
@@ -1480,6 +1481,8 @@ void CTsReaderFilter::ThreadProc()
                   //yes, then send a EC_LENGTH_CHANGED event to the graph
                   NotifyEvent(EC_LENGTH_CHANGED, NULL, NULL);
                   SetDuration();
+                  // double endr = duration.EndPcr().ToClock() ; 
+                  // LogDebug("CTsReaderFilter::Duration, real end = %f", (float)endr);
                 }
               }
               else if (isLiveCount > 0)
@@ -1494,6 +1497,8 @@ void CTsReaderFilter::ThreadProc()
             else
             {
               lastDurUpdate = 0;
+              m_bRecording = true; //We missed an update - force update next time
+              // LogDebug("CTsReaderFilter::Duration, Update missed");
             }
             
           }
@@ -1503,7 +1508,7 @@ void CTsReaderFilter::ThreadProc()
             double start = pcrStartLast.ToClock() ;
             double end = pcrEndLast.ToClock() ; 
 
-            end += max(3.9, ((double)(GET_TIME_NOW() - lastDurUpdate)/1000.0));
+            end += min(3.5, ((double)(GET_TIME_NOW() - lastDurUpdate)/1000.0));
             
             //set the duration
             pcrStart.FromClock(start) ;
@@ -1516,6 +1521,7 @@ void CTsReaderFilter::ThreadProc()
               //yes, then send a EC_LENGTH_CHANGED event to the graph
               NotifyEvent(EC_LENGTH_CHANGED, NULL, NULL);
               SetDuration();
+              // LogDebug("CTsReaderFilter::Duration, predicted end = %f", (float)end);
             }
           }
           

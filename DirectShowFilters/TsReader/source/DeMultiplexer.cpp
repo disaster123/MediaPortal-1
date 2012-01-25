@@ -697,7 +697,9 @@ void CDeMultiplexer::Start()
   m_bStarting=true ;
   m_receivedPackets=0;
   m_mpegParserTriggerFormatChange=false;
-  m_mpegParserReset = true;
+  m_mpegParserReset = true;  
+  m_bFirstGopParsed = false; 
+  m_mpegPesParser->basicVideoInfo.isValid = false;
   m_videoChanged=false;
   m_audioChanged=false;
   m_bEndOfFile=false;
@@ -721,12 +723,12 @@ void CDeMultiplexer::Start()
       Sleep(10);
     }      
 	  // LogDebug("demux:Start() BytesRead:%d, BytesProcessed:%d", BytesRead, dwBytesProcessed);
-    if (dwBytesProcessed>INITIAL_READ_SIZE || GetAudioStreamCount()>0)
+    if (dwBytesProcessed>INITIAL_READ_SIZE || GetAudioStreamCount()>0) //Wait for first PAT to be found
     {
       #ifdef USE_DYNAMIC_PINS
-      if ((m_pids.videoPids.size() > 0 && m_pids.videoPids[0].Pid > 1) && 
-           !m_mpegPesParser->basicVideoInfo.isValid && !m_bFirstGopParsed &&
-           dwBytesProcessed<INITIAL_READ_SIZE)
+      if ((m_pids.videoPids.size() > 0 && m_pids.videoPids[0].Pid > 1) &&       //There is a video stream.....
+           (!m_mpegPesParser->basicVideoInfo.isValid || !m_bFirstGopParsed) &&  //and the first GOP header is not parsed....
+           dwBytesProcessed<INITIAL_READ_SIZE)                                  //and we have not reached the data limit
       {
         //We are waiting for the first video GOP header to be parsed
         //so that OnVideoFormatChanged() can be triggered if necessary
