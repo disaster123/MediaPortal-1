@@ -180,7 +180,7 @@ CTsReaderFilter::CTsReaderFilter(IUnknown *pUnk, HRESULT *phr):
   TCHAR filename[1024];
   GetLogFile(filename);
   ::DeleteFile(filename);
-  LogDebug("--- Buffer-empty rate control testing ----");
+  LogDebug("----- Experimental noStopMod version -----");
   LogDebug("---------- v0.0.45 XXX -------------------");
   
   m_fileReader=NULL;
@@ -406,9 +406,9 @@ void STDMETHODCALLTYPE CTsReaderFilter::OnZapping(int info)
   // Theorically a new PAT ( equal to PAT+1 modulo 16 ) will be issued by TsWriter.
   if (info == 0x80)							
   {
-     m_bOnZap = true ;
-     m_demultiplexer.RequestNewPat();
-     m_bAnalog = false;
+    m_bOnZap = true ;
+    m_demultiplexer.RequestNewPat();
+    m_bAnalog = false;    
   }
   else
   {
@@ -575,6 +575,10 @@ STDMETHODIMP CTsReaderFilter::Stop()
     //Flushing is delegated
     m_demultiplexer.m_bFlushDelgNow = true;
     m_demultiplexer.WakeThread(); 
+    for(int i(0) ; ((i < 500) && m_demultiplexer.m_bFlushDelgNow) ; i++)
+    {
+      Sleep(1);
+    }
   }
   LogDebug("CTsReaderFilter::Stop() done");
   m_bStoppedForUnexpectedSeek=true ;
@@ -649,10 +653,17 @@ STDMETHODIMP CTsReaderFilter::Pause()
             LogDebug("  -- Pause()  ->start rtsp from %f", startTime);
             m_buffer.Clear();
             
-            //m_demultiplexer.Flush(false);
-            //Flushing is delegated
-            m_demultiplexer.m_bFlushDelgNow = true;
-            m_demultiplexer.WakeThread(); 
+            if (!m_demultiplexer.m_bFlushDelgNow && !m_demultiplexer.m_bFlushRunning) //Flush already pending
+            {
+              //m_demultiplexer.Flush(false);
+              //Flushing is delegated
+              m_demultiplexer.m_bFlushDelgNow = true;
+              m_demultiplexer.WakeThread(); 
+              for(int i(0) ; ((i < 500) && m_demultiplexer.m_bFlushDelgNow) ; i++)
+              {
+                Sleep(1);
+              }
+            }
     
             //start streaming
             m_buffer.Run(true);
@@ -1190,13 +1201,15 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
 
 	  if (!m_bOnZap || !m_demultiplexer.IsNewPatReady() || m_bAnalog) // On zapping, new PAT has occured, we should not flush to avoid loosing data.
 	  {                                                               //             new PAT has not occured, we should flush to avoid restart with old data.							
-	    //m_demultiplexer.Flush(true);
-      //Flushing is delegated
-      m_demultiplexer.m_bFlushDelgNow = true;
-      m_demultiplexer.WakeThread(); 
-      while (m_demultiplexer.m_bFlushDelgNow) 
+      if (!m_demultiplexer.m_bFlushDelgNow && !m_demultiplexer.m_bFlushRunning) //Flush already pending
       {
-        Sleep(1);
+        //Flushing is delegated
+        m_demultiplexer.m_bFlushDelgNow = true;
+        m_demultiplexer.WakeThread(); 
+        for(int i(0) ; ((i < 500) && m_demultiplexer.m_bFlushDelgNow) ; i++)
+        {
+          Sleep(1);
+        }
       }
     }
 

@@ -201,9 +201,12 @@ bool CDeMultiplexer::SetAudioStream(int stream)
       {
         LogDebug("SetAudioStream : OnMediaTypeChanged(AUDIO_CHANGE)");
         //Flush(true) ;                   
-        //Flushing is delegated to CTsReaderFilter::ThreadProc()
-        m_bFlushDelgNow = true;
-        WakeThread(); 
+        //Flushing is delegated to CDeMultiplexer::ThreadProc()
+        if (!m_bFlushDelgNow && !m_bFlushRunning) //Flush already pending
+        {
+          m_bFlushDelgNow = true;
+          WakeThread(); 
+        }
         m_filter.OnMediaTypeChanged(AUDIO_CHANGE);
         SetMediaChanging(true);
         m_filter.m_bForceSeekOnStop=true;     // Force stream to be resumed after
@@ -738,9 +741,12 @@ void CDeMultiplexer::Start()
       #endif
       m_reader->SetFilePointer(0,FILE_BEGIN);
       //Flush(true);
-      //Flushing is delegated to CTsReaderFilter::ThreadProc()
-      m_bFlushDelgNow = true;
-      WakeThread(); 
+      //Flushing is delegated to CDeMultiplexer::ThreadProc()
+      if (!m_bFlushDelgNow && !m_bFlushRunning) //Flush already pending
+      {
+        m_bFlushDelgNow = true;
+        WakeThread(); 
+      }
       m_streamPcr.Reset();
       m_bStarting=false;
 	    LogDebug("demux:Start() end1 BytesProcessed:%d", dwBytesProcessed);
@@ -972,12 +978,6 @@ void CDeMultiplexer::OnTsPacket(byte* tsPacket)
   	return;
   }
 
-//  //process the ts packet further
-//  FillSubtitle(header,tsPacket);
-//  FillAudio(header,tsPacket);
-//  FillVideo(header,tsPacket);
-//  FillTeletext(header,tsPacket);
-
   //process the ts packet further
   FillVideo(header,tsPacket);
   FillAudio(header,tsPacket);
@@ -1035,7 +1035,7 @@ void CDeMultiplexer::FillAudio(CTsHeader& header, byte* tsPacket)
       m_AudioValidPES=false;  
       m_bSetAudioDiscontinuity=true;
       LogDebug("PES audio 0-0-1 fail");
-      //Flushing is delegated to CTsReaderFilter::ThreadProc()
+      //Flushing is delegated to CDeMultiplexer::ThreadProc()
       m_bFlushDelegated = true;
       WakeThread();  
       return;
@@ -1076,7 +1076,7 @@ void CDeMultiplexer::FillAudio(CTsHeader& header, byte* tsPacket)
             m_lastAudioPTS.IsValid=false;
             m_lastVideoPTS.IsValid=false;
             m_bSetAudioDiscontinuity=true;
-            //Flushing is delegated to CTsReaderFilter::ThreadProc()
+            //Flushing is delegated to CDeMultiplexer::ThreadProc()
             m_bFlushDelegated = true;
             WakeThread();            
           }
@@ -1295,7 +1295,7 @@ void CDeMultiplexer::FillVideoH264(CTsHeader& header, byte* tsPacket)
       m_p->rtStart = Packet::INVALID_TIME;
       m_WaitHeaderPES = -1;
       m_bSetVideoDiscontinuity=true;
-      //Flushing is delegated to CTsReaderFilter::ThreadProc()
+      //Flushing is delegated to CDeMultiplexer::ThreadProc()
       m_bFlushDelegated = true;
       WakeThread();
       return;
@@ -1328,7 +1328,7 @@ void CDeMultiplexer::FillVideoH264(CTsHeader& header, byte* tsPacket)
             LogDebug("DeMultiplexer::FillVideoH264 pts jump found : %f %f, %f", (float) diff, (float)pts.ToClock(), (float)m_lastVideoPTS.ToClock());
             m_lastAudioPTS.IsValid=false;
             m_lastVideoPTS.IsValid=false;
-            //Flushing is delegated to CTsReaderFilter::ThreadProc()
+            //Flushing is delegated to CDeMultiplexer::ThreadProc()
             m_bFlushDelegated = true;
             WakeThread();
           }
@@ -1682,7 +1682,7 @@ void CDeMultiplexer::FillVideoMPEG2(CTsHeader& header, byte* tsPacket)
       m_p->rtStart = Packet::INVALID_TIME;
       m_WaitHeaderPES = -1;
       m_bSetVideoDiscontinuity=true;
-      //Flushing is delegated to CTsReaderFilter::ThreadProc()
+      //Flushing is delegated to CDeMultiplexer::ThreadProc()
       m_bFlushDelegated = true;
       WakeThread();    
       return;        
@@ -1715,7 +1715,7 @@ void CDeMultiplexer::FillVideoMPEG2(CTsHeader& header, byte* tsPacket)
             LogDebug("DeMultiplexer::FillVideoMPEG2 pts jump found : %f %f, %f", (float) diff, (float)pts.ToClock(), (float)m_lastVideoPTS.ToClock());
             m_lastAudioPTS.IsValid=false;
             m_lastVideoPTS.IsValid=false;
-            //Flushing is delegated to CTsReaderFilter::ThreadProc()
+            //Flushing is delegated to CDeMultiplexer::ThreadProc()
             m_bFlushDelegated = true;
             WakeThread();
           }
@@ -2159,11 +2159,16 @@ void CDeMultiplexer::OnNewChannel(CChannelInfo& info)
     
     if (m_filter.IsTimeShifting() && (m_iPatVersion!=-1)) //TimeShifting TV channel change only
     {
-      DWORD timeTemp = GET_TIME_NOW();
+      DWORD timeTemp = GetTickCount();
       int PatReqDiff = (info.PatVersion & 0x0F) - (m_ReqPatVersion & 0x0F);
       int PatIDiff = (info.PatVersion & 0x0F) - (m_iPatVersion & 0x0F);
       
-      if (!((PatIDiff == 1) || (PatIDiff == -15) || (PatReqDiff == 0))) //Not (PAT version incremented by 1 or expected PAT)
+      if (PatIDiff < 0) //Rollover
+      {
+        PatIDiff += 16;
+      }
+      
+      if ((PatIDiff > 7) && (PatReqDiff != 0)) //PAT version change too big/negative and it's not the requested PAT)
       {      
         //Skipped back in timeshift file or possible RTSP seek accuracy problem ?
         if (!m_bWaitGoodPat)
@@ -2196,10 +2201,12 @@ void CDeMultiplexer::OnNewChannel(CChannelInfo& info)
     m_iPatVersion=info.PatVersion;
     m_bSetAudioDiscontinuity=true;
     m_bSetVideoDiscontinuity=true;
-    //Flushing is delegated to CTsReaderFilter::ThreadProc()
-    m_bFlushDelgNow = true;
-    WakeThread(); 
-   
+    //Flushing is delegated to CDeMultiplexer::ThreadProc()
+    if (!m_bFlushDelgNow && !m_bFlushRunning) //Flush already pending
+    {
+      m_bFlushDelgNow = true;
+      WakeThread(); 
+    }
 //    Flush();
 //    m_filter.m_bOnZap = true ;
   }
@@ -2458,6 +2465,13 @@ void CDeMultiplexer::RequestNewPat(void)
   m_ReqPatVersion &= 0x0F;
   LogDebug("Request new PAT = %d", m_ReqPatVersion);
   m_WaitNewPatTmo=GET_TIME_NOW()+10000;
+  
+  if (!m_bFlushDelgNow && !m_bFlushRunning && (m_filter.State() == State_Paused)) //Flush already pending
+  {
+    //Flush buffers to speed up zapping
+    m_bFlushDelgNow = true;
+    WakeThread(); 
+  }
 }
 
 void CDeMultiplexer::ClearRequestNewPat(void)
