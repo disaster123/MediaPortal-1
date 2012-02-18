@@ -180,8 +180,8 @@ CTsReaderFilter::CTsReaderFilter(IUnknown *pUnk, HRESULT *phr):
   TCHAR filename[1024];
   GetLogFile(filename);
   ::DeleteFile(filename);
-  LogDebug("--- Buffer-empty rate control testing ----");
-  LogDebug("---------- v0.0.45 XXX -------------------");
+  LogDebug("----- Experimental noStopMod version -----");
+  LogDebug("---------- v0.0.46 XXX -------------------");
   
   m_fileReader=NULL;
   m_fileDuration=NULL;
@@ -201,8 +201,25 @@ CTsReaderFilter::CTsReaderFilter(IUnknown *pUnk, HRESULT *phr):
   m_dwGraphRegister = 0;
   m_rtspClient.Initialize();
   HKEY key;
-  if (ERROR_SUCCESS==RegCreateKey(HKEY_CURRENT_USER, "Software\\MediaPortal\\TsReader",&key))
+  
+  //  if (ERROR_SUCCESS==RegCreateKey(HKEY_CURRENT_USER, "Software\\MediaPortal\\TsReader",&key))
+  //  {
+  //    RegCloseKey(key);
+  //  }
+
+  m_bDisableVidSizeRebuild = false;
+  if (ERROR_SUCCESS==RegCreateKeyEx(HKEY_CURRENT_USER, "Software\\Team MediaPortal\\TsReader", 0, NULL, 
+                                    REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &key, NULL))
   {
+    if (ERROR_FILE_NOT_FOUND==RegQueryValueEx(key,"disableVidSizeRebuild",0,NULL,NULL,NULL))
+    {
+      LogDebug("----- disableVidSizeRebuild not found -----");
+    }
+    else
+    {
+      LogDebug("----- disableVidSizeRebuild found -----");
+      m_bDisableVidSizeRebuild = true;
+    }
     RegCloseKey(key);
   }
 
@@ -406,9 +423,9 @@ void STDMETHODCALLTYPE CTsReaderFilter::OnZapping(int info)
   // Theorically a new PAT ( equal to PAT+1 modulo 16 ) will be issued by TsWriter.
   if (info == 0x80)							
   {
-     m_bOnZap = true ;
-     m_demultiplexer.RequestNewPat();
-     m_bAnalog = false;
+    m_bOnZap = true ;
+    m_demultiplexer.RequestNewPat();
+    m_bAnalog = false;    
   }
   else
   {
@@ -575,6 +592,10 @@ STDMETHODIMP CTsReaderFilter::Stop()
     //Flushing is delegated
     m_demultiplexer.m_bFlushDelgNow = true;
     m_demultiplexer.WakeThread(); 
+    for(int i(0) ; ((i < 500) && (m_demultiplexer.m_bFlushDelgNow || m_demultiplexer.m_bFlushRunning)) ; i++)
+    {
+      Sleep(1);
+    }
   }
   LogDebug("CTsReaderFilter::Stop() done");
   m_bStoppedForUnexpectedSeek=true ;
@@ -649,10 +670,17 @@ STDMETHODIMP CTsReaderFilter::Pause()
             LogDebug("  -- Pause()  ->start rtsp from %f", startTime);
             m_buffer.Clear();
             
-            //m_demultiplexer.Flush(false);
-            //Flushing is delegated
-            m_demultiplexer.m_bFlushDelgNow = true;
-            m_demultiplexer.WakeThread(); 
+            if (!m_demultiplexer.m_bFlushDelgNow && !m_demultiplexer.m_bFlushRunning) //Flush already pending
+            {
+              //m_demultiplexer.Flush(false);
+              //Flushing is delegated
+              m_demultiplexer.m_bFlushDelgNow = true;
+              m_demultiplexer.WakeThread(); 
+            }
+            for(int i(0) ; ((i < 500) && (m_demultiplexer.m_bFlushDelgNow || m_demultiplexer.m_bFlushRunning)) ; i++)
+            {
+              Sleep(1);
+            }
     
             //start streaming
             m_buffer.Run(true);
@@ -1190,11 +1218,13 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
 
 	  if (!m_bOnZap || !m_demultiplexer.IsNewPatReady() || m_bAnalog) // On zapping, new PAT has occured, we should not flush to avoid loosing data.
 	  {                                                               //             new PAT has not occured, we should flush to avoid restart with old data.							
-	    //m_demultiplexer.Flush(true);
-      //Flushing is delegated
-      m_demultiplexer.m_bFlushDelgNow = true;
-      m_demultiplexer.WakeThread(); 
-      while (m_demultiplexer.m_bFlushDelgNow) 
+      if (!m_demultiplexer.m_bFlushDelgNow && !m_demultiplexer.m_bFlushRunning) //Flush already pending
+      {
+        //Flushing is delegated
+        m_demultiplexer.m_bFlushDelgNow = true;
+        m_demultiplexer.WakeThread(); 
+      }
+      for(int i(0) ; ((i < 500) && (m_demultiplexer.m_bFlushDelgNow || m_demultiplexer.m_bFlushRunning)) ; i++)
       {
         Sleep(1);
       }
@@ -1217,8 +1247,12 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
       }
     }
 
-    m_ShowBufferVideo = 2;
-    m_ShowBufferAudio = 2;
+    m_ShowBufferVideo = 5;
+    m_ShowBufferAudio = 5;
+
+    //Try and refill the buffers
+    m_demultiplexer.m_bReadAheadFromFile = true;
+    m_demultiplexer.WakeThread(); //File read prefetch
     
     //LogDebug("CTsReaderFilter::--SeekPreStart() DeliverEndFlush"); 
     
@@ -1227,15 +1261,15 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
       // Update m_rtStart in case of has not seeked yet
       GetVideoPin()->SetStart(rtAbsSeek) ;
 
-      // and restart the thread
-      //LogDebug("CTsReaderFilter::--SeekPreStart() Vid Run"); 
-      GetVideoPin()->Run();
-      
-      Sleep(50);
-
       //deliver a end-flush to the codec filter so it will start asking for data again
       //LogDebug("CTsReaderFilter::--SeekPreStart() Vid DeliverEndFlush"); 
-      GetVideoPin()->DeliverEndFlush();      
+      GetVideoPin()->DeliverEndFlush();
+
+      Sleep(20);
+            
+      // and restart the thread
+      //LogDebug("CTsReaderFilter::--SeekPreStart() Vid Run"); 
+      GetVideoPin()->Run();     
     }
   
     if (GetSubtitlePin()->IsConnected())
@@ -1282,16 +1316,15 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
       //LogDebug("CTsReaderFilter::--SeekPreStart() Wait vid sample delivery"); 
       int i=0;
       //Wait for video pin sample delivery - workaround for video decoders hanging....
-      while ((i < 500) && !m_demultiplexer.IsAudioChanging() && !m_demultiplexer.IsMediaChanging() && !m_bStopping && (m_State != State_Stopped) && !GetVideoPin()->HasDeliveredSample())
+      while ((i < 1000) && !m_demultiplexer.IsAudioChanging() && !m_demultiplexer.IsMediaChanging() && !m_bStopping && (m_State != State_Stopped) && !GetVideoPin()->HasDeliveredSample())
       {
         Sleep(1);
         i++;
       }
-      if ((i >= 500) && !m_demultiplexer.IsAudioChanging() && !m_demultiplexer.IsMediaChanging() && !m_bStopping && (m_State != State_Stopped))
+      if ((i >= 1000) && !m_demultiplexer.IsAudioChanging() && !m_demultiplexer.IsMediaChanging() && !m_bStopping && (m_State != State_Stopped))
       {
-        LogDebug("CTsReaderFilter: SeekPreStart: NotDeliveredSample error!! - force graph rebuild");       
-        m_demultiplexer.SetMediaChanging(true);
-        OnMediaTypeChanged(VIDEO_CHANGE | AUDIO_CHANGE);
+        LogDebug("CTsReaderFilter: SeekPreStart: NotDeliveredSample error!! - set EOF");       
+        m_demultiplexer.SetEndOfFile(true);
         SetWaitDataAfterSeek(false);           
         return ;
       }
@@ -1644,13 +1677,14 @@ void CTsReaderFilter::ThreadProc()
 void CTsReaderFilter::SetDuration()
 {
   return;
-  DWORD secs=m_duration.Duration().Millisecs();
-  HKEY key;
-  if (ERROR_SUCCESS==RegOpenKey(HKEY_CURRENT_USER, "Software\\MediaPortal\\TsReader",&key))
-  {
-    RegSetValueEx(key, "duration",0,REG_DWORD,(const BYTE*)&secs,sizeof(DWORD));
-    RegCloseKey(key);
-  }
+  
+  //  DWORD secs=m_duration.Duration().Millisecs();
+  //  HKEY key;
+  //  if (ERROR_SUCCESS==RegOpenKey(HKEY_CURRENT_USER, "Software\\MediaPortal\\TsReader",&key))
+  //  {
+  //    RegSetValueEx(key, "duration",0,REG_DWORD,(const BYTE*)&secs,sizeof(DWORD));
+  //    RegCloseKey(key);
+  //  }
 }
 
 HRESULT CTsReaderFilter::AddGraphToRot(IUnknown *pUnkGraph)
