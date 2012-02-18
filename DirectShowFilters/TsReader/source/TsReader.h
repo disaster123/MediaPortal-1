@@ -229,6 +229,7 @@ public:
   CLSID           m_videoDecoderCLSID;
   bool            m_bFastSyncFFDShow;
   bool            m_EnableSlowMotionOnZapping;
+  bool            m_bDisableVidSizeRebuild;
 
   CLSID           GetCLSIDFromPin(IPin* pPin);
   

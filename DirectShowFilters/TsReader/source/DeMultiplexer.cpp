@@ -519,7 +519,6 @@ void CDeMultiplexer::Flush(bool clearAVready)
   FlushVideo();
   FlushSubtitle();
   m_bFlushDelegated = false;
-  // m_bFlushDelgNow = false;
   m_bReadAheadFromFile = false;  
   
   if (clearAVready)
@@ -1539,7 +1538,14 @@ void CDeMultiplexer::FillVideoH264(CTsHeader& header, byte* tsPacket)
 
           if (Gop)
           {
-            if (m_lastVidResX!=m_mpegPesParser->basicVideoInfo.width || m_lastVidResY!=m_mpegPesParser->basicVideoInfo.height)
+            if (m_lastVidResX!=m_mpegPesParser->basicVideoInfo.width || m_lastVidResY!=m_mpegPesParser->basicVideoInfo.height
+                || (m_mpegParserTriggerFormatChange && m_videoChanged && !IsAudioChanging()))
+            {
+              LogDebug("DeMultiplexer: triggering OnVideoFormatChanged");
+              m_filter.OnVideoFormatChanged(m_mpegPesParser->basicVideoInfo.streamType,m_mpegPesParser->basicVideoInfo.width,m_mpegPesParser->basicVideoInfo.height,m_mpegPesParser->basicVideoInfo.arx,m_mpegPesParser->basicVideoInfo.ary,15000000,m_mpegPesParser->basicVideoInfo.isInterlaced);
+            }
+            
+            if ((m_lastVidResX!=m_mpegPesParser->basicVideoInfo.width || m_lastVidResY!=m_mpegPesParser->basicVideoInfo.height) && !m_filter.m_bDisableVidSizeRebuild)
             {
               LogDebug("DeMultiplexer: %x video format changed: res=%dx%d aspectRatio=%d:%d fps=%d isInterlaced=%d",header.Pid,m_mpegPesParser->basicVideoInfo.width,m_mpegPesParser->basicVideoInfo.height,m_mpegPesParser->basicVideoInfo.arx,m_mpegPesParser->basicVideoInfo.ary,m_mpegPesParser->basicVideoInfo.fps,m_mpegPesParser->basicVideoInfo.isInterlaced);
               if (m_mpegParserTriggerFormatChange && !IsAudioChanging())
@@ -1556,8 +1562,6 @@ void CDeMultiplexer::FillVideoH264(CTsHeader& header, byte* tsPacket)
               {
                 m_videoChanged = true;
               }
-              LogDebug("DeMultiplexer: triggering OnVideoFormatChanged");
-              m_filter.OnVideoFormatChanged(m_mpegPesParser->basicVideoInfo.streamType,m_mpegPesParser->basicVideoInfo.width,m_mpegPesParser->basicVideoInfo.height,m_mpegPesParser->basicVideoInfo.arx,m_mpegPesParser->basicVideoInfo.ary,15000000,m_mpegPesParser->basicVideoInfo.isInterlaced);
             }
             else //video resolution is unchanged, but there may be other format changes
             {
@@ -1922,12 +1926,19 @@ void CDeMultiplexer::FillVideoMPEG2(CTsHeader& header, byte* tsPacket)
             
             if (Gop)
             {
-              if (m_lastVidResX!=m_mpegPesParser->basicVideoInfo.width || m_lastVidResY!=m_mpegPesParser->basicVideoInfo.height)
+              if (m_lastVidResX!=m_mpegPesParser->basicVideoInfo.width || m_lastVidResY!=m_mpegPesParser->basicVideoInfo.height
+                  || (m_mpegParserTriggerFormatChange && m_videoChanged && !IsAudioChanging()))
+              {
+                LogDebug("DeMultiplexer: triggering OnVideoFormatChanged");
+                m_filter.OnVideoFormatChanged(m_mpegPesParser->basicVideoInfo.streamType,m_mpegPesParser->basicVideoInfo.width,m_mpegPesParser->basicVideoInfo.height,m_mpegPesParser->basicVideoInfo.arx,m_mpegPesParser->basicVideoInfo.ary,15000000,m_mpegPesParser->basicVideoInfo.isInterlaced);
+              }
+              
+              if ((m_lastVidResX!=m_mpegPesParser->basicVideoInfo.width || m_lastVidResY!=m_mpegPesParser->basicVideoInfo.height) && !m_filter.m_bDisableVidSizeRebuild)
               {
                 LogDebug("DeMultiplexer: %x video format changed: res=%dx%d aspectRatio=%d:%d fps=%d isInterlaced=%d",header.Pid,m_mpegPesParser->basicVideoInfo.width,m_mpegPesParser->basicVideoInfo.height,m_mpegPesParser->basicVideoInfo.arx,m_mpegPesParser->basicVideoInfo.ary,m_mpegPesParser->basicVideoInfo.fps,m_mpegPesParser->basicVideoInfo.isInterlaced);
                 if (m_mpegParserTriggerFormatChange && !IsAudioChanging())
                 {
-                  LogDebug("DeMultiplexer: OnMediaFormatChange triggered by mpeg2Parser, aud %d, vid 1", m_audioChanged);
+                  LogDebug("DeMultiplexer: OnMediaFormatChange triggered by MPEG2 parser, aud %d, vid 1", m_audioChanged);
                   SetMediaChanging(true);
                   if (m_audioChanged)
                     m_filter.OnMediaTypeChanged(VIDEO_CHANGE | AUDIO_CHANGE); //Video and audio
@@ -1939,8 +1950,6 @@ void CDeMultiplexer::FillVideoMPEG2(CTsHeader& header, byte* tsPacket)
                 {
                   m_videoChanged = true;
                 }
-                LogDebug("DeMultiplexer: triggering OnVideoFormatChanged");
-                m_filter.OnVideoFormatChanged(m_mpegPesParser->basicVideoInfo.streamType,m_mpegPesParser->basicVideoInfo.width,m_mpegPesParser->basicVideoInfo.height,m_mpegPesParser->basicVideoInfo.arx,m_mpegPesParser->basicVideoInfo.ary,15000000,m_mpegPesParser->basicVideoInfo.isInterlaced);
               }
               else //video resolution is unchanged, but there may be other format changes
               {
@@ -2207,8 +2216,6 @@ void CDeMultiplexer::OnNewChannel(CChannelInfo& info)
       m_bFlushDelgNow = true;
       WakeThread(); 
     }
-//    Flush();
-//    m_filter.m_bOnZap = true ;
   }
   else
   {

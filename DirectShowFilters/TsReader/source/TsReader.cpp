@@ -181,7 +181,7 @@ CTsReaderFilter::CTsReaderFilter(IUnknown *pUnk, HRESULT *phr):
   GetLogFile(filename);
   ::DeleteFile(filename);
   LogDebug("----- Experimental noStopMod version -----");
-  LogDebug("---------- v0.0.45 XXX -------------------");
+  LogDebug("---------- v0.0.46 XXX -------------------");
   
   m_fileReader=NULL;
   m_fileDuration=NULL;
@@ -201,8 +201,25 @@ CTsReaderFilter::CTsReaderFilter(IUnknown *pUnk, HRESULT *phr):
   m_dwGraphRegister = 0;
   m_rtspClient.Initialize();
   HKEY key;
-  if (ERROR_SUCCESS==RegCreateKey(HKEY_CURRENT_USER, "Software\\MediaPortal\\TsReader",&key))
+  
+  //  if (ERROR_SUCCESS==RegCreateKey(HKEY_CURRENT_USER, "Software\\MediaPortal\\TsReader",&key))
+  //  {
+  //    RegCloseKey(key);
+  //  }
+
+  m_bDisableVidSizeRebuild = false;
+  if (ERROR_SUCCESS==RegCreateKeyEx(HKEY_CURRENT_USER, "Software\\Team MediaPortal\\TsReader", 0, NULL, 
+                                    REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &key, NULL))
   {
+    if (ERROR_FILE_NOT_FOUND==RegQueryValueEx(key,"disableVidSizeRebuild",0,NULL,NULL,NULL))
+    {
+      LogDebug("----- disableVidSizeRebuild not found -----");
+    }
+    else
+    {
+      LogDebug("----- disableVidSizeRebuild found -----");
+      m_bDisableVidSizeRebuild = true;
+    }
     RegCloseKey(key);
   }
 
@@ -575,7 +592,7 @@ STDMETHODIMP CTsReaderFilter::Stop()
     //Flushing is delegated
     m_demultiplexer.m_bFlushDelgNow = true;
     m_demultiplexer.WakeThread(); 
-    for(int i(0) ; ((i < 500) && m_demultiplexer.m_bFlushDelgNow) ; i++)
+    for(int i(0) ; ((i < 500) && (m_demultiplexer.m_bFlushDelgNow || m_demultiplexer.m_bFlushRunning)) ; i++)
     {
       Sleep(1);
     }
@@ -659,10 +676,10 @@ STDMETHODIMP CTsReaderFilter::Pause()
               //Flushing is delegated
               m_demultiplexer.m_bFlushDelgNow = true;
               m_demultiplexer.WakeThread(); 
-              for(int i(0) ; ((i < 500) && m_demultiplexer.m_bFlushDelgNow) ; i++)
-              {
-                Sleep(1);
-              }
+            }
+            for(int i(0) ; ((i < 500) && (m_demultiplexer.m_bFlushDelgNow || m_demultiplexer.m_bFlushRunning)) ; i++)
+            {
+              Sleep(1);
             }
     
             //start streaming
@@ -1206,10 +1223,10 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
         //Flushing is delegated
         m_demultiplexer.m_bFlushDelgNow = true;
         m_demultiplexer.WakeThread(); 
-        for(int i(0) ; ((i < 500) && m_demultiplexer.m_bFlushDelgNow) ; i++)
-        {
-          Sleep(1);
-        }
+      }
+      for(int i(0) ; ((i < 500) && (m_demultiplexer.m_bFlushDelgNow || m_demultiplexer.m_bFlushRunning)) ; i++)
+      {
+        Sleep(1);
       }
     }
 
@@ -1230,8 +1247,12 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
       }
     }
 
-    m_ShowBufferVideo = 2;
-    m_ShowBufferAudio = 2;
+    m_ShowBufferVideo = 5;
+    m_ShowBufferAudio = 5;
+
+    //Try and refill the buffers
+    m_demultiplexer.m_bReadAheadFromFile = true;
+    m_demultiplexer.WakeThread(); //File read prefetch
     
     //LogDebug("CTsReaderFilter::--SeekPreStart() DeliverEndFlush"); 
     
@@ -1240,15 +1261,15 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
       // Update m_rtStart in case of has not seeked yet
       GetVideoPin()->SetStart(rtAbsSeek) ;
 
-      // and restart the thread
-      //LogDebug("CTsReaderFilter::--SeekPreStart() Vid Run"); 
-      GetVideoPin()->Run();
-      
-      Sleep(50);
-
       //deliver a end-flush to the codec filter so it will start asking for data again
       //LogDebug("CTsReaderFilter::--SeekPreStart() Vid DeliverEndFlush"); 
-      GetVideoPin()->DeliverEndFlush();      
+      GetVideoPin()->DeliverEndFlush();
+
+      Sleep(20);
+            
+      // and restart the thread
+      //LogDebug("CTsReaderFilter::--SeekPreStart() Vid Run"); 
+      GetVideoPin()->Run();     
     }
   
     if (GetSubtitlePin()->IsConnected())
@@ -1295,16 +1316,15 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
       //LogDebug("CTsReaderFilter::--SeekPreStart() Wait vid sample delivery"); 
       int i=0;
       //Wait for video pin sample delivery - workaround for video decoders hanging....
-      while ((i < 500) && !m_demultiplexer.IsAudioChanging() && !m_demultiplexer.IsMediaChanging() && !m_bStopping && (m_State != State_Stopped) && !GetVideoPin()->HasDeliveredSample())
+      while ((i < 1000) && !m_demultiplexer.IsAudioChanging() && !m_demultiplexer.IsMediaChanging() && !m_bStopping && (m_State != State_Stopped) && !GetVideoPin()->HasDeliveredSample())
       {
         Sleep(1);
         i++;
       }
-      if ((i >= 500) && !m_demultiplexer.IsAudioChanging() && !m_demultiplexer.IsMediaChanging() && !m_bStopping && (m_State != State_Stopped))
+      if ((i >= 1000) && !m_demultiplexer.IsAudioChanging() && !m_demultiplexer.IsMediaChanging() && !m_bStopping && (m_State != State_Stopped))
       {
-        LogDebug("CTsReaderFilter: SeekPreStart: NotDeliveredSample error!! - force graph rebuild");       
-        m_demultiplexer.SetMediaChanging(true);
-        OnMediaTypeChanged(VIDEO_CHANGE | AUDIO_CHANGE);
+        LogDebug("CTsReaderFilter: SeekPreStart: NotDeliveredSample error!! - set EOF");       
+        m_demultiplexer.SetEndOfFile(true);
         SetWaitDataAfterSeek(false);           
         return ;
       }
@@ -1657,13 +1677,14 @@ void CTsReaderFilter::ThreadProc()
 void CTsReaderFilter::SetDuration()
 {
   return;
-  DWORD secs=m_duration.Duration().Millisecs();
-  HKEY key;
-  if (ERROR_SUCCESS==RegOpenKey(HKEY_CURRENT_USER, "Software\\MediaPortal\\TsReader",&key))
-  {
-    RegSetValueEx(key, "duration",0,REG_DWORD,(const BYTE*)&secs,sizeof(DWORD));
-    RegCloseKey(key);
-  }
+  
+  //  DWORD secs=m_duration.Duration().Millisecs();
+  //  HKEY key;
+  //  if (ERROR_SUCCESS==RegOpenKey(HKEY_CURRENT_USER, "Software\\MediaPortal\\TsReader",&key))
+  //  {
+  //    RegSetValueEx(key, "duration",0,REG_DWORD,(const BYTE*)&secs,sizeof(DWORD));
+  //    RegCloseKey(key);
+  //  }
 }
 
 HRESULT CTsReaderFilter::AddGraphToRot(IUnknown *pUnkGraph)
