@@ -304,8 +304,8 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
         //Sleep(20);
         m_FillBuffSleepTime = 5;
         CreateEmptySample(pSample);
-        m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
-        m_sampleCount = 0;
+        //m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
+        //m_sampleCount = 0;
         m_bInFillBuffer = false;
         return NOERROR;
       }
@@ -503,7 +503,7 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
             //ifso, set it
             pSample->SetDiscontinuity(TRUE);
 
-            if (m_sampleCount == 0) 
+            if ((m_sampleCount == 0) && !m_pTsReaderFilter->m_bDisableAddPMT)
             {
               //Add MediaType info to first sample after OnThreadStartPlay()
               CMediaType mt; 

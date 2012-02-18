@@ -87,6 +87,7 @@ protected:
   
   DWORD m_LastFillBuffTime;
   int   m_sampleCount;
+  bool  m_bPinNoAddPMT;
 
 };
 
