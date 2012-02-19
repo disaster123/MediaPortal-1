@@ -200,26 +200,31 @@ CTsReaderFilter::CTsReaderFilter(IUnknown *pUnk, HRESULT *phr):
   wcscpy(m_fileName,L"");
   m_dwGraphRegister = 0;
   m_rtspClient.Initialize();
-  HKEY key;
-  
-  //  if (ERROR_SUCCESS==RegCreateKey(HKEY_CURRENT_USER, "Software\\MediaPortal\\TsReader",&key))
-  //  {
-  //    RegCloseKey(key);
-  //  }
 
+  HKEY key;
   m_bDisableVidSizeRebuild = false;
+  m_bDisableAddPMT = false;
   if (ERROR_SUCCESS==RegCreateKeyEx(HKEY_CURRENT_USER, "Software\\Team MediaPortal\\TsReader", 0, NULL, 
                                     REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &key, NULL))
   {
-    if (ERROR_FILE_NOT_FOUND==RegQueryValueEx(key,"disableVidSizeRebuild",0,NULL,NULL,NULL))
+    DWORD keyValue = 0;
+    LPCTSTR disableVidSizeRebuild = TEXT("DisableVidSizeRebuild");
+    ReadRegistryKeyDword(key, disableVidSizeRebuild, keyValue);
+    if (keyValue)
     {
-      LogDebug("----- disableVidSizeRebuild not found -----");
-    }
-    else
-    {
-      LogDebug("----- disableVidSizeRebuild found -----");
+      LogDebug("----- disableVidSizeRebuild -----");
       m_bDisableVidSizeRebuild = true;
     }
+
+    keyValue = 0;
+    LPCTSTR disableAddPMT = TEXT("DisableAddPMT");
+    ReadRegistryKeyDword(key, disableAddPMT, keyValue);
+    if (keyValue)
+    {
+      LogDebug("----- disableAddPMT -----");
+      m_bDisableAddPMT = true;
+    }
+    
     RegCloseKey(key);
   }
 
@@ -1316,12 +1321,12 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
       //LogDebug("CTsReaderFilter::--SeekPreStart() Wait vid sample delivery"); 
       int i=0;
       //Wait for video pin sample delivery - workaround for video decoders hanging....
-      while ((i < 1000) && !m_demultiplexer.IsAudioChanging() && !m_demultiplexer.IsMediaChanging() && !m_bStopping && (m_State != State_Stopped) && !GetVideoPin()->HasDeliveredSample())
+      while ((i < 2000) && !m_demultiplexer.IsAudioChanging() && !m_demultiplexer.IsMediaChanging() && !m_bStopping && (m_State != State_Stopped) && !GetVideoPin()->HasDeliveredSample())
       {
         Sleep(1);
         i++;
       }
-      if ((i >= 1000) && !m_demultiplexer.IsAudioChanging() && !m_demultiplexer.IsMediaChanging() && !m_bStopping && (m_State != State_Stopped))
+      if ((i >= 2000) && !m_demultiplexer.IsAudioChanging() && !m_demultiplexer.IsMediaChanging() && !m_bStopping && (m_State != State_Stopped))
       {
         LogDebug("CTsReaderFilter: SeekPreStart: NotDeliveredSample error!! - set EOF");       
         m_demultiplexer.SetEndOfFile(true);
@@ -1680,7 +1685,7 @@ void CTsReaderFilter::SetDuration()
   
   //  DWORD secs=m_duration.Duration().Millisecs();
   //  HKEY key;
-  //  if (ERROR_SUCCESS==RegOpenKey(HKEY_CURRENT_USER, "Software\\MediaPortal\\TsReader",&key))
+  //  if (ERROR_SUCCESS==RegOpenKey(HKEY_CURRENT_USER, "Software\\Team MediaPortal\\TsReader",&key))
   //  {
   //    RegSetValueEx(key, "duration",0,REG_DWORD,(const BYTE*)&secs,sizeof(DWORD));
   //    RegCloseKey(key);
@@ -2072,6 +2077,39 @@ CLSID CTsReaderFilter::GetCLSIDFromPin(IPin* pPin)
     }
   }
   return clsid;
+}
+
+void CTsReaderFilter::ReadRegistryKeyDword(HKEY hKey, LPCTSTR& lpSubKey, DWORD& data)
+{
+  DWORD dwSize = sizeof(DWORD);
+  DWORD dwType = REG_DWORD;
+  LONG error = RegQueryValueEx(hKey, lpSubKey, NULL, &dwType, (PBYTE)&data, &dwSize);
+  if (error != ERROR_SUCCESS)
+  {
+    if (error == ERROR_FILE_NOT_FOUND)
+    {
+      LogDebug("Create default value for %s", lpSubKey);
+      WriteRegistryKeyDword(hKey, lpSubKey, data);
+    }
+    else
+    {
+      LogDebug("Faíled to create default value for %s", lpSubKey);
+    }
+  }
+}
+
+void CTsReaderFilter::WriteRegistryKeyDword(HKEY hKey, LPCTSTR& lpSubKey, DWORD& data)
+{  
+  DWORD dwSize = sizeof(DWORD);
+  LONG result = RegSetValueEx(hKey, lpSubKey, 0, REG_DWORD, (LPBYTE)&data, dwSize);
+  if (result == ERROR_SUCCESS) 
+  {
+    LogDebug("Success writing to Registry: %s", lpSubKey);
+  } 
+  else 
+  {
+    LogDebug("Error writing to Registry - subkey: %s error: %d", lpSubKey, result);
+  }
 }
 
 

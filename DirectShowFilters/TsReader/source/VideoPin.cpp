@@ -59,7 +59,8 @@ CVideoPin::CVideoPin(LPUNKNOWN pUnk, CTsReaderFilter *pFilter, HRESULT *phr,CCri
     //AM_SEEKING_CanGetCurrentPos |
     AM_SEEKING_Source;
 //  m_bSeeking=false;
-  m_bInFillBuffer=false;
+  m_bInFillBuffer = false;
+  m_bPinNoAddPMT = false;
 }
 
 CVideoPin::~CVideoPin()
@@ -159,7 +160,8 @@ HRESULT CVideoPin::CheckConnect(IPin *pReceivePin)
 
 HRESULT CVideoPin::CompleteConnect(IPin *pReceivePin)
 {
-  m_bInFillBuffer=false;
+  m_bInFillBuffer = false;
+  m_bPinNoAddPMT = false;
   HRESULT hr = CBaseOutputPin::CompleteConnect(pReceivePin);
   if (SUCCEEDED(hr))
   {
@@ -182,7 +184,8 @@ HRESULT CVideoPin::CompleteConnect(IPin *pReceivePin)
     }
     else if (m_pTsReaderFilter->m_videoDecoderCLSID == CLSID_FFDSHOWDXVA)
     {
-      LogDebug("vidPin:CompleteConnect() FFDShow DXVA Video Decoder connected");
+      m_bPinNoAddPMT = true;
+      LogDebug("vidPin:CompleteConnect() FFDShow DXVA Video Decoder connected, disable AddPMT");
     }
     
     m_bConnected=true;    
@@ -343,8 +346,8 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
         //Sleep(5);
         m_FillBuffSleepTime = 5;
         CreateEmptySample(pSample);
-        m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
-        m_sampleCount = 0;
+        //m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
+        //m_sampleCount = 0;
         m_bInFillBuffer = false;
         return NOERROR;
       }
@@ -488,7 +491,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
           //do we need to set the discontinuity flag?
           if (m_bDiscontinuity || buffer->GetDiscontinuity())
           {
-            if (m_sampleCount == 0) 
+            if ((m_sampleCount == 0) && !m_pTsReaderFilter->m_bDisableAddPMT && !m_bPinNoAddPMT)
             {
               //Add MediaType info to first sample after OnThreadStartPlay()
               CMediaType mt; 

@@ -230,6 +230,7 @@ public:
   bool            m_bFastSyncFFDShow;
   bool            m_EnableSlowMotionOnZapping;
   bool            m_bDisableVidSizeRebuild;
+  bool            m_bDisableAddPMT;
 
   CLSID           GetCLSIDFromPin(IPin* pPin);
   
@@ -243,6 +244,8 @@ private:
   void    RemoveGraphFromRot();
   void    SetMediaPosnUpdate(REFERENCE_TIME MediaPos);
   void    BufferingPause(bool longPause);
+  void    ReadRegistryKeyDword(HKEY hKey, LPCTSTR& lpSubKey, DWORD& data);
+  void    WriteRegistryKeyDword(HKEY hKey, LPCTSTR& lpSubKey, DWORD& data);
 
   CAudioPin*	    m_pAudioPin;
   CVideoPin*	    m_pVideoPin;
