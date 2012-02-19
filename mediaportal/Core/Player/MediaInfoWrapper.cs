@@ -103,10 +103,17 @@ namespace MediaPortal.Player
       //currently disabled for all tv/radio/streaming video
       if (isTV || isRadio || isRTSP || isAVStream || !File.Exists(strFile))
       {
-        Log.Debug("MediaInfoWrapper: isTv:{0}, isRadio:{1}, isRTSP:{2}, isAVStream:{3}", isTV, isRadio, isRTSP,
-                  isAVStream);
-        Log.Debug("MediaInfoWrapper: disabled for this content");
-        return;
+          Log.Debug("MediaInfoWrapper: isTv:{0}, isRadio:{1}, isRTSP:{2}, isAVStream:{3}", isTV, isRadio, isRTSP,
+                    isAVStream);
+          Log.Debug("MediaInfoWrapper: disabled for this content");
+          return;
+      }
+
+      if (Util.Utils.IsNetwork(strFile) || Util.Utils.IsPersistentNetwork(strFile))
+      {
+          Log.Debug("MediaInfoWrapper: isNetwork");
+          Log.Debug("MediaInfoWrapper: disabled for this content");
+          return;
       }
 
       //currently mediainfo is only used for local video related material (if enabled)
@@ -119,6 +126,7 @@ namespace MediaPortal.Player
 
       try
       {
+        Log.Debug("MediaInfoWrapper: MediaInfo started");
         _mI = new MediaInfo();
         _mI.Option("ParseSpeed", _ParseSpeed);
 
