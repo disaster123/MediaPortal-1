@@ -449,14 +449,12 @@ HRESULT CSubtitlePin::OnThreadStartPlay()
 HRESULT CSubtitlePin::ChangeStart()
 {
   m_pTsReaderFilter->SetSeeking(true);
-  UpdateFromSeek();
-  return S_OK;
+  return UpdateFromSeek();
 }
 HRESULT CSubtitlePin::ChangeStop()
 {
   m_pTsReaderFilter->SetSeeking(true);
-  UpdateFromSeek();
-  return S_OK;
+  return UpdateFromSeek();
 }
 
 HRESULT CSubtitlePin::ChangeRate()
@@ -472,7 +470,7 @@ HRESULT CSubtitlePin::ChangeRate()
   {
     m_pTsReaderFilter->m_bForceSeekAfterRateChange = true;
     m_pTsReaderFilter->SetSeeking(true);
-    UpdateFromSeek();
+    return UpdateFromSeek();
   }
   return S_OK;
 }
@@ -599,11 +597,10 @@ STDMETHODIMP CSubtitlePin::SetPositions(LONGLONG *pCurrent, DWORD CurrentFlags, 
 //  LogDebug("sub seek done---");
 //}
 
-void CSubtitlePin::UpdateFromSeek()
+HRESULT CSubtitlePin::UpdateFromSeek()
 {
   LogDebug("subPin: UpdateFromSeek, m_rtStart %f, m_dRateSeeking %f",(float)m_rtStart.Millisecs()/1000.0f,(float)m_dRateSeeking);
-  m_pTsReaderFilter->SeekPreStart(m_rtStart) ;
-  return ;
+  return m_pTsReaderFilter->SeekPreStart(m_rtStart) ;
 }
 
 //******************************************************

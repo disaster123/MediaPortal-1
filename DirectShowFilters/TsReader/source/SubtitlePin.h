@@ -58,9 +58,9 @@ public:
   void SetDiscontinuity(bool onOff);
 
 protected:
-  void LogCurrentPosition();
-  void UpdateFromSeek();
-  void CreateEmptySample(IMediaSample *pSample);
+  void    LogCurrentPosition();
+  HRESULT UpdateFromSeek();
+  void    CreateEmptySample(IMediaSample *pSample);
 
   CTsReaderFilter * const m_pTsReaderFilter;
   bool      m_bConnected;

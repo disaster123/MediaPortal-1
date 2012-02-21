@@ -171,7 +171,7 @@ public:
   void            Seek(CRefTime&  seekTime, bool seekInFile);
 //  void            SeekDone(CRefTime& refTime);
 //  void            SeekStart();
-  void            SeekPreStart(CRefTime& rtSeek);
+  HRESULT         SeekPreStart(CRefTime& rtSeek);
   bool            SetSeeking(bool onOff);
   void            SetWaitDataAfterSeek(bool onOff);
   double          UpdateDuration();

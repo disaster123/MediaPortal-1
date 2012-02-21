@@ -62,7 +62,7 @@ public:
   DWORD    m_FillBuffSleepTime;
 
 protected:
-  void      UpdateFromSeek();
+  HRESULT   UpdateFromSeek();
   void      CreateEmptySample(IMediaSample *pSample);
   
   CTsReaderFilter * const m_pTsReaderFilter;

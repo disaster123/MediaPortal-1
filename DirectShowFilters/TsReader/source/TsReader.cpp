@@ -1074,11 +1074,11 @@ bool CTsReaderFilter::IsFilterRunning()
 }
 
 
-void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
+HRESULT CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
 {
   //  if (IsWaitDataAfterSeek())
   //  {
-  //    return;
+  //    return S_OK;
   //  }
   
   bool doSeek = true;
@@ -1132,7 +1132,7 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
       m_seekTime = rtSeek ;
       m_absSeekTime = rtAbsSeek ;
       SetSeeking(false);
-      return ;
+      return S_OK;
     }
   }
 
@@ -1185,7 +1185,7 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
     if (!doSeek && !m_bOnZap) 
     {
       SetSeeking(false);
-      return ;
+      return S_OK;
     }
  
     SetSeeking(true); //Just in case...normally set already by calling method
@@ -1265,16 +1265,15 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
     {
       // Update m_rtStart in case of has not seeked yet
       GetVideoPin()->SetStart(rtAbsSeek) ;
-
+            
       //deliver a end-flush to the codec filter so it will start asking for data again
       //LogDebug("CTsReaderFilter::--SeekPreStart() Vid DeliverEndFlush"); 
       GetVideoPin()->DeliverEndFlush();
 
-      Sleep(20);
-            
       // and restart the thread
       //LogDebug("CTsReaderFilter::--SeekPreStart() Vid Run"); 
-      GetVideoPin()->Run();     
+      //GetVideoPin()->Run();     
+      GetVideoPin()->Pause();     
     }
   
     if (GetSubtitlePin()->IsConnected())
@@ -1303,7 +1302,8 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
 
       // and restart the thread
       //LogDebug("CTsReaderFilter::--SeekPreStart() Aud Run"); 
-      GetAudioPin()->Run();
+      //GetAudioPin()->Run();
+      GetAudioPin()->Pause();     
     }
  
     SetWaitDataAfterSeek(true);  
@@ -1331,7 +1331,7 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
         LogDebug("CTsReaderFilter: SeekPreStart: NotDeliveredSample error!! - set EOF");       
         m_demultiplexer.SetEndOfFile(true);
         SetWaitDataAfterSeek(false);           
-        return ;
+        return E_FAIL;
       }
     }
     
@@ -1340,7 +1340,7 @@ void CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
   
   SetWaitDataAfterSeek(false);  
     
-  return ;
+  return S_OK;
 }
 
 // When a IMediaSeeking.SetPositions() is done on one of the output pins the output pin will do:

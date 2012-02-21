@@ -691,14 +691,12 @@ HRESULT CVideoPin::OnThreadStartPlay()
 HRESULT CVideoPin::ChangeStart()
 {
   m_pTsReaderFilter->SetSeeking(true);
-  UpdateFromSeek();
-  return S_OK;
+  return UpdateFromSeek();
 }
 HRESULT CVideoPin::ChangeStop()
 {
   m_pTsReaderFilter->SetSeeking(true);
-  UpdateFromSeek();
-  return S_OK;
+  return UpdateFromSeek();
 }
 HRESULT CVideoPin::ChangeRate()
 {
@@ -720,7 +718,7 @@ HRESULT CVideoPin::ChangeRate()
   {
     m_pTsReaderFilter->m_bForceSeekAfterRateChange = true;
     m_pTsReaderFilter->SetSeeking(true);
-    UpdateFromSeek();
+    return UpdateFromSeek();
   }
 
   return S_OK;
@@ -745,11 +743,10 @@ STDMETHODIMP CVideoPin::SetPositions(LONGLONG *pCurrent, DWORD CurrentFlags, LON
 /// UpdateFromSeek() called when need to seek to a specific timestamp in the file
 /// m_rtStart contains the time we need to seek to...
 ///
-void CVideoPin::UpdateFromSeek()
+HRESULT CVideoPin::UpdateFromSeek()
 {
   LogDebug("vidPin: UpdateFromSeek, m_rtStart %f, m_dRateSeeking %f",(float)m_rtStart.Millisecs()/1000.0f,(float)m_dRateSeeking);
-  m_pTsReaderFilter->SeekPreStart(m_rtStart) ;
-  return ;
+  return m_pTsReaderFilter->SeekPreStart(m_rtStart) ;
 }
 
 //******************************************************

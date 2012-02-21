@@ -654,15 +654,13 @@ bool CAudioPin::IsConnected()
 HRESULT CAudioPin::ChangeStart()
 {
   m_pTsReaderFilter->SetSeeking(true);
-  UpdateFromSeek();
-  return S_OK;
+  return UpdateFromSeek();
 }
 
 HRESULT CAudioPin::ChangeStop()
 {
   m_pTsReaderFilter->SetSeeking(true);
-  UpdateFromSeek();
-  return S_OK;
+  return UpdateFromSeek();
 }
 
 HRESULT CAudioPin::ChangeRate()
@@ -678,7 +676,7 @@ HRESULT CAudioPin::ChangeRate()
   {
     m_pTsReaderFilter->m_bForceSeekAfterRateChange = true;
     m_pTsReaderFilter->SetSeeking(true);
-    UpdateFromSeek();
+    return UpdateFromSeek();
   }
   return S_OK;
 }
@@ -732,13 +730,13 @@ STDMETHODIMP CAudioPin::SetPositions(LONGLONG *pCurrent, DWORD CurrentFlags, LON
 /// UpdateFromSeek() called when need to seek to a specific timestamp in the file
 /// m_rtStart contains the time we need to seek to...
 ///
-void CAudioPin::UpdateFromSeek()
+HRESULT CAudioPin::UpdateFromSeek()
 {
   LogDebug("audPin: UpdateFromSeek, m_rtStart %f, m_dRateSeeking %f",(float)m_rtStart.Millisecs()/1000.0f,(float)m_dRateSeeking);
-  m_pTsReaderFilter->SeekPreStart(m_rtStart);
+  return m_pTsReaderFilter->SeekPreStart(m_rtStart);
 
 //  LogDebug("audPin: seek done %f/%f",(float)m_rtStart.Millisecs()/1000.0f,(float)m_rtDuration.Millisecs()/1000.0f);
-  return ;
+//  return ;
 }
 
 //******************************************************
