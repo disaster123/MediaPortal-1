@@ -1272,8 +1272,8 @@ HRESULT CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
 
       // and restart the thread
       //LogDebug("CTsReaderFilter::--SeekPreStart() Vid Run"); 
-      //GetVideoPin()->Run();     
-      GetVideoPin()->Pause();     
+      GetVideoPin()->Run();     
+      //GetVideoPin()->Pause();     
     }
   
     if (GetSubtitlePin()->IsConnected())
@@ -1302,8 +1302,8 @@ HRESULT CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
 
       // and restart the thread
       //LogDebug("CTsReaderFilter::--SeekPreStart() Aud Run"); 
-      //GetAudioPin()->Run();
-      GetAudioPin()->Pause();     
+      GetAudioPin()->Run();
+      //GetAudioPin()->Pause();     
     }
  
     SetWaitDataAfterSeek(true);  
