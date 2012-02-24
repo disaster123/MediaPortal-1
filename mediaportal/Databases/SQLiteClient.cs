@@ -20,9 +20,11 @@
 
 using System;
 using System.Collections;
+using System.Data;
+using System.Data.SQLite;
 using System.IO;
+using System.Reflection;
 using System.Runtime.InteropServices;
-using MediaPortal.Database;
 using MediaPortal.GUI.Library;
 
 namespace SQLite.NET
@@ -38,75 +40,14 @@ namespace SQLite.NET
     [DllImport("shlwapi.dll")]
     private static extern bool PathIsNetworkPath(string Path);
 
-    [DllImport("sqlite.dll")]
-    internal static extern int sqlite3_open16([MarshalAs(UnmanagedType.LPWStr)] string dbname, out IntPtr handle);
-
-    [DllImport("sqlite.dll")]
-    internal static extern void sqlite3_close(IntPtr sqlite_handle);
-
-    [DllImport("sqlite.dll")]
-    internal static extern IntPtr sqlite3_errmsg16(IntPtr sqlite_handle);
-
-    [DllImport("sqlite.dll")]
-    internal static extern int sqlite3_changes(IntPtr handle);
-
-    [DllImport("sqlite.dll")]
-    internal static extern int sqlite3_last_insert_rowid(IntPtr sqlite_handle);
-
-    [DllImport("sqlite.dll")]
-    internal static extern SqliteError sqlite3_prepare16(IntPtr sqlite_handle,
-                                                         [MarshalAs(UnmanagedType.LPWStr)] string zSql, int zSqllen,
-                                                         out IntPtr pVm, out IntPtr pzTail);
-
-    [DllImport("sqlite.dll")]
-    internal static extern SqliteError sqlite3_step(IntPtr pVm);
-
-    [DllImport("sqlite.dll")]
-    internal static extern SqliteError sqlite3_finalize(IntPtr pVm, out IntPtr pzErrMsg);
-
-    [DllImport("sqlite.dll")]
-    internal static extern SqliteError sqlite3_exec16(IntPtr handle, string sql, IntPtr callback, IntPtr user_data,
-                                                      out IntPtr errstr_ptr);
-
-    [DllImport("sqlite.dll")]
-    internal static extern IntPtr sqlite3_column_name16(IntPtr pVm, int col);
-
-    [DllImport("sqlite.dll")]
-    internal static extern IntPtr sqlite3_column_text16(IntPtr pVm, int col);
-
-    [DllImport("sqlite.dll")]
-    internal static extern IntPtr sqlite3_column_blob(IntPtr pVm, int col);
-
-    [DllImport("sqlite.dll")]
-    internal static extern int sqlite3_column_bytes(IntPtr pVm, int col);
-
-    [DllImport("sqlite.dll")]
-    internal static extern int sqlite3_column_count(IntPtr pVm);
-
-    [DllImport("sqlite.dll")]
-    internal static extern int sqlite3_column_type(IntPtr pVm, int col);
-
-    [DllImport("sqlite.dll")]
-    internal static extern Int64 sqlite3_column_int64(IntPtr pVm, int col);
-
-    [DllImport("sqlite.dll")]
-    internal static extern double sqlite3_column_double(IntPtr pVm, int col);
-
-    [DllImport("sqlite.dll")]
-    internal static extern IntPtr sqlite3_libversion();
-
     #endregion
 
     #region variables
 
-    // Fields
-    private int busyRetries = 5;
-    private int busyRetryDelay = 25;
     private static int currentWaitCount = 0;
-    private IntPtr dbHandle = IntPtr.Zero;
     private string databaseName = string.Empty;
     private string DBName = string.Empty;
-    //private long dbHandleAdres=0;
+    private System.Data.SQLite.SQLiteConnection _connection;
 
     #endregion
 
@@ -116,83 +57,25 @@ namespace SQLite.NET
 
     #endregion
 
-    #region enums
-
-    // Nested Types
-    public enum SqliteError : int
-    {
-      /// <value>Successful result</value>
-      OK = 0,
-      /// <value>SQL error or missing database</value>
-      ERROR = 1,
-      /// <value>An internal logic error in SQLite</value>
-      INTERNAL = 2,
-      /// <value>Access permission denied</value>
-      PERM = 3,
-      /// <value>Callback routine requested an abort</value>
-      ABORT = 4,
-      /// <value>The database file is locked</value>
-      BUSY = 5,
-      /// <value>A table in the database is locked</value>
-      LOCKED = 6,
-      /// <value>A malloc() failed</value>
-      NOMEM = 7,
-      /// <value>Attempt to write a readonly database</value>
-      READONLY = 8,
-      /// <value>Operation terminated by public const int interrupt()</value>
-      INTERRUPT = 9,
-      /// <value>Some kind of disk I/O error occurred</value>
-      IOERR = 10,
-      /// <value>The database disk image is malformed</value>
-      CORRUPT = 11,
-      /// <value>(Internal Only) Table or record not found</value>
-      NOTFOUND = 12,
-      /// <value>Insertion failed because database is full</value>
-      FULL = 13,
-      /// <value>Unable to open the database file</value>
-      CANTOPEN = 14,
-      /// <value>Database lock protocol error</value>
-      PROTOCOL = 15,
-      /// <value>(Internal Only) Database table is empty</value>
-      EMPTY = 16,
-      /// <value>The database schema changed</value>
-      SCHEMA = 17,
-      /// <value>Too much data for one row of a table</value>
-      TOOBIG = 18,
-      /// <value>Abort due to contraint violation</value>
-      CONSTRAINT = 19,
-      /// <value>Data type mismatch</value>
-      MISMATCH = 20,
-      /// <value>Library used incorrectly</value>
-      MISUSE = 21,
-      /// <value>Uses OS features not supported on host</value>
-      NOLFS = 22,
-      /// <value>Authorization denied</value>
-      AUTH = 23,
-      /// <value>Auxiliary database format error</value>
-      FORMAT = 24,
-      /// <value>2nd parameter to sqlite_bind out of range</value>
-      RANGE = 25,
-      /// <value>File opened that is not a database file</value>
-      NOTADB = 26,
-      /// <value>sqlite_step() has another row ready</value>
-      ROW = 100,
-      /// <value>sqlite_step() has finished executing</value>
-      DONE = 101
-    }
-
-    #endregion
-
     static SQLiteClient()
     {
-      string libVersion;
       currentWaitCount = 0;
-      IntPtr pName = sqlite3_libversion();
-      if (pName != IntPtr.Zero)
+
+      Log.Info("Using System.Data.SQLite v{0} with SQLite v{1}", SystemDataSQLiteVersion(), System.Data.SQLite.SQLiteConnection.SQLiteVersion);
+    }
+
+    private static string SystemDataSQLiteVersion()
+    {
+      Assembly SDS = Assembly.GetAssembly(typeof(System.Data.SQLite.SQLiteConnection));
+      if (null != SDS)
       {
-        libVersion = Marshal.PtrToStringAnsi(pName);
-        Log.Info("using sqlite {0}", libVersion);
+        AssemblyName SDSName = SDS.GetName();
+        if (null != SDSName)
+        {
+          return SDSName.Version.ToString();
+        }
       }
+      return "UNKNOWN";
     }
 
     private static bool WaitForFile(string fileName)
@@ -238,29 +121,39 @@ namespace SQLite.NET
       }
     }
 
-    // Methods
-
     private void init(string dbName)
     {
       bool isRemotePath = PathIsNetworkPath(dbName);
       if (isRemotePath)
       {
-        Log.Info("SQLLiteClient: database is remote {0}", this.DBName);
+        Log.Info("SQLiteClient: Database is remote {0}", dbName);
         WaitForFile(dbName);
       }
 
       this.DBName = dbName;
       databaseName = Path.GetFileName(dbName);
-      //Log.Info("dbs:open:{0}",databaseName);
-      dbHandle = IntPtr.Zero;
 
-      SqliteError err = (SqliteError)sqlite3_open16(dbName, out dbHandle);
-      //Log.Info("dbs:opened:{0} {1} {2:X}",databaseName, err.ToString(),dbHandle.ToInt32());
-      if (err != SqliteError.OK)
+      if (CheckConnection())
       {
-        throw new SQLiteException(string.Format("Failed to open database, SQLite said: {0} {1}", dbName, err.ToString()));
+        Close();
       }
-      //Log.Info("dbs:opened:{0} {1:X}",databaseName, dbHandle.ToInt32());
+      _connection = new SQLiteConnection(string.Format("Data Source={0};Pooling=true;FailIfMissing=false", dbName));
+      try
+      {
+        _connection.Open();
+      }
+      catch (Exception ex)
+      {
+        try
+        {
+          _connection.Close();
+        }
+        catch { }
+        if (_connection != null)
+          _connection.Dispose();
+        _connection = null;
+        throw new SQLiteException(string.Format("SQLiteClient: Failed to open database {0}: {1}", dbName, ex.ToString()));
+      }
     }
 
     public string DatabaseName
@@ -275,276 +168,108 @@ namespace SQLite.NET
 
     public int ChangedRows()
     {
-      if (dbHandle == IntPtr.Zero)
+      if (!CheckConnection())
       {
         return 0;
       }
-      return sqlite3_changes(dbHandle);
+
+      return _connection.Changes;
+    }
+
+    private bool CheckConnection()
+    {
+      return _connection != null && _connection.State != ConnectionState.Broken && _connection.State != ConnectionState.Closed && _connection.State != ConnectionState.Connecting;
     }
 
     public void Close()
     {
-      if (dbHandle != IntPtr.Zero)
+      try
       {
-        //System.Diagnostics.Debugger.Launch();
-        //Log.Info("SQLiteClient: Closing database: {0} st {1}", databaseName, Environment.StackTrace);
-        Log.Info("SQLiteClient: Closing database: {0}", databaseName);
-        try
-        {
-          sqlite3_close(dbHandle);
-        }
-        catch (Exception e)
-        {
-          Log.Error("SQLiteClient: Trouble closing database: {0} ({1})", databaseName, e.Message);
-        }
-        finally
-        {
-          dbHandle = IntPtr.Zero;
-          databaseName = string.Empty;
-        }
+        if (CheckConnection())
+          _connection.Close();
+      }
+      catch (Exception ex)
+      {
+        throw new SQLiteException(string.Format("Failed to open database {0}: {1}", databaseName, ex.ToString()));
+      }
+      finally
+      {
+        if (_connection != null)
+          _connection.Dispose();
+        _connection = null;
+        databaseName = string.Empty;
+        DBName = string.Empty;
       }
     }
-
-    private void ThrowError(string statement, string sqlQuery, SqliteError err)
-    {
-      string errorMsg = Marshal.PtrToStringUni(sqlite3_errmsg16(dbHandle));
-      Log.Error("SQLiteClient: {0} cmd:{1} err:{2} detailed:{3} query:{4}",
-                databaseName, statement, err.ToString(), errorMsg, sqlQuery);
-
-      throw new SQLiteException(
-        String.Format("SQLiteClient: {0} cmd:{1} err:{2} detailed:{3} query:{4}", databaseName, statement,
-                      err.ToString(),
-                      errorMsg, sqlQuery), err);
-    }
-
+    
     public SQLiteResultSet Execute(string query)
     {
-      SQLiteResultSet set1 = new SQLiteResultSet();
-      lock (typeof (SQLiteClient))
+      SQLiteResultSet settemp = new SQLiteResultSet();
+
+      if (!CheckConnection())
       {
-        //Log.Info("dbs:{0} sql:{1}", databaseName,query);
-        if (query == null)
-        {
-          Log.Error("SQLiteClient: query==null");
-          return set1;
-        }
-        if (query.Length == 0)
-        {
-          Log.Error("SQLiteClient: query==''");
-          return set1;
-        }
-        IntPtr errMsg;
-        //string msg = "";
+        Log.Error("SQLiteClient: _connection==null");
+        return settemp;
+      }
+      if (query == null)
+      {
+        Log.Error("SQLiteClient: query==null");
+        return settemp;
+      }
+      if (query.Length == 0)
+      {
+        Log.Error("SQLiteClient: query==''");
+        return settemp;
+      }
 
-        SqliteError err;
-        set1.LastCommand = query;
-
-        try
+      DataTable table = new DataTable();
+      using (SQLiteCommand cmd = _connection.CreateCommand())
+      {
+        cmd.CommandText = query;
+        using (SQLiteDataReader reader = cmd.ExecuteReader())
         {
-          IntPtr pVm;
-          IntPtr pzTail;
-          err = sqlite3_prepare16(dbHandle, query, query.Length * 2, out pVm, out pzTail);
-          if (err == SqliteError.OK)
-          {
-            ReadpVm(query, set1, ref pVm);
-          }
-
-          if (pVm == IntPtr.Zero)
-          {
-            ThrowError("sqlite3_prepare16:pvm=null", query, err);
-          }
-          err = sqlite3_finalize(pVm, out errMsg);
-        }
-        finally {}
-        if (err != SqliteError.OK)
-        {
-          Log.Error("SQLiteClient: query returned {0} {1}", err.ToString(), query);
-          ThrowError("sqlite3_finalize", query, err);
+          table.Load(reader);
+          reader.Close();
         }
       }
-      return set1;
-    }
 
-    internal void ReadpVm(string query, SQLiteResultSet set1, ref IntPtr pVm)
-    {
-      int pN;
-      SqliteError res = SqliteError.ERROR;
-
-      if (pVm == IntPtr.Zero)
+      settemp.LastCommand = query;
+      if (settemp.ColumnNames.Count == 0)
       {
-        ThrowError("SQLiteClient: pvm=null", query, res);
+        for (int j = 0; j < table.Columns.Count; j++)
+        {
+          string colName = table.Columns[j].ColumnName;
+          settemp.columnNames.Add(colName);
+          settemp.ColumnIndices[colName] = j;
+        }
       }
-      DateTime now = DateTime.Now;
-      TimeSpan ts = now - DateTime.Now;
-      while (true && ts.TotalSeconds > -15)
+
+      for (int i = 0; i < table.Rows.Count; i++)
       {
-        res = sqlite3_step(pVm);
-        pN = sqlite3_column_count(pVm);
-        /*
-        if (res == SqliteError.ERROR)
-        {
-          ThrowError("sqlite3_step", query, res);
-        }
-        */
-        if (res == SqliteError.DONE)
-        {
-          break;
-        }
-
-
-        // when resuming from hibernation or standby and where the db3 files are located on a network drive, we often end up in a neverending loop
-        // while (true)...it never exits. and the app is hanging.
-        // Lets handle it by disconnecting the DB, and then reconnect.
-        if (res == SqliteError.BUSY || res == SqliteError.ERROR)
-        {
-          this.Close();
-
-          dbHandle = IntPtr.Zero;
-
-          // bool res2 = WaitForFile(this.DBName);
-
-          SqliteError err = (SqliteError)sqlite3_open16(this.DBName, out dbHandle);
-
-          if (err != SqliteError.OK)
-          {
-            throw new SQLiteException(string.Format("Failed to re-open database, SQLite said: {0} {1}", DBName,
-                                                    err.ToString()));
-          }
-          else
-          {
-            IntPtr pzTail;
-            err = sqlite3_prepare16(dbHandle, query, query.Length * 2, out pVm, out pzTail);
-
-            res = sqlite3_step(pVm);
-            pN = sqlite3_column_count(pVm);
-
-            if (pVm == IntPtr.Zero)
-            {
-              ThrowError("sqlite3_prepare16:pvm=null", query, err);
-            }
-          }
-        }
-
-        // We have some data; lets read it
-        if (set1.ColumnNames.Count == 0)
-        {
-          for (int i = 0; i < pN; i++)
-          {
-            string colName;
-            IntPtr pName = sqlite3_column_name16(pVm, i);
-            if (pName == IntPtr.Zero)
-            {
-              ThrowError(String.Format("SqlClient:sqlite3_column_name16() returned null {0}/{1}", i, pN), query, res);
-            }
-            colName = Marshal.PtrToStringUni(pName);
-            set1.columnNames.Add(colName);
-            set1.ColumnIndices[colName] = i;
-          }
-        }
-
         SQLiteResultSet.Row row = new SQLiteResultSet.Row();
-        for (int i = 0; i < pN; i++)
+        for (int j = 0; j < table.Columns.Count; j++)
         {
-          string colData = "";
-          IntPtr pName = sqlite3_column_text16(pVm, i);
-          if (pName != IntPtr.Zero)
-          {
-            colData = Marshal.PtrToStringUni(pName);
-          }
-          row.fields.Add(colData);
+          row.fields.Add(PrepareColumnData(table.Rows[i][j]));
         }
-        set1.Rows.Add(row);
-
-        ts = now - DateTime.Now;
+        settemp.Rows.Add(row);
       }
 
-      if (res == SqliteError.BUSY || res == SqliteError.ERROR)
-      {
-        ThrowError("sqlite3_step", query, res);
-      }
+      return settemp;
     }
 
-    ~SQLiteClient()
+    private string PrepareColumnData(object data)
     {
-      //Log.Info("dbs:{0} ~ctor()", databaseName);
-      Close();
+      if (data is System.Byte[])
+      {
+        return BitConverter.ToString(data as System.Byte[]).Replace("-", string.Empty);
+      }
+      return data.ToString();
     }
-
-    /*
-
-		public ArrayList GetAll(string query)
-		{
-			SQLiteResultSet set1 = this.Execute(query);
-			return set1.Rows;
-		}
- 
-
-		public ArrayList GetAllHash(string query)
-		{
-			SQLiteResultSet set1 = this.Execute(query);
-			ArrayList list1 = new ArrayList();
-			while (set1.IsMoreData)
-			{
-				list1.Add(set1.GetRowHash());
-			}
-			return list1;
-		}
- 
-
-		public ArrayList GetColumn(string query)
-		{
-			return this.GetColumn(query, 0);
-		}
- 
-
-		public ArrayList GetColumn(string query, int column)
-		{
-			SQLiteResultSet set1 = this.Execute(query);
-			return set1.GetColumn(column);
-		}
- 
-
-
-
-		public string GetOne(string query)
-		{
-			SQLiteResultSet set1 = this.Execute(query);
-			return set1.GetField(0, 0);
-		}
- 
-
-		public ArrayList GetRow(string query)
-		{
-			return this.GetRow(query, 0);
-		}
- 
-
-		public ArrayList GetRow(string query, int row)
-		{
-			SQLiteResultSet set1 = this.Execute(query);
-			return set1.GetRow(row);
-		}
- 
-
-		public Hashtable GetRowHash(string query)
-		{
-			return this.GetRowHash(query, 0);
-		}
- 
-
-		public Hashtable GetRowHash(string query, int row)
-		{
-			SQLiteResultSet set1 = this.Execute(query);
-			return set1.GetRowHash(row);
-		}
- 
-    */
 
     public ArrayList GetColumn(string query)
     {
       return GetColumn(query, 0);
     }
-
 
     public ArrayList GetColumn(string query, int column)
     {
@@ -554,35 +279,28 @@ namespace SQLite.NET
 
     public int LastInsertID()
     {
-      return sqlite3_last_insert_rowid(dbHandle);
-    }
+      if (!CheckConnection())
+      {
+        return 0;
+      }
 
+      return (int)_connection.LastInsertRowId;
+    }
 
     public static string Quote(string input)
     {
       return string.Format("'{0}'", input.Replace("'", "''"));
     }
 
-
-    // Properties
-    public int BusyRetries
-    {
-      get { return busyRetries; }
-      set { busyRetries = value; }
-    }
-
-
-    public int BusyRetryDelay
-    {
-      get { return busyRetryDelay; }
-      set { busyRetryDelay = value; }
-    }
-
     #region IDisposable Members
+
+    ~SQLiteClient()
+    {
+      Close();
+    }
 
     public void Dispose()
     {
-      //Log.Info("dbs:{0} Dispose()", databaseName);
       Close();
     }
 
