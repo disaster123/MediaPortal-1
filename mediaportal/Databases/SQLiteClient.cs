@@ -123,6 +123,8 @@ namespace SQLite.NET
 
     private void init(string dbName)
     {
+      Log.Debug("SQLiteClient: INIT START {0}", dbName);
+        
       bool isRemotePath = PathIsNetworkPath(dbName);
       if (isRemotePath)
       {
@@ -154,6 +156,8 @@ namespace SQLite.NET
         _connection = null;
         throw new SQLiteException(string.Format("SQLiteClient: Failed to open database {0}: {1}", dbName, ex.ToString()));
       }
+
+        Log.Debug("SQLiteClient: INIT END {0}", dbName);
     }
 
     public string DatabaseName
@@ -183,7 +187,8 @@ namespace SQLite.NET
 
     public void Close()
     {
-      try
+        Log.Debug("SQLiteClient: close start {0}", databaseName);
+        try
       {
         if (CheckConnection())
           _connection.Close();
@@ -200,11 +205,13 @@ namespace SQLite.NET
         databaseName = string.Empty;
         DBName = string.Empty;
       }
+        Log.Debug("SQLiteClient: close end {0}", databaseName);
     }
     
     public SQLiteResultSet Execute(string query)
     {
-      SQLiteResultSet settemp = new SQLiteResultSet();
+        Log.Debug("SQLiteClient: execute start {0}", databaseName);
+        SQLiteResultSet settemp = new SQLiteResultSet();
 
       if (!CheckConnection())
       {
@@ -255,6 +262,7 @@ namespace SQLite.NET
       }
 
       return settemp;
+      Log.Debug("SQLiteClient: execute end {0}", databaseName);
     }
 
     private string PrepareColumnData(object data)
