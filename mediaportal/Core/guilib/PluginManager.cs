@@ -378,10 +378,12 @@ namespace MediaPortal.GUI.Library
     {
       if (!IsPlugInEnabled(strFile))
       {
+        Log.Info("  Skipping plugin from: {0} (disabled)", strFile);
         return;
       }
 
       Type[] foundInterfaces = null;
+      DateTime starttime = DateTime.Now;
 
       Log.Info("  Load plugins from : {0}", strFile);
       try
@@ -521,14 +523,18 @@ namespace MediaPortal.GUI.Library
           strFile.Substring(strFile.LastIndexOf(@"\") + 1));
         Log.Info("PluginManager: Exception: {0}", ex);
       }
+      Log.Info("  Plugin loading took {0}s : {1}", DateTime.Now.Subtract(starttime).TotalSeconds, strFile);
     }
 
     public static void LoadWindowPlugin(string strFile)
     {
       if (!IsPlugInEnabled(strFile))
       {
+        Log.Info("  Skipping plugin from: {0} (disabled)", strFile);
         return;
       }
+
+      DateTime starttime = DateTime.Now;
 
       Log.Info("  Load plugins from : {0}", strFile);
       try
@@ -669,8 +675,8 @@ namespace MediaPortal.GUI.Library
           strFile.Substring(strFile.LastIndexOf(@"\") + 1));
         Log.Info("PluginManager: Exception: {0}", ex);
       }
+      Log.Info("  Plugin loading took {0}s : {1}", DateTime.Now.Subtract(starttime).TotalSeconds, strFile);
     }
-
 
 
     public static bool IsPlugInEnabled(string strDllname)
