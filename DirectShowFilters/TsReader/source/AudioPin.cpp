@@ -74,6 +74,7 @@ CAudioPin::CAudioPin(LPUNKNOWN pUnk, CTsReaderFilter *pFilter, HRESULT *phr,CCri
     AM_SEEKING_Source;
   m_bSubtitleCompensationSet=false;
   m_bInFillBuffer=false;
+  m_bPinNoAddPMT = false;
 }
 
 CAudioPin::~CAudioPin()
@@ -147,7 +148,8 @@ HRESULT CAudioPin::DecideBufferSize(IMemAllocator *pAlloc, ALLOCATOR_PROPERTIES 
 
 HRESULT CAudioPin::CompleteConnect(IPin *pReceivePin)
 {
-  m_bInFillBuffer=false;
+  m_bInFillBuffer = false;
+  m_bPinNoAddPMT = false;
   LogDebug("audPin:CompleteConnect()");
   HRESULT hr = CBaseOutputPin::CompleteConnect(pReceivePin);
   if (SUCCEEDED(hr))
@@ -421,7 +423,7 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
           CRefTime compTemp;
           compTemp.m_time=(BestCompensation.m_time - m_pTsReaderFilter->m_ClockOnStart.m_time) - PRESENT_DELAY ;
           m_pTsReaderFilter->SetCompensation(compTemp);
-          m_pTsReaderFilter->AddVideoComp = AddVideoCompensation;
+          m_pTsReaderFilter->AddVideoComp = (AddVideoCompensation < 0) ? 0 : AddVideoCompensation;
 
           LogDebug("audPin:Compensation:%03.3f, Clock on start %03.3f m_rtStart:%d ",(float)m_pTsReaderFilter->Compensation.Millisecs()/1000.0f, m_pTsReaderFilter->m_ClockOnStart.Millisecs()/1000.0f, m_rtStart.Millisecs());
 
@@ -503,7 +505,7 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
             //ifso, set it
             pSample->SetDiscontinuity(TRUE);
 
-            if ((m_sampleCount == 0) && !m_pTsReaderFilter->m_bDisableAddPMT)
+            if ((m_sampleCount == 0) && !m_pTsReaderFilter->m_bDisableAddPMT && !m_bPinNoAddPMT)
             {
               //Add MediaType info to first sample after OnThreadStartPlay()
               CMediaType mt; 
@@ -512,6 +514,7 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
               demux.GetAudioStreamType(audioIndex, mt);
               pSample->SetMediaType(&mt);            
               LogDebug("audPin: Add pmt and set discontinuity L:%d B:%d fTime:%03.3f SampCnt:%d", m_bDiscontinuity, buffer->GetDiscontinuity(), (float)fTime, m_sampleCount);
+              m_bPinNoAddPMT = true; //Only add on first play (not after a seek)
             }   
             else
             {        

@@ -172,7 +172,7 @@ HRESULT CVideoPin::CompleteConnect(IPin *pReceivePin)
     if (m_pTsReaderFilter->m_videoDecoderCLSID == CLSID_FFDSHOWVIDEO)
     {
       m_pTsReaderFilter->m_bFastSyncFFDShow=true;
-      LogDebug("vidPin:CompleteConnect() FFDShow Video Decoder connected");
+      LogDebug("vidPin:CompleteConnect() FFDShow Video Decoder connected, disable AddPMT");
     }
     else if (m_pTsReaderFilter->m_videoDecoderCLSID == CLSID_LAVCUVID)
     {
@@ -264,7 +264,7 @@ HRESULT CVideoPin::DoBufferProcessingLoop(void)
       if (hr == S_OK) 
       {
         // Some decoders seem to crash when we provide empty samples 
-        if ((pSample->GetActualDataLength() > 0) && !m_pTsReaderFilter->IsSeeking() && !m_pTsReaderFilter->IsStopping())
+        if ((pSample->GetActualDataLength() > 0)&& !m_pTsReaderFilter->IsSeeking() && !m_pTsReaderFilter->IsStopping())
         {
           hr = Deliver(pSample);     
         }
@@ -346,8 +346,6 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
         //Sleep(5);
         m_FillBuffSleepTime = 5;
         CreateEmptySample(pSample);
-        //m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
-        //m_sampleCount = 0;
         m_bInFillBuffer = false;
         return NOERROR;
       }
@@ -358,16 +356,6 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
         // and slow down emptying rate when data available gets really low
         double frameTime;
         int buffCnt = demux.GetVideoBufferCnt(&frameTime);
-
-        //        DWORD sampSleepTime = max(1,(DWORD)(frameTime/4.0));       
-        //        if ((buffCnt < 9) && (buffCnt > 5))
-        //        {
-        //      	  sampSleepTime = max(1,(DWORD)(frameTime/8.0));
-        //        }
-        //        else if ((buffCnt == 0) || (buffCnt > 20))
-        //        {
-        //      	  sampSleepTime = 1;
-        //        }
 
         DWORD sampSleepTime = max(1,(DWORD)(frameTime/4.0));       
         if ((buffCnt == 0) || (buffCnt > 5) || (m_dRateSeeking != 1.0))
@@ -473,6 +461,11 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
             }
             else
             {
+              //if (m_sampleCount < 30) 
+              //{
+              //  LogDebug("vidPin: late/early sample discarded, fTime:%03.3f SampCnt:%d", (float)fTime, m_sampleCount);
+              //}
+              
               // Sample is too late.
               m_bPresentSample = false ;
             }
@@ -504,6 +497,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
               {
                 LogDebug("vidPin: Add pmt failed - set discontinuity L:%d B:%d fTime:%03.3f SampCnt:%d", m_bDiscontinuity, buffer->GetDiscontinuity(), (float)fTime, m_sampleCount);
               }
+              m_bPinNoAddPMT = true; //Only add on first play (not after a seek)
             }   
             else
             {        
@@ -661,7 +655,20 @@ bool CVideoPin::TimestampDisconChecker(REFERENCE_TIME timeStamp)
 /// Called when thread is about to start delivering data to the codec
 ///
 HRESULT CVideoPin::OnThreadStartPlay()
+{  
+  // DWORD thrdID = GetCurrentThreadId();
+  // LogDebug("vidPin:OnThreadStartPlay(%f), rate:%02.2f, threadID:0x%x, GET_TIME_NOW:0x%x", (float)m_rtStart.Millisecs()/1000.0f, m_dRateSeeking, thrdID, GET_TIME_NOW());
+
+  //start playing
+  
+  DeliverNewSegment(m_rtStart, m_rtStop, m_dRateSeeking);
+  return CSourceStream::OnThreadStartPlay( );
+}
+
+HRESULT CVideoPin::DeliverNewSegment(REFERENCE_TIME tStart, REFERENCE_TIME tStop, double dRate)
 {
+  LogDebug("vidPin:DeliverNewSegment(start %f, stop %f), rate:%02.2f", (float)tStart/10000000.0f, (float)tStop/10000000.0f, dRate);
+
   //set discontinuity flag indicating to codec that the new data
   //is not belonging to any previous data
   m_bDiscontinuity=TRUE;
@@ -678,14 +685,15 @@ HRESULT CVideoPin::OnThreadStartPlay()
 	m_fMTDMean = 0;
 	m_llMTDSumAvg = 0;
   ZeroMemory((void*)&m_pllMTD, sizeof(REFERENCE_TIME) * NB_MTDSIZE);
-  
-  DWORD thrdID = GetCurrentThreadId();
-  LogDebug("vidPin:OnThreadStartPlay(%f), rate:%02.2f, threadID:0x%x, GET_TIME_NOW:0x%x", (float)m_rtStart.Millisecs()/1000.0f, m_dRateSeeking, thrdID, GET_TIME_NOW());
 
-  //start playing
-  DeliverNewSegment(m_rtStart, m_rtStop, m_dRateSeeking);
-  return CSourceStream::OnThreadStartPlay( );
+  return CBaseOutputPin::DeliverNewSegment(tStart, tStop, dRate);
 }
+
+HRESULT CVideoPin::StartNewSegment()
+{
+  return DeliverNewSegment(m_rtStart, m_rtStop, m_dRateSeeking);
+}
+
 
 // CSourceSeeking
 HRESULT CVideoPin::ChangeStart()

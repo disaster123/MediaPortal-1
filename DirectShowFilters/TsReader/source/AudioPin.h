@@ -84,7 +84,8 @@ protected:
   LONGLONG  m_llLastComp;
   
   DWORD m_LastFillBuffTime;
-  int       m_sampleCount;
+  int   m_sampleCount;
+  bool  m_bPinNoAddPMT;
   
 };
 

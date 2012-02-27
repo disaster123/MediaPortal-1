@@ -53,11 +53,13 @@ public:
   STDMETHODIMP Notify(IBaseFilter * pSender, Quality q);
 
   HRESULT OnThreadStartPlay();
+  HRESULT DeliverNewSegment(REFERENCE_TIME tStart, REFERENCE_TIME tStop, double dRate);
   void SetStart(CRefTime rtStartTime);
   bool IsConnected();
   bool IsInFillBuffer();
   bool HasDeliveredSample();
   void SetDiscontinuity(bool onOff);
+  HRESULT StartNewSegment();
   DWORD m_FillBuffSleepTime;
 
 protected:
