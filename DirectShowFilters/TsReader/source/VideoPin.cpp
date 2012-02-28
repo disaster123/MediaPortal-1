@@ -257,10 +257,10 @@ HRESULT CVideoPin::DoBufferProcessingLoop(void)
         // or the allocator is decommited & we will be asked to
         // exit soon.
       }
-
+      
       // Virtual function user will override.
       hr = FillBuffer(pSample);
-
+      
       if (hr == S_OK) 
       {
         // Some decoders seem to crash when we provide empty samples 
@@ -378,6 +378,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
         m_bDiscontinuity=true;
       }
 
+
       //did we reach the end of the file
       if (demux.EndOfFile())
       {
@@ -442,14 +443,14 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
           if (m_dRateSeeking == 1.0)
           {
             //Slowly increase stall point threshold over the first 8 seconds of play
-            stallPoint = min(1.5, (1.0 + (((double)cRefTime.m_time)/160000000.0)));
+            stallPoint = min(1.8, (1.3 + (((double)cRefTime.m_time)/160000000.0)));
             
             //Discard late samples at start of play,
             //and samples outside a sensible timing window during play 
             //(helps with signal corruption recovery)
             if ((fTime > (ForcePresent ? -0.5 : -0.3)) && (fTime < 3.0))
             {
-              if (fTime > stallPoint)
+              if ((fTime > stallPoint) && (m_pTsReaderFilter->State() == State_Running))
               {
                 //Too early - stall for a while to avoid over-filling of video pipeline buffers
                 //Sleep(10);
@@ -460,12 +461,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
               }
             }
             else
-            {
-              //if (m_sampleCount < 30) 
-              //{
-              //  LogDebug("vidPin: late/early sample discarded, fTime:%03.3f SampCnt:%d", (float)fTime, m_sampleCount);
-              //}
-              
+            {              
               // Sample is too late.
               m_bPresentSample = false ;
             }

@@ -181,7 +181,7 @@ CTsReaderFilter::CTsReaderFilter(IUnknown *pUnk, HRESULT *phr):
   GetLogFile(filename);
   ::DeleteFile(filename);
   LogDebug("----- Experimental noStopMod version -----");
-  LogDebug("---------- v0.0.46 XXX -------------------");
+  LogDebug("---------- v0.0.47 XXX -------------------");
   
   m_fileReader=NULL;
   m_fileDuration=NULL;
@@ -1210,13 +1210,7 @@ HRESULT CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
       GetVideoPin()->Stop();
       //LogDebug("CTsReaderFilter::--SeekPreStart() Vid Stop"); 
       GetVideoPin()->SetStart(rtAbsSeek) ;
-      //LogDebug("CTsReaderFilter::--SeekPreStart() Vid SetStart"); 
-      
-      //GetVideoPin()->DeliverEndFlush();
-      //LogDebug("CTsReaderFilter::--SeekPreStart() Vid DeliverEndFlush"); 
-      //m_pVideoPin->StartNewSegment();
-      //GetVideoPin()->Run();
-      //LogDebug("CTsReaderFilter::--SeekPreStart() Vid Run"); 
+      //LogDebug("CTsReaderFilter::--SeekPreStart() Vid SetStart");       
     }
   
 
@@ -1257,19 +1251,11 @@ HRESULT CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
       }
     }
 
-    m_ShowBufferVideo = 5;
-    m_ShowBufferAudio = 5;
-
+    m_ShowBufferVideo = 3;
+    m_ShowBufferAudio = 3;
 
     if (GetVideoPin()->IsConnected())
-    {
-      //deliver a begin-flush to the codec filter so it stops asking for data
-      //LogDebug("CTsReaderFilter::--SeekPreStart() Vid DeliverBeginFlush"); 
-      //GetVideoPin()->DeliverBeginFlush();
-      //LogDebug("CTsReaderFilter::--SeekPreStart() Vid DeliverBeginFlush"); 
-      //GetVideoPin()->Stop();
-      //LogDebug("CTsReaderFilter::--SeekPreStart() Vid Stop"); 
-      
+    {      
       GetVideoPin()->SetStart(rtAbsSeek) ;
       //LogDebug("CTsReaderFilter::--SeekPreStart() Vid SetStart"); 
       GetVideoPin()->DeliverEndFlush();
@@ -1320,7 +1306,7 @@ HRESULT CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
       Sleep(1);
     }
 
-    //Wait for video pin sample delivery - workaround for video decoders hanging....
+    //Wait for video pin sample delivery - check that video decoder is accepting samples....
     if (GetVideoPin()->IsConnected())
     {  
       //LogDebug("CTsReaderFilter::--SeekPreStart() Wait vid sample delivery"); 
@@ -1334,8 +1320,8 @@ HRESULT CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
       if ((i >= 3000) && !m_demultiplexer.IsAudioChanging() && !m_demultiplexer.IsMediaChanging() 
              && !m_bStopping && (m_State != State_Stopped) && !m_demultiplexer.EndOfFile() )
       {
-        LogDebug("CTsReaderFilter: SeekPreStart: NotDeliveredSample error!! - set EOF");  
-        NotifyEvent(EC_ERRORABORT, 0x88780078, NULL); // No sound driver is available for use - forces player to abort...     
+        LogDebug("CTsReaderFilter: SeekPreStart: NotDeliveredSample error!! - set EOF");
+        NotifyEvent(EC_ERRORABORT, 0x88780078, NULL); // forces player to abort..."No sound driver is available for use"   
         m_demultiplexer.SetEndOfFile(true);
         SetWaitDataAfterSeek(false);           
         return E_FAIL;

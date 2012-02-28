@@ -61,7 +61,7 @@ public:
   void SetDiscontinuity(bool onOff);
   HRESULT StartNewSegment();
   DWORD m_FillBuffSleepTime;
-
+  
 protected:
   HRESULT   UpdateFromSeek();
   void      CreateEmptySample(IMediaSample *pSample);

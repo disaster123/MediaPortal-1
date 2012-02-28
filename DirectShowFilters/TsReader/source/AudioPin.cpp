@@ -471,7 +471,7 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
             //Slowly increase stall point threshold over the first 8 seconds of play
             //to allow audio renderer buffer to build up to 0.4s
             stallPoint = min(0.4, (0.2 + (((double)cRefTime.m_time)/400000000.0)));
-            if (fTime > stallPoint)
+            if ((fTime > stallPoint) && (m_pTsReaderFilter->State() == State_Running))
             {
               //Too early - stall to avoid over-filling of audio decode/renderer buffers
               //Sleep(10);
