@@ -181,7 +181,7 @@ CTsReaderFilter::CTsReaderFilter(IUnknown *pUnk, HRESULT *phr):
   GetLogFile(filename);
   ::DeleteFile(filename);
   LogDebug("----- Experimental noStopMod version -----");
-  LogDebug("---------- v0.0.47 XXX -------------------");
+  LogDebug("---------- v0.0.49 XXX -------------------");
   
   m_fileReader=NULL;
   m_fileDuration=NULL;
@@ -201,19 +201,30 @@ CTsReaderFilter::CTsReaderFilter(IUnknown *pUnk, HRESULT *phr):
   m_dwGraphRegister = 0;
   m_rtspClient.Initialize();
 
+  //Read (and create if needed) debug registry settings
   HKEY key;
-  m_bDisableVidSizeRebuild = false;
+  m_bDisableVidSizeRebuildMPEG2 = false;
+  m_bDisableVidSizeRebuildH264 = false;
   m_bDisableAddPMT = false;
   if (ERROR_SUCCESS==RegCreateKeyEx(HKEY_CURRENT_USER, "Software\\Team MediaPortal\\TsReader", 0, NULL, 
                                     REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &key, NULL))
   {
     DWORD keyValue = 0;
-    LPCTSTR disableVidSizeRebuild = TEXT("DisableVidSizeRebuild");
-    ReadRegistryKeyDword(key, disableVidSizeRebuild, keyValue);
+    LPCTSTR disableVidSizeRebuildMPEG2 = TEXT("DisableVidSizeRebuildMPEG2");
+    ReadRegistryKeyDword(key, disableVidSizeRebuildMPEG2, keyValue);
     if (keyValue)
     {
-      LogDebug("----- disableVidSizeRebuild -----");
-      m_bDisableVidSizeRebuild = true;
+      LogDebug("----- DisableVidSizeRebuildMPEG2 -----");
+      m_bDisableVidSizeRebuildMPEG2 = true;
+    }
+
+    keyValue = 0;
+    LPCTSTR disableVidSizeRebuildH264 = TEXT("DisableVidSizeRebuildH264");
+    ReadRegistryKeyDword(key, disableVidSizeRebuildH264, keyValue);
+    if (keyValue)
+    {
+      LogDebug("----- DisableVidSizeRebuildH264 -----");
+      m_bDisableVidSizeRebuildH264 = true;
     }
 
     keyValue = 0;
@@ -221,7 +232,7 @@ CTsReaderFilter::CTsReaderFilter(IUnknown *pUnk, HRESULT *phr):
     ReadRegistryKeyDword(key, disableAddPMT, keyValue);
     if (keyValue)
     {
-      LogDebug("----- disableAddPMT -----");
+      LogDebug("----- DisableAddPMT -----");
       m_bDisableAddPMT = true;
     }
     

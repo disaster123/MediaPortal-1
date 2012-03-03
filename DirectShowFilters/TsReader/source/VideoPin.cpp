@@ -61,6 +61,7 @@ CVideoPin::CVideoPin(LPUNKNOWN pUnk, CTsReaderFilter *pFilter, HRESULT *phr,CCri
 //  m_bSeeking=false;
   m_bInFillBuffer = false;
   m_bPinNoAddPMT = false;
+  m_bAddPMT = false;
 }
 
 CVideoPin::~CVideoPin()
@@ -162,6 +163,7 @@ HRESULT CVideoPin::CompleteConnect(IPin *pReceivePin)
 {
   m_bInFillBuffer = false;
   m_bPinNoAddPMT = false;
+  m_bAddPMT = true;
   HRESULT hr = CBaseOutputPin::CompleteConnect(pReceivePin);
   if (SUCCEEDED(hr))
   {
@@ -172,7 +174,7 @@ HRESULT CVideoPin::CompleteConnect(IPin *pReceivePin)
     if (m_pTsReaderFilter->m_videoDecoderCLSID == CLSID_FFDSHOWVIDEO)
     {
       m_pTsReaderFilter->m_bFastSyncFFDShow=true;
-      LogDebug("vidPin:CompleteConnect() FFDShow Video Decoder connected, disable AddPMT");
+      LogDebug("vidPin:CompleteConnect() FFDShow Video Decoder connected");
     }
     else if (m_pTsReaderFilter->m_videoDecoderCLSID == CLSID_LAVCUVID)
     {
@@ -223,6 +225,11 @@ HRESULT CVideoPin::BreakConnect()
 void CVideoPin::SetDiscontinuity(bool onOff)
 {
   m_bDiscontinuity=onOff;
+}
+
+void CVideoPin::SetAddPMT()
+{
+  m_bAddPMT = true;
 }
 
 void CVideoPin::CreateEmptySample(IMediaSample *pSample)
@@ -373,7 +380,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
       else
       {
         buffer=NULL;
-        //Force discon and add pmt to next good sample
+        //Force discon on next good sample
         m_sampleCount = 0;
         m_bDiscontinuity=true;
       }
@@ -480,7 +487,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
           //do we need to set the discontinuity flag?
           if (m_bDiscontinuity || buffer->GetDiscontinuity())
           {
-            if ((m_sampleCount == 0) && !m_pTsReaderFilter->m_bDisableAddPMT && !m_bPinNoAddPMT)
+            if ((m_sampleCount == 0) && m_bAddPMT && !m_pTsReaderFilter->m_bDisableAddPMT && !m_bPinNoAddPMT)
             {
               //Add MediaType info to first sample after OnThreadStartPlay()
               CMediaType mt; 
@@ -493,7 +500,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
               {
                 LogDebug("vidPin: Add pmt failed - set discontinuity L:%d B:%d fTime:%03.3f SampCnt:%d", m_bDiscontinuity, buffer->GetDiscontinuity(), (float)fTime, m_sampleCount);
               }
-              m_bPinNoAddPMT = true; //Only add on first play (not after a seek)
+              m_bAddPMT = false; //Only add once each time
             }   
             else
             {        
