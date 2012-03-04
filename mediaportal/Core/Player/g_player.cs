@@ -662,7 +662,7 @@ namespace MediaPortal.Player
           }
         }
       }
-    }
+      }
     
     public static bool IsBDDirectory(string path)
     {
@@ -1275,11 +1275,11 @@ namespace MediaPortal.Player
         {
           if (!File.Exists(Util.DaemonTools.GetVirtualDrive() + @"\VIDEO_TS\VIDEO_TS.IFO"))
              if (!File.Exists(Util.DaemonTools.GetVirtualDrive() + @"\BDMV\index.bdmv"))
-            {
-              _currentFilePlaying = strFile;
-              MediaPortal.Ripper.AutoPlay.ExamineCD(Util.DaemonTools.GetVirtualDrive(), true);
-              return true;
-            }
+          {
+            _currentFilePlaying = strFile;
+            MediaPortal.Ripper.AutoPlay.ExamineCD(Util.DaemonTools.GetVirtualDrive(), true);
+            return true;
+          }
         }
 
         if (!playingRemoteUrl && Util.Utils.IsDVD(strFile))
@@ -1295,7 +1295,8 @@ namespace MediaPortal.Player
 
         if (!playingRemoteUrl) // MediaInfo can only be used on files (local or SMB)
         {
-        _mediaInfo = new MediaInfoWrapper(strFile);
+          // no mediainfo on play - it just makes play slow!
+          // _mediaInfo = new MediaInfoWrapper(strFile);
         }
 
         if ((!playingRemoteUrl && Util.Utils.IsVideo(strFile)) || Util.Utils.IsLiveTv(strFile)) //local video, tv, rtsp
@@ -1382,7 +1383,7 @@ namespace MediaPortal.Player
             {
               bool bInternal = xmlreader.GetValueAsBool("movieplayer", "internal", true);
               bool bInternalDVD = xmlreader.GetValueAsBool("dvdplayer", "internal", true);
-              
+
               // External player extension filter
               _externalPlayerExtensions = xmlreader.GetValueAsString("movieplayer", "extensions", "");
               if (!bInternal && !string.IsNullOrEmpty(_externalPlayerExtensions) && 
@@ -1410,7 +1411,7 @@ namespace MediaPortal.Player
                     strFile = Util.DaemonTools.GetVirtualDrive() + (@"\BDMV\index.bdmv");
                     if (!File.Exists(strFile))
                       return false;
-                  }
+                }
                 }
                 if (Util.Utils.PlayMovie(strFile))
                 {
@@ -1430,7 +1431,7 @@ namespace MediaPortal.Player
 
         _currentFileName = strFile;
         _player = _factory.Create(strFile, type);
-        
+
         if (_player != null)
         {
           if (chapters != null)
@@ -1839,12 +1840,12 @@ namespace MediaPortal.Player
         }
         if (_chapters != null)
         {
-          return _chapters;
-        }
+        return _chapters;
+      }
         else
         {
           return _player.Chapters;
-        }
+    }
       }
     }
 
@@ -1860,7 +1861,7 @@ namespace MediaPortal.Player
         return _chaptersname;
       }
     }
-    
+
     public static double[] JumpPoints
     {
       get
@@ -3196,7 +3197,7 @@ namespace MediaPortal.Player
       {
         bool playingRemoteUrl = Util.Utils.IsRemoteUrl(FileName);
         if (_mediaInfo == null && !playingRemoteUrl)
-          _mediaInfo = new MediaInfoWrapper(FileName);
+        _mediaInfo = new MediaInfoWrapper(FileName);
 
         GUIMessage msg = new GUIMessage(GUIMessage.MessageType.GUI_MSG_CODEC_MISSING, 0, 0, 0, 0, 0, null);
         msg.Label = string.Format("{0}: {1}", GUILocalizeStrings.Get(1451), Util.Utils.GetFilename(FileName));
