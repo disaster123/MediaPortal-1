@@ -1239,7 +1239,8 @@ namespace MediaPortal.Player
           _delayedrefreshratechanger = null;
         }
 
-        _mediaInfo = new MediaInfoWrapper(strFile);
+        // no mediainfo on play - it just makes play slow!
+        // _mediaInfo = new MediaInfoWrapper(strFile);
         Starting = true;
 
         if (Util.Utils.IsVideo(strFile) || Util.Utils.IsLiveTv(strFile)) //video, tv, rtsp
