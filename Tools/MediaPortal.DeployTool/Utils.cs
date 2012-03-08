@@ -602,11 +602,9 @@ namespace MediaPortal.DeployTool
 
     public static string GetDisplayVersion()
     {
-      return "1.2.1";
       return "1.2.2";
       return "1.2.0";
     }
 
     #endregion
   }
-}
