@@ -1220,8 +1220,6 @@ HRESULT CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
       //LogDebug("CTsReaderFilter::--SeekPreStart() Vid DeliverBeginFlush"); 
       GetVideoPin()->Stop();
       //LogDebug("CTsReaderFilter::--SeekPreStart() Vid Stop"); 
-      GetVideoPin()->SetStart(rtAbsSeek) ;
-      //LogDebug("CTsReaderFilter::--SeekPreStart() Vid SetStart");       
     }
   
 
@@ -1265,9 +1263,14 @@ HRESULT CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
     m_ShowBufferVideo = 3;
     m_ShowBufferAudio = 3;
 
+    //Update the start positions on all pins
+    GetVideoPin()->SetStart(rtAbsSeek) ;
+    GetSubtitlePin()->SetStart(rtAbsSeek) ;
+    GetAudioPin()->SetStart(rtAbsSeek) ;
+
     if (GetVideoPin()->IsConnected())
     {      
-      GetVideoPin()->SetStart(rtAbsSeek) ;
+      //GetVideoPin()->SetStart(rtAbsSeek) ;
       //LogDebug("CTsReaderFilter::--SeekPreStart() Vid SetStart"); 
       GetVideoPin()->DeliverEndFlush();
       //LogDebug("CTsReaderFilter::--SeekPreStart() Vid DeliverEndFlush"); 
@@ -1281,7 +1284,7 @@ HRESULT CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
       //LogDebug("CTsReaderFilter::--SeekPreStart() Sub Run"); 
 
       // Update m_rtStart in case of has not seeked yet
-      GetSubtitlePin()->SetStart(rtAbsSeek) ;
+      //GetSubtitlePin()->SetStart(rtAbsSeek) ;
     }
 
     m_demultiplexer.CallTeletextEventCallback(TELETEXT_EVENT_SEEK_END,TELETEXT_EVENTVALUE_NONE);
@@ -1295,7 +1298,7 @@ HRESULT CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
     if (GetAudioPin()->IsConnected())
     {
       // Update m_rtStart in case of has not seeked yet
-      GetAudioPin()->SetStart(rtAbsSeek) ;
+      //GetAudioPin()->SetStart(rtAbsSeek) ;
 
       // deliver a end-flush to the codec filter so it will start asking for data again
       GetAudioPin()->DeliverEndFlush();

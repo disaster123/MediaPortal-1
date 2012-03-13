@@ -38,7 +38,8 @@
 
 #define INIT_SHOWBUFFERVIDEO 20
 #define INIT_SHOWBUFFERAUDIO 10
-#define FS_TIM_LIM (2*1000*10000) //2 seconds in hns units
+#define FS_TIM_LIM (2000*10000) //2 seconds in hns units
+#define FS_ADDON_LIM (1000*10000) //1 second in hns units (must not be zero)
 
 using namespace std;
 

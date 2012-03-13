@@ -150,10 +150,6 @@ public:
   //  long m_VideoDataLowCount;
   long m_AVDataLowCount;
 
-  CCritSec m_sectionFlushAudio;
-  CCritSec m_sectionFlushVideo;
-  CCritSec m_sectionFlushSubtitle;
-
 private:
   struct stAudioStream
   {
@@ -173,6 +169,9 @@ private:
   int ReadFromFile(bool isAudio, bool isVideo);
   bool m_bEndOfFile;
   HRESULT RenderFilterPin(CBasePin* pin, bool isAudio, bool isVideo);
+  CCritSec m_sectionFlushAudio;
+  CCritSec m_sectionFlushVideo;
+  CCritSec m_sectionFlushSubtitle;
   CCritSec m_sectionAudio;
   CCritSec m_sectionVideo;
   CCritSec m_sectionSubtitle;
@@ -186,7 +185,7 @@ private:
   CPidTable m_pids;
   vector<CBuffer*> m_vecSubtitleBuffers;
   vector<CBuffer*> m_vecVideoBuffers;
-  vector<CBuffer*> m_t_vecVideoBuffers;
+//  vector<CBuffer*> m_t_vecVideoBuffers;
   vector<CBuffer*> m_vecAudioBuffers;
   vector<CBuffer*> m_t_vecAudioBuffers;
   typedef vector<CBuffer*>::iterator ivecBuffers;
@@ -203,7 +202,7 @@ private:
 
   CBuffer* m_pCurrentTeletextBuffer;
   CBuffer* m_pCurrentSubtitleBuffer;
-  CBuffer* m_pCurrentVideoBuffer;
+//  CBuffer* m_pCurrentVideoBuffer;
   CBuffer* m_pCurrentAudioBuffer;
   CPcr     m_streamPcr;
   CPcr     m_lastVideoPTS;

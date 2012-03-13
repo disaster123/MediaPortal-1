@@ -128,13 +128,8 @@ HRESULT CVideoPin::DecideBufferSize(IMemAllocator *pAlloc, ALLOCATOR_PROPERTIES 
   CheckPointer(pAlloc, E_POINTER);
   CheckPointer(pRequest, E_POINTER);
 
-  if (pRequest->cBuffers == 0)
-  {
-    pRequest->cBuffers = 1;
-  }
-
-  // Would be better if this would be allocated on sample basis
-  pRequest->cbBuffer = 0x1000000;
+  pRequest->cBuffers = max(2, pRequest->cBuffers);
+  pRequest->cbBuffer = max(8388608, (ULONG)pRequest->cbBuffer);
 
   ALLOCATOR_PROPERTIES Actual;
   hr = pAlloc->SetProperties(pRequest, &Actual);
@@ -250,6 +245,7 @@ HRESULT CVideoPin::DoBufferProcessingLoop(void)
 {
   Command com;
   OnThreadStartPlay();
+  SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
 
   do 
   {
@@ -373,7 +369,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
         //Sleep(min(10,sampSleepTime));
         m_FillBuffSleepTime = min(10,sampSleepTime);
                  
-        CAutoLock flock (&demux.m_sectionFlushVideo);
+        //CAutoLock flock (&demux.m_sectionFlushVideo);
         // Get next video buffer from demultiplexer
         buffer=demux.GetVideo(earlyStall);
       }
@@ -423,17 +419,18 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
           cRefTime -= m_rtStart;
           //adjust the timestamp with the compensation
           cRefTime -= compTemp;
-
-          // 'fast start' timestamp modification (during first 2 sec of play)
           cRefTime -= m_pTsReaderFilter->m_ClockOnStart.m_time;
-          if (m_pTsReaderFilter->m_EnableSlowMotionOnZapping && (cRefTime.m_time < FS_TIM_LIM) )
+          
+          // 'fast start' timestamp modification, during first (AddVideoComp + 1 sec) of play
+          double fsAdjLimit = (double)m_pTsReaderFilter->AddVideoComp.m_time + FS_ADDON_LIM; //vid comp + 1 second
+          if (m_pTsReaderFilter->m_EnableSlowMotionOnZapping && ((double)cRefTime.m_time < fsAdjLimit) )
           {
             //float startCref = (float)cRefTime.m_time/(1000*10000); //used in LogDebug below only
-            //Assume desired timestamp span is zero to FS_TIM_LIM, actual span is AddVideoComp to FS_TIM_LIM
-            double offsetRatio = FS_TIM_LIM/(FS_TIM_LIM - (double)m_pTsReaderFilter->AddVideoComp.m_time);
-            double currOffset = FS_TIM_LIM - (double)cRefTime.m_time;
+            //Assume desired timestamp span is zero to fsAdjLimit, actual span is AddVideoComp to fsAdjLimit
+            double offsetRatio = fsAdjLimit/FS_ADDON_LIM; // == fsAdjLimit/(fsAdjLimit - (double)m_pTsReaderFilter->AddVideoComp.m_time);
+            double currOffset = fsAdjLimit - (double)cRefTime.m_time;
             double newOffset = currOffset * offsetRatio;
-            cRefTime = (REFERENCE_TIME)(FS_TIM_LIM - newOffset);   
+            cRefTime = (fsAdjLimit > newOffset) ? (REFERENCE_TIME)(fsAdjLimit - newOffset) : 0;  //Don't allow negative cRefTime
             ForcePresent = true;
             //LogDebug("VFS cOfs %03.3f, nOfs %03.3f, cRefTimeS %03.3f, cRefTimeN %03.3f", (float)currOffset/(1000*10000), (float)newOffset/(1000*10000), startCref, (float)cRefTime.m_time/(1000*10000));         
             if (m_pTsReaderFilter->m_bFastSyncFFDShow)
@@ -455,7 +452,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
             //Discard late samples at start of play,
             //and samples outside a sensible timing window during play 
             //(helps with signal corruption recovery)
-            if ((fTime > (ForcePresent ? -0.5 : -0.3)) && (fTime < 3.0))
+            if ((fTime > (ForcePresent ? -0.5 : -0.3)) && (fTime < 3.5))
             {
               if ((fTime > stallPoint) && (m_pTsReaderFilter->State() == State_Running))
               {
@@ -539,7 +536,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
                    //Use delayed discontinuity
                    pSample->SetDiscontinuity(TRUE);
                    m_delayedDiscont--;
-                   LogDebug("vidPin:set I-frame discontinuity");
+                   LogDebug("vidPin:set I-frame discontinuity, count %d", m_delayedDiscont);
                 }
                 else
                 {
@@ -563,7 +560,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
             {              
               //Samples are running very late - check if this is a persistant problem by counting over a period of time 
               //(m_AVDataLowCount is checked in CTsReaderFilter::ThreadProc())
-              _InterlockedExchangeAdd(&demux.m_AVDataLowCount, 4);   
+              _InterlockedExchangeAdd(&demux.m_AVDataLowCount, 2);   
             }
             
             if (m_pTsReaderFilter->m_ShowBufferVideo) m_pTsReaderFilter->m_ShowBufferVideo--;

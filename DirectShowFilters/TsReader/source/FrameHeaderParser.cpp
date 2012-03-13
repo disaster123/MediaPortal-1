@@ -42,6 +42,24 @@ extern void LogDebug(const char *fmt, ...) ;
 #define countof(array) (sizeof(array)/sizeof(array[0]))
 #define DNew new
 
+//AVC Profile IDC definitions
+#define AVC_PROF_BASELINE  66      
+#define AVC_PROF_MAIN      77      
+#define AVC_PROF_EXTENDED  88      
+#define AVC_PROF_HP        100      
+#define AVC_PROF_Hi10P     110      
+#define AVC_PROF_Hi422     122      
+#define AVC_PROF_Hi444     244      
+#define AVC_PROF_CAVLC444  44      
+#define AVC_PROF_83        83      
+#define AVC_PROF_86        86     
+
+//AVC Chroma format IDC definitions
+#define YUV400  0     
+#define YUV420  1     
+#define YUV422  2     
+#define YUV444  3     
+
 int CFrameHeaderParser::MakeAACInitData(BYTE* pData, int profile, int freq, int channels)
 {
 	int srate_idx;
@@ -402,16 +420,24 @@ bool CFrameHeaderParser::Read(seqhdr& h, int len, CMediaType* pmt, bool reset)
 	{
 		pmt->subtype = MEDIASUBTYPE_MPEG1Payload;
 		pmt->formattype = FORMAT_MPEGVideo;
+		pmt->bTemporalCompression = TRUE;
 		int len = FIELD_OFFSET(MPEG1VIDEOINFO, bSequenceHeader) + shlen + shextlen;
 		MPEG1VIDEOINFO* vi = (MPEG1VIDEOINFO*)DNew BYTE[len];
 		memset(vi, 0, len);
 		vi->hdr.dwBitRate = h.bitrate;
 		vi->hdr.AvgTimePerFrame = h.ifps;
-		vi->hdr.bmiHeader.biSize = sizeof(vi->hdr.bmiHeader);
 		vi->hdr.bmiHeader.biWidth = h.width;
 		vi->hdr.bmiHeader.biHeight = h.height;
-		//vi->hdr.bmiHeader.biXPelsPerMeter = h.width * h.ary;
-		//vi->hdr.bmiHeader.biYPelsPerMeter = h.height * h.arx;
+    vi->hdr.rcSource.right = h.width;
+    vi->hdr.rcSource.bottom = h.height;
+    vi->hdr.rcTarget.right = h.width;
+    vi->hdr.rcTarget.bottom = h.height;
+		vi->hdr.bmiHeader.biCompression = '1GPM';
+		vi->hdr.bmiHeader.biPlanes=1;
+		vi->hdr.bmiHeader.biBitCount=12;
+		vi->hdr.bmiHeader.biClrUsed=0;
+    vi->hdr.bmiHeader.biSizeImage = DIBSIZE(vi->hdr.bmiHeader);
+		vi->hdr.bmiHeader.biSize = sizeof(vi->hdr.bmiHeader);
 		vi->cbSequenceHeader = shlen + shextlen;
 		Seek(shpos);
 		ByteRead((BYTE*)&vi->bSequenceHeader[0], shlen);
@@ -424,6 +450,7 @@ bool CFrameHeaderParser::Read(seqhdr& h, int len, CMediaType* pmt, bool reset)
 	{
 		pmt->subtype = MEDIASUBTYPE_MPEG2_VIDEO;
 		pmt->formattype = FORMAT_MPEG2_VIDEO;
+		pmt->bTemporalCompression = TRUE;
 		int len = FIELD_OFFSET(MPEG2VIDEOINFO, dwSequenceHeader) + shlen + shextlen;
 		MPEG2VIDEOINFO* vi = (MPEG2VIDEOINFO*)pmt->AllocFormatBuffer(len);
 		memset(vi, 0, len);
@@ -431,12 +458,18 @@ bool CFrameHeaderParser::Read(seqhdr& h, int len, CMediaType* pmt, bool reset)
 		vi->hdr.AvgTimePerFrame = h.ifps;
 		vi->hdr.dwPictAspectRatioX = h.arx;
 		vi->hdr.dwPictAspectRatioY = h.ary;
-		vi->hdr.bmiHeader.biSize = sizeof(vi->hdr.bmiHeader);
+    vi->hdr.rcSource.right = h.width;
+    vi->hdr.rcSource.bottom = h.height;
+    vi->hdr.rcTarget.right = h.width;
+    vi->hdr.rcTarget.bottom = h.height;
 		vi->hdr.bmiHeader.biWidth = h.width; 
 		vi->hdr.bmiHeader.biHeight = h.height;
-		//vi->hdr.bmiHeader.biXPelsPerMeter = h.width * h.arx;
-		//vi->hdr.bmiHeader.biYPelsPerMeter = h.height * h.ary;
 		vi->hdr.bmiHeader.biCompression = '2GPM';
+		vi->hdr.bmiHeader.biPlanes=1;
+		vi->hdr.bmiHeader.biBitCount=12;
+		vi->hdr.bmiHeader.biClrUsed=0;
+    vi->hdr.bmiHeader.biSizeImage = DIBSIZE(vi->hdr.bmiHeader);
+		vi->hdr.bmiHeader.biSize = sizeof(vi->hdr.bmiHeader);
 		vi->dwProfile = h.profile;
 		vi->dwLevel = h.level;
 		vi->cbSequenceHeader = shlen + shextlen;
@@ -1268,16 +1301,22 @@ bool CFrameHeaderParser::Read(avchdr& h, int len, CMediaType* pmt, bool reset)
 			h.level = (BYTE)gb.BitRead(8);
 
 			gb.UExpGolombRead(); // seq_parameter_set_id
+			
+			//Initialise to normal values
+		  h.chromaFormat = YUV420;
+			h.lumaDepth = 8; // bit_depth_luma_minus8
+			h.chromaDepth = 8; // bit_depth_chroma_minus8
 
-			if(h.profile >= 100) // high profile
+			if(h.profile >= AVC_PROF_HP || h.profile==AVC_PROF_CAVLC444 || h.profile==AVC_PROF_83 || h.profile==AVC_PROF_86) // high profile etc
 			{
-				if(gb.UExpGolombRead() == 3) // chroma_format_idc
+			  h.chromaFormat = gb.UExpGolombRead();
+				if(h.chromaFormat == YUV444) // chroma_format_idc
 				{
 					gb.BitRead(1); // residue_transform_flag
 				}
 
-				gb.UExpGolombRead(); // bit_depth_luma_minus8
-				gb.UExpGolombRead(); // bit_depth_chroma_minus8
+				h.lumaDepth = (WORD)gb.UExpGolombRead() + 8; // bit_depth_luma_minus8
+				h.chromaDepth = (WORD)gb.UExpGolombRead() + 8; // bit_depth_chroma_minus8
 
 				gb.BitRead(1); // qpprime_y_zero_transform_bypass_flag
 
@@ -1416,11 +1455,12 @@ bool CFrameHeaderParser::Read(avchdr& h, int len, CMediaType* pmt, bool reset)
 	if(!pmt) return(true);
 
 	{
-		int extra = 2+h.spslen-4 + 2+h.ppslen-4;
+		int extra = 2+1+h.spslen-4 + 2+1+h.ppslen-4;
 		pmt->SetType(&MEDIATYPE_Video);
 		//pmt->SetSubtype(&MEDIASUBTYPE_H264);
 		pmt->SetSubtype(&MPG4_SubType);
 		pmt->formattype = FORMAT_MPEG2_VIDEO;
+		pmt->bTemporalCompression = TRUE;
 
 		int len = FIELD_OFFSET(MPEG2VIDEOINFO, dwSequenceHeader) + extra;
 		MPEG2VIDEOINFO* vi = (MPEG2VIDEOINFO*)pmt->AllocFormatBuffer(len);
@@ -1432,7 +1472,7 @@ bool CFrameHeaderParser::Read(avchdr& h, int len, CMediaType* pmt, bool reset)
 		struct {DWORD x, y;} ar[] = {{h.width,h.height},{4,3},{16,9},{221,100},{h.width,h.height}};
 		int i = min(max(h.ar, 1), 5)-1;
 		*/
-		struct {DWORD x, y;} ar[] = {{1,1},{1,1},{12,11},{10,11},{16,11},{40,33},{24,11},{20,11},{32,11},{80,33},{18,11},{15,11},{64,33},{160,99},{1,1},{1,1}};
+		struct {DWORD x, y;} ar[] = {{0,0},{1,1},{12,11},{10,11},{16,11},{40,33},{24,11},{20,11},{32,11},{80,33},{18,11},{15,11},{64,33},{160,99},{4,3},{3,2},{2,1}};
 		if(h.ar == 255)
 		{
 			// make sure that both are 0 or none
@@ -1441,7 +1481,7 @@ bool CFrameHeaderParser::Read(avchdr& h, int len, CMediaType* pmt, bool reset)
 
 			// h.arx and h.ary now contain sample aspect ratio
 		}
-		else if(h.ar < 1 || h.ar > 13)
+		else if(h.ar < 1 || h.ar > 16)
 		{
 			// aspect ratio unspecified or reserved
 			h.ar = 0;
@@ -1462,14 +1502,37 @@ bool CFrameHeaderParser::Read(avchdr& h, int len, CMediaType* pmt, bool reset)
 		if(b) h.arx /= b, h.ary /= b;
 		vi->hdr.dwPictAspectRatioX = h.arx;
 		vi->hdr.dwPictAspectRatioY = h.ary;
-		vi->hdr.bmiHeader.biSize = sizeof(vi->hdr.bmiHeader);
+    vi->hdr.rcSource.right = h.width;
+    vi->hdr.rcSource.bottom = h.height;
+    vi->hdr.rcTarget.right = h.width;
+    vi->hdr.rcTarget.bottom = h.height;
 		vi->hdr.bmiHeader.biWidth = h.width;
 		vi->hdr.bmiHeader.biHeight = h.height;
 		//vi->hdr.bmiHeader.biCompression = '462h';
 		vi->hdr.bmiHeader.biCompression = '1CVA';
 		vi->hdr.bmiHeader.biPlanes=1;
-		vi->hdr.bmiHeader.biBitCount=24;
+
+    switch (h.chromaFormat)
+    {
+      case YUV420 :
+  		  vi->hdr.bmiHeader.biBitCount = h.lumaDepth + (h.chromaDepth/2);
+        break;
+      case YUV422 :
+  		  vi->hdr.bmiHeader.biBitCount = h.lumaDepth + h.chromaDepth;
+        break;
+      case YUV444 :
+  		  vi->hdr.bmiHeader.biBitCount = h.lumaDepth + (2*h.chromaDepth);
+        break;
+      case YUV400 : //Monochrome
+		    vi->hdr.bmiHeader.biBitCount = h.lumaDepth;
+        break;
+      default :
+  		  vi->hdr.bmiHeader.biBitCount = h.lumaDepth + (h.chromaDepth/2);
+    }
+
 		vi->hdr.bmiHeader.biClrUsed=0;
+    vi->hdr.bmiHeader.biSizeImage = DIBSIZE(vi->hdr.bmiHeader);
+		vi->hdr.bmiHeader.biSize = sizeof(vi->hdr.bmiHeader);
 		vi->dwProfile = h.profile;
 		vi->dwFlags = 4; // ?
 		vi->dwLevel = h.level;
@@ -1477,14 +1540,21 @@ bool CFrameHeaderParser::Read(avchdr& h, int len, CMediaType* pmt, bool reset)
 		vi->dwStartTimeCode=0;
 		
 		BYTE* p = (BYTE*)&vi->dwSequenceHeader[0];
+		
+		h.spslen++; //Adjust for nal_unit_type insertion
 		*p++ = (h.spslen-4) >> 8;
 		*p++ = (h.spslen-4) & 0xff;
-		memcpy(p, h.sps, h.spslen-4);
-		p += h.spslen-4;
+		*p++ = 0x67; //Insert the SPS nal_unit_type 
+		memcpy(p, h.sps, h.spslen-5);
+		p += h.spslen-5;
+		
+		h.ppslen++; //Adjust for nal_unit_type insertion
 		*p++ = (h.ppslen-4) >> 8;
 		*p++ = (h.ppslen-4) & 0xff;
-		memcpy(p, h.pps, h.ppslen-4);
-		p += h.ppslen-4;
+		*p++ = 0x68; //Insert the PPS nal_unit_type 
+		memcpy(p, h.pps, h.ppslen-5);
+		p += h.ppslen-5;
+		
 		pmt->SetFormat((BYTE*)vi, len);
 	}
 
@@ -1615,16 +1685,25 @@ bool CFrameHeaderParser::Read(vc1hdr& h, int len, CMediaType* pmt)
 		pmt->majortype = MEDIATYPE_Video;
 		pmt->subtype = FOURCCMap('1CVW');
 		pmt->formattype = FORMAT_VIDEOINFO2;
+		pmt->bTemporalCompression = TRUE;
 		int len = sizeof(VIDEOINFOHEADER2) + extralen + 1;
 		VIDEOINFOHEADER2* vi = (VIDEOINFOHEADER2*)DNew BYTE[len];
 		memset(vi, 0, len);
 		vi->AvgTimePerFrame = (10000000I64*nFrameRateNum)/nFrameRateDen;
 		vi->dwPictAspectRatioX = h.width;
 		vi->dwPictAspectRatioY = h.height;
-		vi->bmiHeader.biSize = sizeof(vi->bmiHeader);
+    vi->rcSource.right = h.width;
+    vi->rcSource.bottom = h.height;
+    vi->rcTarget.right = h.width;
+    vi->rcTarget.bottom = h.height;
 		vi->bmiHeader.biWidth = h.width;
 		vi->bmiHeader.biHeight = h.height;
 		vi->bmiHeader.biCompression = '1CVW';
+		vi->bmiHeader.biPlanes=1;
+		vi->bmiHeader.biBitCount=24;
+		vi->bmiHeader.biClrUsed=0;
+    vi->bmiHeader.biSizeImage = DIBSIZE(vi->bmiHeader);
+		vi->bmiHeader.biSize = sizeof(vi->bmiHeader);
 		BYTE* p = (BYTE*)vi + sizeof(VIDEOINFOHEADER2);
 		*p++ = 0;
 		Seek(extrapos);
@@ -1669,6 +1748,9 @@ void CFrameHeaderParser::DumpAvcHeader(avchdr h)
 	LogDebug("profile: %i",h.profile);
 	LogDebug("PPS len: %i",h.ppslen);
 	LogDebug("SPS len: %i",h.spslen);
+	LogDebug("chromaFormat: %i",h.chromaFormat);
+	LogDebug("lumaDepth: %i",h.lumaDepth);
+	LogDebug("chromaDepth: %i",h.chromaDepth);
 	LogDebug("=================================");
 }
 
