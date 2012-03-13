@@ -203,28 +203,26 @@ CTsReaderFilter::CTsReaderFilter(IUnknown *pUnk, HRESULT *phr):
 
   //Read (and create if needed) debug registry settings
   HKEY key;
-  m_bDisableVidSizeRebuildMPEG2 = false;
-  m_bDisableVidSizeRebuildH264 = false;
+  m_bDisableVidSizeRebuildMPEG2 = true;
+  m_bDisableVidSizeRebuildH264 = true;
   m_bDisableAddPMT = false;
   if (ERROR_SUCCESS==RegCreateKeyEx(HKEY_CURRENT_USER, "Software\\Team MediaPortal\\TsReader", 0, NULL, 
                                     REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &key, NULL))
   {
-    DWORD keyValue = 0;
+    DWORD keyValue = 1;
     LPCTSTR disableVidSizeRebuildMPEG2 = TEXT("DisableVidSizeRebuildMPEG2");
     ReadRegistryKeyDword(key, disableVidSizeRebuildMPEG2, keyValue);
-    if (keyValue)
+    if (!keyValue)
     {
-      LogDebug("----- DisableVidSizeRebuildMPEG2 -----");
-      m_bDisableVidSizeRebuildMPEG2 = true;
+      m_bDisableVidSizeRebuildMPEG2 = false;
     }
 
-    keyValue = 0;
+    keyValue = 1;
     LPCTSTR disableVidSizeRebuildH264 = TEXT("DisableVidSizeRebuildH264");
     ReadRegistryKeyDword(key, disableVidSizeRebuildH264, keyValue);
-    if (keyValue)
+    if (!keyValue)
     {
-      LogDebug("----- DisableVidSizeRebuildH264 -----");
-      m_bDisableVidSizeRebuildH264 = true;
+      m_bDisableVidSizeRebuildH264 = false;
     }
 
     keyValue = 0;
@@ -232,10 +230,19 @@ CTsReaderFilter::CTsReaderFilter(IUnknown *pUnk, HRESULT *phr):
     ReadRegistryKeyDword(key, disableAddPMT, keyValue);
     if (keyValue)
     {
-      LogDebug("----- DisableAddPMT -----");
       m_bDisableAddPMT = true;
     }
-    
+
+    if (m_bDisableVidSizeRebuildMPEG2) {
+      LogDebug("----- DisableVidSizeRebuildMPEG2 -----");
+    }
+    if (m_bDisableVidSizeRebuildH264) {
+      LogDebug("----- DisableVidSizeRebuildH264 -----");
+    }
+    if (m_bDisableAddPMT) {
+      LogDebug("----- DisableAddPMT -----");
+    }
+
     RegCloseKey(key);
   }
 
