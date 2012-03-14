@@ -58,17 +58,19 @@ public:
 	void SetData(const void* ptr, DWORD len) {SetCount(len); memcpy(GetData(), ptr, len);}
 };
 
-class CDeMultiplexer : public CPacketSync, public IPatParserCallback
+class CDeMultiplexer : public CPacketSync, public IPatParserCallback, public TSThread
 {
 public:
   CDeMultiplexer( CTsDuration& duration,CTsReaderFilter& filter);
   virtual ~CDeMultiplexer(void);
 
   void       Start();
-  void       Flush();
-  CBuffer*   GetVideo();
-  CBuffer*   GetAudio();
+  void       Flush(bool clearAVready);
+  CBuffer*   GetVideo(bool earlyStall);
+  CBuffer*   GetAudio(bool earlyStall);
   CBuffer*   GetSubtitle();
+  void       EraseAudioBuff();
+  void       EraseVideoBuff();
   void       OnTsPacket(byte* tsPacket);
   void       OnNewChannel(CChannelInfo& info);
   void       SetFileReader(FileReader* reader);
@@ -83,14 +85,17 @@ public:
   CPidTable  GetPidTable();
 
   int        GetAudioBufferPts(CRefTime& First, CRefTime& Last) ;
+  int        GetAudioBufferCnt();
   int        GetVideoBufferPts(CRefTime& First, CRefTime& Last) ;
+  int        GetVideoBufferCnt(double* frameTime);
+  void       GetBufferCounts(int* ACnt, int* VCnt);
 
   bool       SetAudioStream(__int32 stream);
   bool       GetAudioStream(__int32 &stream);
 
   void       GetAudioStreamInfo(int stream,char* szName);
   void       GetAudioStreamType(int stream,CMediaType&  pmt);
-  void       GetVideoStreamType(CMediaType &pmt);
+  bool       GetVideoStreamType(CMediaType &pmt);
   int        GetAudioStreamCount();
 
   // TsReader::ISubtitleStream uses these
@@ -102,12 +107,12 @@ public:
   bool       SetSubtitleResetCallback( int (CALLBACK *pSubUpdateCallback)(int c, void* opts, int* select));
 
   bool       EndOfFile();
-  bool       HoldAudio();
-  void       SetHoldAudio(bool onOff);
-  bool       HoldVideo();
-  void       SetHoldVideo(bool onOff);
-  bool       HoldSubtitle();
-  void       SetHoldSubtitle(bool onOff);
+  //  bool       HoldAudio();
+  //  void       SetHoldAudio(bool onOff);
+  //  bool       HoldVideo();
+  //  void       SetHoldVideo(bool onOff);
+  //  bool       HoldSubtitle();
+  //  void       SetHoldSubtitle(bool onOff);
   void       ThreadProc();
   void       FlushVideo();
   void       FlushAudio();
@@ -130,9 +135,20 @@ public:
   void SetAudioChanging(bool onOff);
   bool IsAudioChanging(void);
 
+  int  ReadAheadFromFile();
+  bool CheckPrefetchState(bool isVid, bool isAud);
+
   bool m_DisableDiscontinuitiesFiltering;
   DWORD m_LastDataFromRtsp;
   bool m_bAudioVideoReady;
+  bool m_bFlushDelegated;
+  bool m_bFlushDelgNow;
+  bool m_bFlushRunning;
+  bool m_bReadAheadFromFile;
+
+  //  long m_AudioDataLowCount;
+  //  long m_VideoDataLowCount;
+  long m_AVDataLowCount;
 
 private:
   struct stAudioStream
@@ -153,19 +169,23 @@ private:
   int ReadFromFile(bool isAudio, bool isVideo);
   bool m_bEndOfFile;
   HRESULT RenderFilterPin(CBasePin* pin, bool isAudio, bool isVideo);
+  CCritSec m_sectionFlushAudio;
+  CCritSec m_sectionFlushVideo;
+  CCritSec m_sectionFlushSubtitle;
   CCritSec m_sectionAudio;
   CCritSec m_sectionVideo;
   CCritSec m_sectionSubtitle;
   CCritSec m_sectionRead;
   CCritSec m_sectionAudioChanging;
   CCritSec m_sectionMediaChanging;
+  CCritSec m_sectionSetAudioStream;
   FileReader* m_reader;
   CPatParser m_patParser;
   CMpegPesParser *m_mpegPesParser;
   CPidTable m_pids;
   vector<CBuffer*> m_vecSubtitleBuffers;
   vector<CBuffer*> m_vecVideoBuffers;
-  vector<CBuffer*> m_t_vecVideoBuffers;
+//  vector<CBuffer*> m_t_vecVideoBuffers;
   vector<CBuffer*> m_vecAudioBuffers;
   vector<CBuffer*> m_t_vecAudioBuffers;
   typedef vector<CBuffer*>::iterator ivecBuffers;
@@ -182,7 +202,7 @@ private:
 
   CBuffer* m_pCurrentTeletextBuffer;
   CBuffer* m_pCurrentSubtitleBuffer;
-  CBuffer* m_pCurrentVideoBuffer;
+//  CBuffer* m_pCurrentVideoBuffer;
   CBuffer* m_pCurrentAudioBuffer;
   CPcr     m_streamPcr;
   CPcr     m_lastVideoPTS;
@@ -199,16 +219,19 @@ private:
 
   unsigned int m_iAudioReadCount;
 
-  bool m_bHoldAudio;
-  bool m_bHoldVideo;
-  bool m_bHoldSubtitle;
+  //  bool m_bHoldAudio;
+  //  bool m_bHoldVideo;
+  //  bool m_bHoldSubtitle;
   int m_iAudioIdx;
   int m_iPatVersion;
   int m_ReqPatVersion;
-  int m_WaitNewPatTmo;
+  DWORD m_WaitNewPatTmo;
+  DWORD m_WaitGoodPatTmo;
+  bool m_bWaitGoodPat;
   int m_receivedPackets;
 
   bool m_bFirstGopFound;
+  bool m_bSecondGopFound;
   bool m_bFrame0Found;
 
   bool  m_bWaitForMediaChange;
@@ -249,4 +272,11 @@ private:
   float m_MinVideoDelta;
 
   bool m_bShuttingDown;
+  
+  int m_lastVidResX;
+  int m_lastVidResY;
+  
+  bool m_mpegParserReset;
+  bool m_bFirstGopParsed;
+
 };

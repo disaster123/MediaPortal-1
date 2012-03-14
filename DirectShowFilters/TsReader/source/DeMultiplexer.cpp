@@ -42,15 +42,20 @@
 // For more details for memory leak detection see the alloctracing.h header
 #include "..\..\alloctracing.h"
 
-#define MAX_BUF_SIZE 8000
+#define MAX_AUD_BUF_SIZE 1024
+#define MAX_VID_BUF_SIZE 512
+#define MAX_SUB_BUF_SIZE 512
 #define BUFFER_LENGTH 0x1000
-#define READ_SIZE (1316*30)
-#define INITIAL_READ_SIZE (READ_SIZE * 1024)
-
-#define AUDIO_CHANGE 0x1
-#define VIDEO_CHANGE 0x2
+//#define READ_SIZE (1316*32)
+//#define MIN_READ_SIZE 564
+#define READ_SIZE (65536)
+#define MIN_READ_SIZE (READ_SIZE/8)
+#define MIN_READ_SIZE_UNC (READ_SIZE/4)
+//#define INITIAL_READ_SIZE (READ_SIZE * 1024)
+#define INITIAL_READ_SIZE (READ_SIZE * 512)
 
 extern void LogDebug(const char *fmt, ...);
+extern DWORD m_tGTStartTime;
 
 // *** UNCOMMENT THE NEXT LINE TO ENABLE DYNAMIC VIDEO PIN HANDLING!!!! ******
 #define USE_DYNAMIC_PINS
@@ -60,8 +65,13 @@ CDeMultiplexer::CDeMultiplexer(CTsDuration& duration,CTsReaderFilter& filter)
 :m_duration(duration)
 ,m_filter(filter)
 {
+  //Initialise m_tGTStartTime for GET_TIME_NOW() macro.
+  //The macro is used to avoid having to handle timeGetTime()
+  //rollover issues in the body of the code
+  m_tGTStartTime = (timeGetTime() - 0x40000000); 
+
   m_patParser.SetCallBack(this);
-  m_pCurrentVideoBuffer = NULL;
+//  m_pCurrentVideoBuffer = NULL;
   m_pCurrentAudioBuffer = new CBuffer();
   m_pCurrentSubtitleBuffer = new CBuffer();
   m_iAudioStream = 0;
@@ -70,13 +80,11 @@ CDeMultiplexer::CDeMultiplexer(CTsDuration& duration,CTsReaderFilter& filter)
   m_audioPid = 0;
   m_currentSubtitlePid = 0;
   m_bEndOfFile = false;
-  m_bHoldAudio = false;
-  m_bHoldVideo = false;
-  m_bHoldSubtitle = false;
   m_bShuttingDown = false;
   m_iAudioIdx = -1;
   m_iPatVersion = -1;
   m_ReqPatVersion = -1;
+  m_bWaitGoodPat = false;
   m_receivedPackets = 0;
   m_bSetAudioDiscontinuity = false;
   m_bSetVideoDiscontinuity = false;
@@ -88,7 +96,13 @@ CDeMultiplexer::CDeMultiplexer(CTsDuration& duration,CTsReaderFilter& filter)
   m_iAudioReadCount = 0;
   m_lastVideoPTS.IsValid = false;
   m_lastAudioPTS.IsValid = false;
+  m_bFlushDelegated = false;
+  m_bFlushDelgNow = false;
+  m_bFlushRunning = false; 
+  m_bStarting=false;
+  m_bReadAheadFromFile = false;
   m_mpegParserTriggerFormatChange = false;
+  m_mpegParserReset = true;
   m_videoChanged=false;
   m_audioChanged=false;
   SetMediaChanging(false);
@@ -102,24 +116,35 @@ CDeMultiplexer::CDeMultiplexer(CTsDuration& duration,CTsReaderFilter& filter)
   m_WaitHeaderPES=-1 ;
   m_VideoPrevCC = -1;
   m_bFirstGopFound = false;
+  m_bSecondGopFound = false;
   m_bFrame0Found = false;
+  m_bFirstGopParsed = false;
+  m_lastVidResX=-1 ;
+  m_lastVidResY=-1 ;
   m_FirstVideoSample = 0x7FFFFFFF00000000LL;
   m_LastVideoSample = 0;
-  m_LastDataFromRtsp = GetTickCount();
+  m_LastDataFromRtsp = GET_TIME_NOW();
   m_mpegPesParser = new CMpegPesParser();
+  
+  LogDebug("demux: Start file read thread");
+  StartThread();
 }
 
 CDeMultiplexer::~CDeMultiplexer()
 {
+  LogDebug("CDeMultiplexer::dtor");
   m_bShuttingDown = true;
-  Flush();
-  delete m_pCurrentVideoBuffer;
+  //stop file read thread
+  StopThread();
+  Flush(true);
+//  delete m_pCurrentVideoBuffer;
   delete m_pCurrentAudioBuffer;
   delete m_pCurrentSubtitleBuffer;
   delete m_mpegPesParser;
 
   m_subtitleStreams.clear();
   m_audioStreams.clear();
+  LogDebug("CDeMultiplexer::dtor - finished");
 }
 
 int CDeMultiplexer::GetVideoServiceType()
@@ -149,6 +174,7 @@ CPidTable CDeMultiplexer::GetPidTable()
 /// and updates the audio output pin media type if needed
 bool CDeMultiplexer::SetAudioStream(int stream)
 {
+  CAutoLock lock (&m_sectionSetAudioStream);
   LogDebug("SetAudioStream : %d",stream);
   //is stream index valid?
   if (stream < 0 || stream >= m_audioStreams.size())
@@ -176,13 +202,22 @@ bool CDeMultiplexer::SetAudioStream(int stream)
       if (!IsMediaChanging())             
       {
         LogDebug("SetAudioStream : OnMediaTypeChanged(AUDIO_CHANGE)");
-        Flush() ;                   
+        //Flush(true) ;                   
+        //Flushing is delegated to CDeMultiplexer::ThreadProc()
+        if (!m_bFlushDelgNow && !m_bFlushRunning) //Flush already pending
+        {
+          m_bFlushDelgNow = true;
+          WakeThread(); 
+        }
         m_filter.OnMediaTypeChanged(AUDIO_CHANGE);
         SetMediaChanging(true);
         m_filter.m_bForceSeekOnStop=true;     // Force stream to be resumed after
       }
-      else                                    // Mpeg parser info is required or audio graph is already rebuilding.
+      else   // Mpeg parser info is required or audio graph is already rebuilding.
+      {
         LogDebug("SetAudioStream : Media already changing");   // just wait 1st GOP
+        m_audioChanged = true;
+      }
     }
   }
   else
@@ -358,20 +393,24 @@ bool CDeMultiplexer::GetSubtitleStreamType(__int32 stream, __int32 &type)
   return S_OK;
 }
 
-void CDeMultiplexer::GetVideoStreamType(CMediaType &pmt)
+bool CDeMultiplexer::GetVideoStreamType(CMediaType &pmt)
 {
-  if( m_pids.videoPids.size() != 0 && m_mpegPesParser != NULL)
+  if( m_pids.videoPids.size() != 0 && m_mpegPesParser != NULL && m_bFirstGopParsed)
   {
+    CAutoLock lock (&m_mpegPesParser->m_sectionVideoPmt);
     pmt = m_mpegPesParser->pmt;
+    return true;
   }
+  return false;
 }
 
 void CDeMultiplexer::FlushVideo()
 {
   LogDebug("demux:flush video");
+  CAutoLock flock (&m_sectionFlushVideo);
   CAutoLock lock (&m_sectionVideo);
-  delete m_pCurrentVideoBuffer;
-  m_pCurrentVideoBuffer = NULL;
+//  delete m_pCurrentVideoBuffer;
+//  m_pCurrentVideoBuffer = NULL;
   ivecBuffers it = m_vecVideoBuffers.begin();
   while (it != m_vecVideoBuffers.end())
   {
@@ -380,15 +419,16 @@ void CDeMultiplexer::FlushVideo()
     it = m_vecVideoBuffers.erase(it);
     /*m_outVideoBuffer++;*/
   }
-  // Clear PES temporary queue.
-  it = m_t_vecVideoBuffers.begin();
-  while (it != m_t_vecVideoBuffers.end())
-  {
-    CBuffer* VideoBuffer = *it;
-    delete VideoBuffer;
-    it = m_t_vecVideoBuffers.erase(it);
-  }
-
+  
+  //  // Clear PES temporary queue.
+  //  it = m_t_vecVideoBuffers.begin();
+  //  while (it != m_t_vecVideoBuffers.end())
+  //  {
+  //    CBuffer* VideoBuffer = *it;
+  //    delete VideoBuffer;
+  //    it = m_t_vecVideoBuffers.erase(it);
+  //  }
+  
   m_p.Free();
   m_lastStart = 0;
   m_pl.RemoveAll();
@@ -396,23 +436,28 @@ void CDeMultiplexer::FlushVideo()
 
   m_VideoPrevCC = -1;
   m_bFirstGopFound = false;
+  m_bSecondGopFound = false;
   m_bFrame0Found = false;
+  m_mpegParserReset = true;
   m_FirstVideoSample = 0x7FFFFFFF00000000LL;
   m_LastVideoSample = 0;
   m_lastVideoPTS.IsValid = false;
-  m_VideoValidPES = true;
+  m_VideoValidPES = false;
   m_mVideoValidPES = false;
   m_WaitHeaderPES=-1 ;
   m_bVideoAtEof=false;
   m_MinVideoDelta = 10.0 ;
+  _InterlockedAnd(&m_AVDataLowCount, 0) ;
   m_filter.m_bRenderingClockTooFast=false ;
-
+  m_bSetVideoDiscontinuity=true;
+  
   Reset();  // PacketSync reset.
 }
 
 void CDeMultiplexer::FlushAudio()
 {
   LogDebug("demux:flush audio");
+  CAutoLock flock (&m_sectionFlushAudio);
   CAutoLock lock (&m_sectionAudio);
   delete m_pCurrentAudioBuffer;
   ivecBuffers it = m_vecAudioBuffers.begin();
@@ -439,14 +484,17 @@ void CDeMultiplexer::FlushAudio()
   m_pCurrentAudioBuffer = new CBuffer();
   m_bAudioAtEof = false;
   m_MinAudioDelta = 10.0;
+  _InterlockedAnd(&m_AVDataLowCount, 0);
   m_filter.m_bRenderingClockTooFast=false;
-
+  m_bSetAudioDiscontinuity=true;
+  
   Reset();  // PacketSync reset.
 }
 
 void CDeMultiplexer::FlushSubtitle()
 {
   LogDebug("demux:flush subtitle");
+  CAutoLock flock (&m_sectionFlushSubtitle);
   CAutoLock lock (&m_sectionSubtitle);
   delete m_pCurrentSubtitleBuffer;
   ivecBuffers it = m_vecSubtitleBuffers.begin();
@@ -460,24 +508,29 @@ void CDeMultiplexer::FlushSubtitle()
 }
 
 /// Flushes all buffers
-void CDeMultiplexer::Flush()
+void CDeMultiplexer::Flush(bool clearAVready)
 {
+  if (m_bFlushRunning) return;
+    
   LogDebug("demux:flushing");
 
+  m_bFlushRunning = true; //Stall GetVideo()/GetAudio()/GetSubtitle() calls from pins 
+
   m_iAudioReadCount = 0;
-  m_LastDataFromRtsp = GetTickCount();
-  bool holdAudio = HoldAudio();
-  bool holdVideo = HoldVideo();
-  bool holdSubtitle = HoldSubtitle();
-  SetHoldAudio(true);
-  SetHoldVideo(true);
-  SetHoldSubtitle(true);
+  m_LastDataFromRtsp = GET_TIME_NOW();
   FlushAudio();
   FlushVideo();
   FlushSubtitle();
-  SetHoldAudio(holdAudio);
-  SetHoldVideo(holdVideo);
-  SetHoldSubtitle(holdSubtitle);
+  m_bFlushDelegated = false;
+  m_bReadAheadFromFile = false;  
+  
+  if (clearAVready)
+  {
+    m_filter.m_bStreamCompensated=false ;
+    m_bAudioVideoReady=false ;
+  }
+  
+  m_bFlushRunning = false;
 }
 
 ///
@@ -485,16 +538,25 @@ void CDeMultiplexer::Flush()
 // or NULL if there is none available
 CBuffer* CDeMultiplexer::GetSubtitle()
 {
+  if (m_bFlushDelgNow || m_bFlushRunning || m_bStarting) return NULL; //Flush pending or Start() active
+  if (m_filter.GetSubtitlePin()->IsConnected() && (m_iAudioStream == -1) || IsAudioChanging()) return NULL;
+
+  if ((m_pids.subtitlePids.size() > 0 && m_pids.subtitlePids[0].Pid==0) || IsMediaChanging())
+  {
+    m_bReadAheadFromFile = true;
+    WakeThread();
+    return NULL;
+  }
   //if there is no subtitle pid, then simply return NULL
   if (m_currentSubtitlePid==0) return NULL;
   if (m_bEndOfFile) return NULL;
-  if (m_bHoldSubtitle) return NULL;
-
+  
+  CAutoLock lock (&m_sectionSubtitle);
+  
   //are there subtitle packets in the buffer?
   if (m_vecSubtitleBuffers.size()!=0 )
   {
     //yup, then return the next one
-    CAutoLock lock (&m_sectionSubtitle);
     ivecBuffers it =m_vecSubtitleBuffers.begin();
     CBuffer* subtitleBuffer=*it;
     m_vecSubtitleBuffers.erase(it);
@@ -507,112 +569,131 @@ CBuffer* CDeMultiplexer::GetSubtitle()
 ///
 ///Returns the next video packet
 // or NULL if there is none available
-CBuffer* CDeMultiplexer::GetVideo()
+CBuffer* CDeMultiplexer::GetVideo(bool earlyStall)
 {
-  if (m_filter.GetVideoPin()->IsConnected() && ((m_iAudioStream == -1) || IsAudioChanging())) return NULL;
+  //CAutoLock flock (&m_sectionFlushVideo);
+  if (m_bFlushDelgNow || m_bFlushRunning || m_bStarting) return NULL; //Flush pending or Start() active 
+  if (m_filter.GetVideoPin()->IsConnected() && (m_iAudioStream == -1) || IsAudioChanging()) return NULL;
 
   //if there is no video pid, then simply return NULL
   if ((m_pids.videoPids.size() > 0 && m_pids.videoPids[0].Pid==0) || IsMediaChanging())
   {
-    ReadFromFile(false,true);
+    m_bReadAheadFromFile = true;
+    WakeThread();
     return NULL;
   }
 
-  // when there are no video packets at the moment
-  // then try to read some from the current file
-  while ((m_vecVideoBuffers.size()==0) || (m_FirstVideoSample.m_time >= m_LastAudioSample.m_time))
+  if (CheckPrefetchState(!earlyStall, false))
   {
-    //if filter is stopped or
-    //end of file has been reached or
-    //demuxer should stop getting video packets
-    //then return NULL
-    if (!m_filter.IsFilterRunning()) return NULL;
-    if (m_filter.m_bStopping) return NULL;
-    if (m_bEndOfFile) return NULL;
-//    if (m_bHoldVideo) return NULL;
-
-    //else try to read some packets from the file
-    if (ReadFromFile(false,true)<READ_SIZE) break ;
+    //Prefetch some data
+    m_bReadAheadFromFile = true;
+    WakeThread();
   }
 
-  //are there video packets in the buffer?
-  if (m_vecVideoBuffers.size()!=0 && !IsMediaChanging()) // && (m_FirstVideoSample.m_time < m_LastAudioSample.m_time))
+  //  if (m_vecVideoBuffers.size()==0)
+  //  {
+  //    return NULL;
+  //  }
+
+  //We should have a video packet available
+  CAutoLock lock (&m_sectionVideo);
+
+  if (m_vecVideoBuffers.size() > 0)
   {
-    CAutoLock lock (&m_sectionVideo);
-    //yup, then return the next one
-    ivecBuffers it =m_vecVideoBuffers.begin();
-    if (it!=m_vecVideoBuffers.end())
-    {
-      CBuffer* videoBuffer=*it;
-      m_vecVideoBuffers.erase(it);
-      return videoBuffer;
-    }
+    ivecBuffers it = m_vecVideoBuffers.begin();
+    CBuffer* videoBuffer = *it;
+    return videoBuffer;
   }
 
   //no video packets available
   return NULL;
 }
 
+//Free a video buffer after use
+void CDeMultiplexer::EraseVideoBuff()
+{
+  CAutoLock lock (&m_sectionVideo);
+  
+  if (m_vecVideoBuffers.size() > 0)
+  {
+    ivecBuffers it = m_vecVideoBuffers.begin();
+    m_vecVideoBuffers.erase(it);
+  }
+}
+
 ///
 ///Returns the next audio packet
 // or NULL if there is none available
-CBuffer* CDeMultiplexer::GetAudio()
+CBuffer* CDeMultiplexer::GetAudio(bool earlyStall)
 {
-  int SizeRead=READ_SIZE ;
+  if (m_bFlushDelgNow || m_bFlushRunning || m_bStarting) return NULL; //Flush pending or Start() active
   if ((m_iAudioStream == -1) || IsAudioChanging()) return NULL;
 
   // if there is no audio pid, then simply return NULL
   if ((m_audioPid==0) || IsMediaChanging())
   {
-    ReadFromFile(true,false);
+    m_bReadAheadFromFile = true;
+    WakeThread();
     return NULL;
+  }
+
+  if (CheckPrefetchState(false, !earlyStall))
+  {
+    //Prefetch some data
+    m_bReadAheadFromFile = true;
+    WakeThread();
   }
 
   // when there are no audio packets at the moment
   // then try to read some from the current file
-  while (m_vecAudioBuffers.size()==0 || !m_bAudioVideoReady)
+  if (!m_bAudioVideoReady && (m_vecAudioBuffers.size()>0))
   {
-    //if filter is stopped or
-    //end of file has been reached or
-    //demuxer should stop getting audio packets
-    //then return NULL
-    if (!m_filter.IsFilterRunning()) return NULL;
-    if (m_filter.m_bStopping) return NULL;
+    // Goal is to start with at least 500mS audio and 300mS video ahead. ( LiveTv and RTSP as TsReader cannot go ahead by itself)
+    if (m_LastAudioSample.Millisecs() - m_FirstAudioSample.Millisecs() < 510) return NULL ;       // Not enough audio to start.
 
-    if (m_bEndOfFile) return NULL;
-
-    SizeRead = ReadFromFile(true,false) ;
-
-    //are there audio packets in the buffer?
-    if (m_vecAudioBuffers.size()==0 && SizeRead<READ_SIZE) return NULL;                          // No buffer and nothing to read....
-
-    if (IsMediaChanging()) return NULL;
-
-    // Goal is to start with at least 200mS audio and 400mS video ahead. ( LiveTv and RTSP as TsReader cannot go ahead by itself)
-    if (m_LastAudioSample.Millisecs() - m_FirstAudioSample.Millisecs() < 200) return NULL ;       // Not enough audio to start.
-    if (!m_bAudioVideoReady && m_filter.GetVideoPin()->IsConnected())
+    if (m_filter.GetVideoPin()->IsConnected())
     {
       if (!m_bFrame0Found) return NULL ;
-      if (m_LastVideoSample.Millisecs() - m_FirstAudioSample.Millisecs() < 400) return NULL ;     // Not enough video & audio to start.
-      if (!m_filter.GetAudioPin()->m_EnableSlowMotionOnZapping || !m_filter.m_bLiveTv)
+      if (m_LastVideoSample.Millisecs() - m_FirstVideoSample.Millisecs() < 310) return NULL ;   // Not enough video to start.
+      
+      if (!m_filter.m_EnableSlowMotionOnZapping)
       {
-        if (m_LastVideoSample.Millisecs() - m_FirstVideoSample.Millisecs() < 400) return NULL ;   // Not enough video to start.
-        if (m_LastAudioSample.Millisecs() - m_FirstVideoSample.Millisecs() < 200) return NULL ;   // Not enough simultaneous audio & video to start.
-      }
+        if (m_LastAudioSample.Millisecs() - m_FirstVideoSample.Millisecs() < 10) return NULL ;   // Not enough simultaneous audio & video to start.
+      }       
     }
+
     m_bAudioVideoReady=true ;
   }
 
-  //yup, then return the next one
+  //  if (m_vecAudioBuffers.size()==0)
+  //  {
+  //    return NULL;
+  //  }
+
+  //Return the next buffer
   CAutoLock lock (&m_sectionAudio);
 
-  ivecBuffers it =m_vecAudioBuffers.begin();
-  CBuffer* audiobuffer=*it;
-  m_vecAudioBuffers.erase(it);
-
-  return audiobuffer;
+  if (m_vecAudioBuffers.size() > 0)
+  {
+    ivecBuffers it = m_vecAudioBuffers.begin();
+    CBuffer* audiobuffer = *it;
+    return audiobuffer;
+  }
+  
+  return NULL;
 }
 
+//Free an audio buffer after use
+void CDeMultiplexer::EraseAudioBuff()
+{
+  CAutoLock lock (&m_sectionAudio);
+  
+  if (m_vecAudioBuffers.size() > 0)
+  {
+    ivecBuffers it = m_vecAudioBuffers.begin();
+    m_vecAudioBuffers.erase(it);
+  }
+}
 
 /// Starts the demuxer
 /// This method will read the file until we found the pat/sdt
@@ -623,35 +704,56 @@ void CDeMultiplexer::Start()
   m_bStarting=true ;
   m_receivedPackets=0;
   m_mpegParserTriggerFormatChange=false;
+  m_mpegParserReset = true;  
+  m_bFirstGopParsed = false; 
+  m_mpegPesParser->basicVideoInfo.isValid = false;
   m_videoChanged=false;
   m_audioChanged=false;
   m_bEndOfFile=false;
-  m_bHoldAudio=false;
-  m_bHoldVideo=false;
   m_iPatVersion=-1;
   m_ReqPatVersion=-1;
+  m_bWaitGoodPat = false;
   m_bSetAudioDiscontinuity=false;
   m_bSetVideoDiscontinuity=false;
-  DWORD dwBytesProcessed=0;
-  DWORD m_Time = GetTickCount();
-  while((GetTickCount() - m_Time) < 5000)
+  m_bReadAheadFromFile = false;
+  m_bAudioVideoReady=false;
+  m_filter.m_bStreamCompensated=false ;
+  int dwBytesProcessed=0;
+  DWORD m_Time = GET_TIME_NOW();
+  while((GET_TIME_NOW() - m_Time) < 10000)
   {
-    int BytesRead =ReadFromFile(false,false);
-    if (BytesRead==0) Sleep(10);
-    if (dwBytesProcessed>INITIAL_READ_SIZE || GetAudioStreamCount()>0)
+    m_bEndOfFile = false;  //reset eof every time through to ignore a false eof due to slow rtsp startup
+    int BytesRead = ReadFromFile(false,false);    
+    if (BytesRead <= 0)
+    {
+      BytesRead = 0;
+      Sleep(10);
+    }      
+	  // LogDebug("demux:Start() BytesRead:%d, BytesProcessed:%d", BytesRead, dwBytesProcessed);
+    if (dwBytesProcessed>INITIAL_READ_SIZE || GetAudioStreamCount()>0) //Wait for first PAT to be found
     {
       #ifdef USE_DYNAMIC_PINS
-      if ((!m_mpegPesParser->basicVideoInfo.isValid &&  m_pids.videoPids.size() > 0 && 
-        m_pids.videoPids[0].Pid>1) && dwBytesProcessed<INITIAL_READ_SIZE)
+      if ((m_pids.videoPids.size() > 0 && m_pids.videoPids[0].Pid > 1) &&       //There is a video stream.....
+           (!m_mpegPesParser->basicVideoInfo.isValid || !m_bFirstGopParsed) &&  //and the first GOP header is not parsed....
+           dwBytesProcessed<INITIAL_READ_SIZE)                                  //and we have not reached the data limit
       {
+        //We are waiting for the first video GOP header to be parsed
+        //so that OnVideoFormatChanged() can be triggered if necessary
         dwBytesProcessed+=BytesRead;
         continue;
       }
       #endif
       m_reader->SetFilePointer(0,FILE_BEGIN);
-      Flush();
+      //Flush(true);
+      //Flushing is delegated to CDeMultiplexer::ThreadProc()
+      if (!m_bFlushDelgNow && !m_bFlushRunning) //Flush already pending
+      {
+        m_bFlushDelgNow = true;
+        WakeThread(); 
+      }
       m_streamPcr.Reset();
       m_bStarting=false;
+	    LogDebug("demux:Start() end1 BytesProcessed:%d", dwBytesProcessed);
       return;
     }
     dwBytesProcessed+=BytesRead;
@@ -659,6 +761,7 @@ void CDeMultiplexer::Start()
   m_streamPcr.Reset();
   m_iAudioReadCount=0;
   m_bStarting=false;
+	LogDebug("demux:Start() end2 BytesProcessed:%d", dwBytesProcessed);
 }
 
 void CDeMultiplexer::SetEndOfFile(bool bEndOfFile)
@@ -671,17 +774,42 @@ bool CDeMultiplexer::EndOfFile()
   return m_bEndOfFile;
 }
 
+int CDeMultiplexer::ReadAheadFromFile()
+{
+  //if filter is stopped or
+  //end of file has been reached or
+  //demuxer should stop getting video packets
+  //then return an error
+  if (!m_filter.IsFilterRunning() || m_filter.m_bStopping || m_bEndOfFile) return -1;
+  
+	//LogDebug("demux:ReadAheadFromFile");
+  int SizeRead = ReadFromFile(false,false) ;
+  
+  if (m_filter.State() != State_Running)
+  {
+    _InterlockedAnd(&m_AVDataLowCount, 0);
+  }
+  else if (m_bAudioVideoReady 
+           && (SizeRead >= 0) && (SizeRead < (m_filter.IsUNCfile() ? MIN_READ_SIZE_UNC : MIN_READ_SIZE))
+           && ((m_vecAudioBuffers.size()==0) || (m_vecVideoBuffers.size()==0)))
+  {
+    // No buffer and nothing to read....Running very low on data
+    _InterlockedIncrement(&m_AVDataLowCount);   
+  }
+
+  return SizeRead;
+}
+
 /// This method reads the next READ_SIZE bytes from the file
 /// and processes the raw data
 /// When a TS packet has been discovered, OnTsPacket(byte* tsPacket) gets called
 //  which in its turn deals with the packet
 int CDeMultiplexer::ReadFromFile(bool isAudio, bool isVideo)
 {
-//  if (m_bWeos) return 0 ;
-//  if (IsAudioChanging()) return 0 ;          // Do not read any data during stream selection from MP C#
-  if (m_filter.IsSeeking()) return 0;       // Ambass : to check
+   // Don't read if flush pending/running or no reader....
+  if (m_filter.IsSeeking() || m_bFlushDelgNow || m_bFlushRunning || (m_reader==NULL)) return -1;
+    
   CAutoLock lock (&m_sectionRead);
-  if (m_reader==NULL) return false;
   byte buffer[READ_SIZE];
   int dwReadBytes=0;
   bool result=false;
@@ -707,21 +835,21 @@ int CDeMultiplexer::ReadFromFile(bool isAudio, bool isVideo)
       {
         //yes, then process the raw data
         result=true;
-        OnRawData(buffer,(int)dwReadBytes);
-        m_LastDataFromRtsp = GetTickCount();
+        OnRawData2(buffer,(int)dwReadBytes);
+        m_LastDataFromRtsp = GET_TIME_NOW();
       }
     }
     else
     {
       if (!m_filter.IsTimeShifting())
       {
-        //LogDebug("demux:endoffile...%d",GetTickCount()-m_LastDataFromRtsp );
+        //LogDebug("demux:endoffile...%d",GET_TIME_NOW()-m_LastDataFromRtsp );
         //set EOF flag and return
-        if (GetTickCount()-m_LastDataFromRtsp > 2000 && m_filter.State() != State_Paused ) // A bit crappy, but no better idea...
+        if (((GET_TIME_NOW()-m_LastDataFromRtsp) > 2000) && (m_filter.State() != State_Paused) ) // A bit crappy, but no better idea...
         {
           LogDebug("demux:endoffile");
           m_bEndOfFile=true;
-          return 0;
+          return -1;
         }
       }
     }
@@ -742,7 +870,7 @@ int CDeMultiplexer::ReadFromFile(bool isAudio, bool isVideo)
       if (dwReadBytes > 0)
       {
         //succeeded, process data
-        OnRawData(buffer,(int)dwReadBytes);
+        OnRawData2(buffer,(int)dwReadBytes);
       }
       else
       {
@@ -751,7 +879,7 @@ int CDeMultiplexer::ReadFromFile(bool isAudio, bool isVideo)
           //set EOF flag and return
           LogDebug("demux:endoffile");
           m_bEndOfFile=true;
-          return 0;
+          return -1;
         }
       }
 
@@ -765,11 +893,6 @@ int CDeMultiplexer::ReadFromFile(bool isAudio, bool isVideo)
     }
   }
   //Failed to read any data
-//  if ( (isAudio && m_bHoldAudio) || (isVideo && m_bHoldVideo) )
-//  {
-    //LogDebug("demux:paused %d %d",m_bHoldAudio,m_bHoldVideo);
-//    return 0;
-//  }
   return 0;
 }
 /// This method gets called via ReadFile() when a new TS packet has been received
@@ -778,25 +901,26 @@ int CDeMultiplexer::ReadFromFile(bool isAudio, bool isVideo)
 ///  - decode any audio/video packets and put the PES packets in the appropiate buffers
 void CDeMultiplexer::OnTsPacket(byte* tsPacket)
 {
+  //LogDebug("OnTsPacket() start");
   CTsHeader header(tsPacket);
 
   m_patParser.OnTsPacket(tsPacket);
 
-  if (m_iPatVersion==-1)
+  if ((m_iPatVersion==-1) || m_bWaitGoodPat)
   {
-    // First Pat not found
+    // First PAT not found or waiting for correct PAT
     return;
   }
 
   // Wait for new PAT if required.
-  if ((m_iPatVersion & 0x0F) != (m_ReqPatVersion & 0x0F))
+  if ((m_iPatVersion & 0x0F) != (m_ReqPatVersion & 0x0F)) //No PAT yet, or PAT version doesn't match requested e.g. PAT data from old channel
   {
     if (m_ReqPatVersion==-1)                    
     {                                     // Now, unless channel change, 
        m_ReqPatVersion = m_iPatVersion;    // Initialize Pat Request.
-       m_WaitNewPatTmo = GetTickCount();   // Now, unless channel change request,timeout will be always true. 
+       m_WaitNewPatTmo = GET_TIME_NOW();   // Now, unless channel change request,timeout will be always true. 
     }
-    if (GetTickCount() < m_WaitNewPatTmo) 
+    if (GET_TIME_NOW() < m_WaitNewPatTmo) 
     {
       // Timeout not reached.
       return;
@@ -851,11 +975,17 @@ void CDeMultiplexer::OnTsPacket(byte* tsPacket)
   {
     return;
   }
+  
+  //Buffers about to be flushed
+  if (m_bFlushDelgNow || m_bFlushRunning)
+  {
+  	return;
+  }
 
   //process the ts packet further
-  FillSubtitle(header,tsPacket);
-  FillAudio(header,tsPacket);
   FillVideo(header,tsPacket);
+  FillAudio(header,tsPacket);
+  FillSubtitle(header,tsPacket);
   FillTeletext(header,tsPacket);
 }
 
@@ -874,6 +1004,7 @@ bool CDeMultiplexer::CheckContinuity(int prevCC, CTsHeader& header)
 void CDeMultiplexer::FillAudio(CTsHeader& header, byte* tsPacket)
 {
   //LogDebug("FillAudio - audio PID %d", m_audioPid );
+  CAutoLock flock (&m_sectionFlushAudio);
 
   if (IsAudioChanging() || m_iAudioStream<0 || m_iAudioStream>=m_audioStreams.size()) return;
   m_audioPid=m_audioStreams[m_iAudioStream].pid;
@@ -884,16 +1015,38 @@ void CDeMultiplexer::FillAudio(CTsHeader& header, byte* tsPacket)
   if(!CheckContinuity(m_AudioPrevCC, header))
   {
     LogDebug("Audio Continuity error... %x ( prev %x )", header.ContinuityCounter, m_AudioPrevCC);
-    if (!m_DisableDiscontinuitiesFiltering) m_AudioValidPES=false;  
+    if (!m_DisableDiscontinuitiesFiltering) 
+    {
+      m_AudioValidPES=false;  
+    }
   }
 
   m_AudioPrevCC = header.ContinuityCounter;
 
-  CAutoLock lock (&m_sectionAudio);
+  //CAutoLock lock (&m_sectionAudio);
   //does tspacket contain the start of a pes packet?
   if (header.PayloadUnitStart)
   {
-    //yes packet contains start of a pes packet.
+    //Sanity check PES header
+    int posn=header.PayLoadStart;
+    if (
+           ((tsPacket[posn+0]!=0) || (tsPacket[posn+1]!=0) || (tsPacket[posn+2]!=1)) //Invalid start code
+        || ((tsPacket[posn+3] & 0x80)==0)     //Invalid stream ID
+        || ((tsPacket[posn+6] & 0xC0)!=0x80)  //Invalid marker bits
+        || ((tsPacket[posn+6] & 0x20)==0x20)  //Payload scrambled
+       )
+    {
+      //Discard this new/current PES packet
+      m_AudioValidPES=false;  
+      m_bSetAudioDiscontinuity=true;
+      LogDebug("PES audio 0-0-1 fail");
+      //Flushing is delegated to CDeMultiplexer::ThreadProc()
+      m_bFlushDelegated = true;
+      WakeThread();  
+      return;
+    }
+    
+    //yes, packet contains start of a pes packet.
     //does current buffer hold any data ?
     if (m_pCurrentAudioBuffer->Length() > 0)
     {
@@ -901,18 +1054,17 @@ void CDeMultiplexer::FillAudio(CTsHeader& header, byte* tsPacket)
       m_pCurrentAudioBuffer = new CBuffer();
     }
 
-    if (m_t_vecAudioBuffers.size())
+    if (m_t_vecAudioBuffers.size()) //Process the previous PES packet
     {
       CBuffer *Cbuf=*m_t_vecAudioBuffers.begin();
       byte *p = Cbuf->Data() ;
-      if ((p[0]==0) && (p[1]==0) && (p[2]==1) //Valid start code
-          && ((p[3] & 0x80)!=0)     //Valid stream ID
-          && ((p[6] & 0xC0)==0x80)  //Valid marker bits
-          && ((p[6] & 0x20)!=0x20)) //Payload not scrambled
+
+      if (m_AudioValidPES)
       {
         //get pts/dts from pes header
         CPcr pts;
         CPcr dts;
+        
         if (CPcr::DecodeFromPesHeader(p,0,pts,dts))
         {
           double diff;
@@ -922,10 +1074,16 @@ void CDeMultiplexer::FillAudio(CTsHeader& header, byte* tsPacket)
             diff=m_lastAudioPTS.ToClock()-pts.ToClock();
           else
             diff=pts.ToClock()-m_lastAudioPTS.ToClock();
-          if (diff>10.0)
+          if (diff>2.0)
           {
+            //Large PTS jump - flush the world...
             LogDebug("DeMultiplexer::FillAudio pts jump found : %f %f, %f", (float) diff, (float)pts.ToClock(), (float)m_lastAudioPTS.ToClock());
-            m_AudioValidPES=false;
+            m_lastAudioPTS.IsValid=false;
+            m_lastVideoPTS.IsValid=false;
+            m_bSetAudioDiscontinuity=true;
+            //Flushing is delegated to CDeMultiplexer::ThreadProc()
+            m_bFlushDelegated = true;
+            WakeThread();            
           }
           else
           {
@@ -945,10 +1103,11 @@ void CDeMultiplexer::FillAudio(CTsHeader& header, byte* tsPacket)
               LogDebug("Demux : Audio to render %03.3f Sec", Delta);
               if (Delta < 0.1)
               {
-                LogDebug("Demux : Audio to render too late= %03.3f Sec, rendering will be paused for a while", Delta) ;
-                m_filter.m_bRenderingClockTooFast=true;
+                //_InterlockedIncrement(&m_AudioDataLowCount);              
+                LogDebug("Demux : Audio to render too late= %03.3f Sec", Delta) ;
+                //  m_filter.m_bRenderingClockTooFast=true;
                 m_MinAudioDelta+=1.0;
-                m_MinVideoDelta+=1.0;
+                m_MinVideoDelta+=1.0;                
               }
             }
           }
@@ -965,59 +1124,64 @@ void CDeMultiplexer::FillAudio(CTsHeader& header, byte* tsPacket)
         else
         {
           LogDebug(" No data");
-          m_AudioValidPES=false;
+          m_AudioValidPES=false; //stop further processing
         }
       }
-      else
-      {
-        LogDebug("Pes header 0-0-1 fail");
-        m_AudioValidPES=false;
-      }
 
-      if (m_AudioValidPES)
-      {
-        if (m_bSetAudioDiscontinuity)
+      { //Scoped for CAutoLock
+        CAutoLock lock (&m_sectionAudio);
+        if (m_AudioValidPES)
         {
-          m_bSetAudioDiscontinuity=false;
-          Cbuf->SetDiscontinuity();
-        }
-
-        Cbuf->SetPcr(m_duration.FirstStartPcr(),m_duration.MaxPcr());
-
-        //yes, then move the full PES in main queue.
-        while (m_t_vecAudioBuffers.size())
-        {
-          ivecBuffers it;
-          // Check if queue is no abnormally long..
-          if (m_vecAudioBuffers.size()>MAX_BUF_SIZE)
+          if (m_bSetAudioDiscontinuity)
           {
-            ivecBuffers it = m_vecAudioBuffers.begin();
+            m_bSetAudioDiscontinuity=false;
+            Cbuf->SetDiscontinuity();
+          }
+  
+          Cbuf->SetPcr(m_duration.FirstStartPcr(),m_duration.MaxPcr());
+  
+          //yes, then move the full PES in main queue.
+          while (m_t_vecAudioBuffers.size())
+          {
+            ivecBuffers it;
+            // Check if queue is no abnormally long..
+            if (m_vecAudioBuffers.size()>MAX_AUD_BUF_SIZE)
+            {
+              ivecBuffers it = m_vecAudioBuffers.begin();
+              delete *it;
+              m_vecAudioBuffers.erase(it);
+              
+              //Something is going wrong - abort play
+              //LogDebug("DeMultiplexer: Audio buffer overrun error - aborting");
+              //m_filter.NotifyEvent(EC_ERRORABORT, 0x88780078, NULL); // forces player to abort..."No sound driver is available for use"   
+              //SetEndOfFile(true);
+              //m_bFlushDelegated = true;
+              //WakeThread();            
+            }
+            it = m_t_vecAudioBuffers.begin();
+  
+            CRefTime Ref;
+            if((*it)->MediaTime(Ref))
+            {
+              if (Ref < m_FirstAudioSample) m_FirstAudioSample = Ref;
+              if (Ref > m_LastAudioSample) m_LastAudioSample = Ref;
+            }
+            
+            m_vecAudioBuffers.push_back(*it);
+            m_t_vecAudioBuffers.erase(it);
+          }
+        }
+        else
+        {
+          while (m_t_vecAudioBuffers.size())
+          {
+            ivecBuffers it;
+            it = m_t_vecAudioBuffers.begin();
             delete *it;
-            m_vecAudioBuffers.erase(it);
+            m_t_vecAudioBuffers.erase(it);
           }
-          it = m_t_vecAudioBuffers.begin();
-
-          CRefTime Ref;
-          if((*it)->MediaTime(Ref))
-          {
-            if (Ref < m_FirstAudioSample) m_FirstAudioSample = Ref;
-            if (Ref > m_LastAudioSample) m_LastAudioSample = Ref;
-          }
-
-          m_vecAudioBuffers.push_back(*it);
-          m_t_vecAudioBuffers.erase(it);
+          m_bSetAudioDiscontinuity = true; //Next good packet will be discontinuous
         }
-      }
-      else
-      {
-        while (m_t_vecAudioBuffers.size())
-        {
-          ivecBuffers it;
-          it = m_t_vecAudioBuffers.begin();
-          delete *it;
-          m_t_vecAudioBuffers.erase(it);
-        }
-        m_bSetAudioDiscontinuity = true;
       }
     }
     m_AudioValidPES = true;     
@@ -1052,7 +1216,9 @@ void CDeMultiplexer::FillAudio(CTsHeader& header, byte* tsPacket)
 
 /// This method will check if the tspacket is an video packet
 void CDeMultiplexer::FillVideo(CTsHeader& header, byte* tsPacket)
-{
+{                  
+  CAutoLock lock (&m_sectionFlushVideo);
+  
   if (m_pids.videoPids.size() == 0 || m_pids.videoPids[0].Pid==0) return;
   if (header.Pid!=m_pids.videoPids[0].Pid) return;
 
@@ -1061,14 +1227,18 @@ void CDeMultiplexer::FillVideo(CTsHeader& header, byte* tsPacket)
   if (!CheckContinuity(m_VideoPrevCC, header))
   {
     LogDebug("Video Continuity error... %x ( prev %x )", header.ContinuityCounter, m_VideoPrevCC);
-    if (!m_DisableDiscontinuitiesFiltering) m_VideoValidPES = false;  
+    if (!m_DisableDiscontinuitiesFiltering)
+    {
+      m_VideoValidPES = false;  
+    }
   }
 
   m_VideoPrevCC = header.ContinuityCounter;
 
-  CAutoLock lock (&m_sectionVideo);
 
   if (m_bShuttingDown) return;
+
+  //CAutoLock lock (&m_sectionVideo);
 
   if (m_pids.videoPids[0].VideoServiceType == SERVICE_TYPE_VIDEO_MPEG1 ||
       m_pids.videoPids[0].VideoServiceType == SERVICE_TYPE_VIDEO_MPEG2)
@@ -1077,7 +1247,6 @@ void CDeMultiplexer::FillVideo(CTsHeader& header, byte* tsPacket)
   }
   else
   {
-    //ParseVideoH264(header, tsPacket);
     FillVideoH264(header, tsPacket);
   }
 }
@@ -1125,13 +1294,24 @@ void CDeMultiplexer::FillVideoH264(CTsHeader& header, byte* tsPacket)
       return;
     }
 
-    if ((start[0]!=0) || (start[1]!=0) || (start[2]!=1) //Invalid start code
-        || ((start[3] & 0x80)==0)) //Invalid stream ID
+    if (
+           ((start[0]!=0) || (start[1]!=0) || (start[2]!=1)) //Invalid start code
+        || ((start[3] & 0x80)==0)    //Invalid stream ID
+      	|| ((start[6] & 0xC0)!=0x80) //Invalid marker bits
+        || ((start[6] & 0x20)==0x20) //Payload scrambled
+       )
     {
-      LogDebug("Pes 0-0-1 fail");
+      LogDebug("PES H264 0-0-1 fail");
+      //LogDebug("PES H264 0-0-1 fail, %x-%x-%x-%x-%x-%x-%x-%x", start[0], start[1], start[2], start[3], start[4], start[5], start[6], start[7]);
       m_VideoValidPES=false;
+      m_mVideoValidPES = false;
       m_p->rtStart = Packet::INVALID_TIME;
       m_WaitHeaderPES = -1;
+      m_bSetVideoDiscontinuity=true;
+      //Flushing is delegated to CDeMultiplexer::ThreadProc()
+      m_bFlushDelegated = true;
+      WakeThread();
+      return;
     }
     else
     {
@@ -1142,11 +1322,6 @@ void CDeMultiplexer::FillVideoH264(CTsHeader& header, byte* tsPacket)
       }
       else
       { // full PES header is available.
-      	if ((start[6] & 0xC0)!=0x80   //Invalid marker bits
-          || (start[6] & 0x20)==0x20) //Payload scrambled
-        {
-          return;
-      	}
         CPcr pts;
         CPcr dts;
 
@@ -1160,14 +1335,19 @@ void CDeMultiplexer::FillVideoH264(CTsHeader& header, byte* tsPacket)
             diff=m_lastVideoPTS.ToClock()-pts.ToClock();
           else
             diff=pts.ToClock()-m_lastVideoPTS.ToClock();
-          if (diff>10.0)
+          if (diff>2.0)
           {
-            LogDebug("DeMultiplexer::FillVideo pts jump found : %f %f, %f", (float) diff, (float)pts.ToClock(), (float)m_lastVideoPTS.ToClock());
-            m_VideoValidPES=false;
+            //Large PTS jump - flush the world...
+            LogDebug("DeMultiplexer::FillVideoH264 pts jump found : %f %f, %f", (float) diff, (float)pts.ToClock(), (float)m_lastVideoPTS.ToClock());
+            m_lastAudioPTS.IsValid=false;
+            m_lastVideoPTS.IsValid=false;
+            //Flushing is delegated to CDeMultiplexer::ThreadProc()
+            m_bFlushDelegated = true;
+            WakeThread();
           }
           else
           {
-            // LogDebug("DeMultiplexer::FillVideo pts : %f ", (float)pts.ToClock());
+            //LogDebug("DeMultiplexer::FillVideoH264 pts diff : %f ", (float)pts.ToClock());
             m_lastVideoPTS=pts;
           }
         }
@@ -1258,10 +1438,23 @@ void CDeMultiplexer::FillVideoH264(CTsHeader& header, byte* tsPacket)
           }
 //          LogDebug("frame len %d decoded PTS %f p timestamp %f", p->GetCount(), pts.ToClock(), timestamp.ToClock());
 
-          int lastVidResX=m_mpegPesParser->basicVideoInfo.width;
-          int lastVidResY=m_mpegPesParser->basicVideoInfo.height;
+//          int lastVidResX=m_mpegPesParser->basicVideoInfo.width;
+//          int lastVidResY=m_mpegPesParser->basicVideoInfo.height;
 
-          bool Gop = m_mpegPesParser->OnTsPacket(p->GetData(), p->GetCount(), false);
+          bool Gop = m_mpegPesParser->OnTsPacket(p->GetData(), p->GetCount(), false, m_mpegParserReset);
+          if (Gop)
+          {
+            m_mpegParserReset = true; //Reset next time around (so that it always searches for a full 'Gop' header)
+            if (!m_bFirstGopParsed)
+            {
+              m_bFirstGopParsed = true;
+              LogDebug("DeMultiplexer: First Gop after new PAT, %dx%d @ %d:%d, %.3fHz %s",m_mpegPesParser->basicVideoInfo.width,m_mpegPesParser->basicVideoInfo.height,m_mpegPesParser->basicVideoInfo.arx,m_mpegPesParser->basicVideoInfo.ary,(float)m_mpegPesParser->basicVideoInfo.fps, m_mpegPesParser->basicVideoInfo.isInterlaced ? "interlaced":"progressive");
+            }
+          }
+          else
+          {
+            m_mpegParserReset = false;
+          }
 
           if ((Gop || m_bFirstGopFound) && m_filter.GetVideoPin()->IsConnected())
           {
@@ -1275,6 +1468,11 @@ void CDeMultiplexer::FillVideoH264(CTsHeader& header, byte* tsPacket)
             // Too risky to change CPcr implementation at this time 
             if(p->rtStart != Packet::INVALID_TIME)
             {
+              if (Gop && m_bFirstGopFound && !m_bSecondGopFound)
+              {
+                m_bSecondGopFound=true;
+                LogDebug("  H.264 2nd GOP found %f ", Ref.Millisecs()/1000.0f);
+              }
               if (Gop && !m_bFirstGopFound)
               {
                 m_bFirstGopFound=true;
@@ -1299,67 +1497,115 @@ void CDeMultiplexer::FillVideoH264(CTsHeader& header, byte* tsPacket)
               m_bSetVideoDiscontinuity=false;
               pCurrentVideoBuffer->SetDiscontinuity();
             }
-              REFERENCE_TIME MediaTime;
-              m_filter.GetMediaPosition(&MediaTime);
-              if (m_filter.m_bStreamCompensated && m_bVideoAtEof && !m_filter.m_bRenderingClockTooFast)
-              {
-                 float Delta = (float)((double)Ref.Millisecs()/1000.0)-(float)((double)(m_filter.Compensation.m_time+MediaTime)/10000000.0) ;
-                 if (Delta < m_MinVideoDelta)
-                 {
-                   m_MinVideoDelta=Delta;
-                   LogDebug("Demux : Video to render %03.3f Sec", Delta);
-                   if (Delta < 0.2)
-                   {
-                     LogDebug("Demux : Video to render too late = %03.3f Sec, rendering will be paused for a while", Delta) ;
-                     m_filter.m_bRenderingClockTooFast=true;
-                     m_MinAudioDelta+=1.0;
-                     m_MinVideoDelta+=1.0;
-                   }
-                 }
-              }
-              m_bVideoAtEof = false;
-
-            // ownership is transfered to vector
-            m_vecVideoBuffers.push_back(pCurrentVideoBuffer);
-          }
-
-          if (lastVidResX!=m_mpegPesParser->basicVideoInfo.width || lastVidResY!=m_mpegPesParser->basicVideoInfo.height)
-          {
-            LogDebug("DeMultiplexer: %x video format changed: res=%dx%d aspectRatio=%d:%d fps=%d isInterlaced=%d",header.Pid,m_mpegPesParser->basicVideoInfo.width,m_mpegPesParser->basicVideoInfo.height,m_mpegPesParser->basicVideoInfo.arx,m_mpegPesParser->basicVideoInfo.ary,m_mpegPesParser->basicVideoInfo.fps,m_mpegPesParser->basicVideoInfo.isInterlaced);
-            if (m_mpegParserTriggerFormatChange)
+            
+            REFERENCE_TIME MediaTime;
+            m_filter.GetMediaPosition(&MediaTime);
+            if (m_filter.m_bStreamCompensated && m_bVideoAtEof && !m_filter.m_bRenderingClockTooFast)
             {
-              LogDebug("DeMultiplexer: OnMediaFormatChange triggered by mpeg2Parser, aud %d, vid 1", m_audioChanged);
-              SetMediaChanging(true);
-              if (m_audioChanged)
-                m_filter.OnMediaTypeChanged(VIDEO_CHANGE | AUDIO_CHANGE); //Video and audio
-              else
-                m_filter.OnMediaTypeChanged(VIDEO_CHANGE); //Video only
-              m_mpegParserTriggerFormatChange=false;
-            }
-            LogDebug("DeMultiplexer: triggering OnVideoFormatChanged");
-            m_filter.OnVideoFormatChanged(m_mpegPesParser->basicVideoInfo.streamType,m_mpegPesParser->basicVideoInfo.width,m_mpegPesParser->basicVideoInfo.height,m_mpegPesParser->basicVideoInfo.arx,m_mpegPesParser->basicVideoInfo.ary,15000000,m_mpegPesParser->basicVideoInfo.isInterlaced);
-          }
-          else //video resolution is the unchanged, but there may be other format changes
-          {
-            if (m_mpegParserTriggerFormatChange && Gop)
-            {
-              if (m_audioChanged || m_videoChanged)
+              float Delta = (float)((double)Ref.Millisecs()/1000.0)-(float)((double)(m_filter.Compensation.m_time+MediaTime)/10000000.0) ;
+              if (Delta < m_MinVideoDelta)
               {
-                SetMediaChanging(true);
-                LogDebug("DeMultiplexer: Got GOP after channel change detected, trigger format change, aud %d, vid %d", m_audioChanged, m_videoChanged);
-                if (m_audioChanged && m_videoChanged)
-                  m_filter.OnMediaTypeChanged(VIDEO_CHANGE | AUDIO_CHANGE);
-                else if (m_audioChanged)
-                  m_filter.OnMediaTypeChanged(AUDIO_CHANGE);
+                m_MinVideoDelta=Delta;
+                if (Delta < 0.2)
+                {
+                  //_InterlockedIncrement(&m_VideoDataLowCount);              
+                  LogDebug("Demux : Video to render too late= %03.3f Sec", Delta) ;
+                  //  m_filter.m_bRenderingClockTooFast=true;
+                  m_MinAudioDelta+=1.0;
+                  m_MinVideoDelta+=1.0;                
+                }
                 else
-                  m_filter.OnMediaTypeChanged(VIDEO_CHANGE);
+                {
+                  LogDebug("Demux : Video to render %03.3f Sec", Delta);
+                }
+              }
+            }
+            m_bVideoAtEof = false;
+
+            { //Scoped for CAutoLock
+              CAutoLock lock (&m_sectionVideo);
+              if (m_vecVideoBuffers.size()<=MAX_VID_BUF_SIZE)
+              {
+                if (m_bFirstGopFound)
+                {
+                  // ownership is transfered to vector
+                  m_vecVideoBuffers.push_back(pCurrentVideoBuffer);
+                }
+                else
+                {
+                  delete pCurrentVideoBuffer;
+                  pCurrentVideoBuffer = NULL;
+                  m_bSetVideoDiscontinuity = true;            
+                  //LogDebug("DeMultiplexer: Delete video buffer");
+                }
               }
               else
               {
-                SetMediaChanging(false);
+                delete pCurrentVideoBuffer;
+                pCurrentVideoBuffer = NULL;
+                m_bSetVideoDiscontinuity = true;            
+                //Something is going wrong - abort play
+                //LogDebug("DeMultiplexer: Video buffer overrun error - aborting");
+                //m_filter.NotifyEvent(EC_ERRORABORT, 0x88780078, NULL); // forces player to abort..."No sound driver is available for use"   
+                //SetEndOfFile(true);
+                //m_bFlushDelegated = true;
+                //WakeThread();            
               }
-              m_mpegParserTriggerFormatChange=false;
             }
+          }
+
+          if (Gop)
+          {
+            if (m_lastVidResX!=m_mpegPesParser->basicVideoInfo.width || m_lastVidResY!=m_mpegPesParser->basicVideoInfo.height
+                || (m_mpegParserTriggerFormatChange && m_videoChanged && !IsAudioChanging()))
+            {
+              LogDebug("DeMultiplexer: triggering OnVideoFormatChanged");
+              m_filter.OnVideoFormatChanged(m_mpegPesParser->basicVideoInfo.streamType,m_mpegPesParser->basicVideoInfo.width,m_mpegPesParser->basicVideoInfo.height,m_mpegPesParser->basicVideoInfo.arx,m_mpegPesParser->basicVideoInfo.ary,15000000,m_mpegPesParser->basicVideoInfo.isInterlaced);
+              m_filter.GetVideoPin()->SetAddPMT();
+            }
+            
+            if ((m_lastVidResX!=m_mpegPesParser->basicVideoInfo.width || m_lastVidResY!=m_mpegPesParser->basicVideoInfo.height) && !m_filter.m_bDisableVidSizeRebuildH264)
+            {
+              LogDebug("DeMultiplexer: %x video format changed, %dx%d @ %d:%d, %.3fHz %s",header.Pid,m_mpegPesParser->basicVideoInfo.width,m_mpegPesParser->basicVideoInfo.height,m_mpegPesParser->basicVideoInfo.arx,m_mpegPesParser->basicVideoInfo.ary,(float)m_mpegPesParser->basicVideoInfo.fps,m_mpegPesParser->basicVideoInfo.isInterlaced ? "interlaced":"progressive");
+              if (m_mpegParserTriggerFormatChange && !IsAudioChanging())
+              {
+                LogDebug("DeMultiplexer: OnMediaFormatChange triggered by H264Parser, aud %d, vid 1", m_audioChanged);
+                SetMediaChanging(true);
+                if (m_audioChanged)
+                  m_filter.OnMediaTypeChanged(VIDEO_CHANGE | AUDIO_CHANGE); //Video and audio
+                else
+                  m_filter.OnMediaTypeChanged(VIDEO_CHANGE); //Video only
+                m_mpegParserTriggerFormatChange=false;
+              }
+              else if (m_mpegParserTriggerFormatChange)
+              {
+                m_videoChanged = true;
+              }
+            }
+            else //video resolution is unchanged, but there may be other format changes
+            {
+              if (m_mpegParserTriggerFormatChange && !IsAudioChanging())
+              {
+                LogDebug("DeMultiplexer: Got GOP after channel change detected, format change, aud %d, vid %d", m_audioChanged, m_videoChanged);
+                if (m_audioChanged || m_videoChanged)
+                {
+                  SetMediaChanging(true);
+                  if (m_audioChanged && m_videoChanged)
+                    m_filter.OnMediaTypeChanged(VIDEO_CHANGE | AUDIO_CHANGE);
+                  else if (m_audioChanged)
+                    m_filter.OnMediaTypeChanged(AUDIO_CHANGE);
+                  else
+                    m_filter.OnMediaTypeChanged(VIDEO_CHANGE);
+                }
+                else
+                {
+                  SetMediaChanging(false);
+                }
+                m_mpegParserTriggerFormatChange=false;
+              }
+            }
+            m_lastVidResX=m_mpegPesParser->basicVideoInfo.width;
+            m_lastVidResY=m_mpegPesParser->basicVideoInfo.height;
           }
         }
         else
@@ -1445,13 +1691,24 @@ void CDeMultiplexer::FillVideoMPEG2(CTsHeader& header, byte* tsPacket)
       return;
     }
 
-    if ((start[0]!=0) || (start[1]!=0) || (start[2]!=1) //Invalid start code
-        || ((start[3] & 0x80)==0)) //Invalid stream ID
+    if (
+           ((start[0]!=0) || (start[1]!=0) || (start[2]!=1)) //Invalid start code
+        || ((start[3] & 0x80)==0)    //Invalid stream ID
+      	|| ((start[6] & 0xC0)!=0x80) //Invalid marker bits
+        || ((start[6] & 0x20)==0x20) //Payload scrambled
+       )
     {
-      LogDebug("Pes 0-0-1 fail");
-      m_VideoValidPES=false;
+      LogDebug("PES MPEG2 0-0-1 fail");
+      //LogDebug("Pes MPEG2 0-0-1 fail, %x-%x-%x-%x-%x-%x-%x-%x", start[0], start[1], start[2], start[3], start[4], start[5], start[6], start[7]);
+      m_VideoValidPES = false;
+      m_mVideoValidPES = false;
       m_p->rtStart = Packet::INVALID_TIME;
       m_WaitHeaderPES = -1;
+      m_bSetVideoDiscontinuity=true;
+      //Flushing is delegated to CDeMultiplexer::ThreadProc()
+      m_bFlushDelegated = true;
+      WakeThread();    
+      return;        
     }
     else
     {
@@ -1462,15 +1719,10 @@ void CDeMultiplexer::FillVideoMPEG2(CTsHeader& header, byte* tsPacket)
       }
       else
       { // full PES header is available.
-      	if ((start[6] & 0xC0)!=0x80   //Invalid marker bits
-          || (start[6] & 0x20)==0x20) //Payload scrambled
-        {
-          return;
-      	}
         CPcr pts;
         CPcr dts;
 
-//      m_VideoValidPES=true ;
+        m_VideoValidPES=true ;
         if (CPcr::DecodeFromPesHeader(start,0,pts,dts))
         {
           double diff;
@@ -1480,10 +1732,15 @@ void CDeMultiplexer::FillVideoMPEG2(CTsHeader& header, byte* tsPacket)
             diff=m_lastVideoPTS.ToClock()-pts.ToClock();
           else
             diff=pts.ToClock()-m_lastVideoPTS.ToClock();
-          if (diff>10.0)
+          if (diff>2.0)
           {
-            LogDebug("DeMultiplexer::FillVideo pts jump found : %f %f, %f", (float) diff, (float)pts.ToClock(), (float)m_lastVideoPTS.ToClock());
-            m_VideoValidPES=false;
+            //Large PTS jump - flush the world...
+            LogDebug("DeMultiplexer::FillVideoMPEG2 pts jump found : %f %f, %f", (float) diff, (float)pts.ToClock(), (float)m_lastVideoPTS.ToClock());
+            m_lastAudioPTS.IsValid=false;
+            m_lastVideoPTS.IsValid=false;
+            //Flushing is delegated to CDeMultiplexer::ThreadProc()
+            m_bFlushDelegated = true;
+            WakeThread();
           }
           else
           {
@@ -1560,7 +1817,7 @@ void CDeMultiplexer::FillVideoMPEG2(CTsHeader& header, byte* tsPacket)
           m_pl.AddTail(p2);
 //          LogDebug("DeMultiplexer::FillVideo Frame length : %d %x %x", size, *(DWORD*)start, *(DWORD*)next);
 
-          if (m_VideoValidPES)
+          if (m_mVideoValidPES)
           {
             CAutoPtr<Packet> p(new Packet());
             p = m_pl.RemoveHead();
@@ -1575,10 +1832,24 @@ void CDeMultiplexer::FillVideoMPEG2(CTsHeader& header, byte* tsPacket)
 
 //            LogDebug("frame len %d decoded PTS %f (framerate %f), %c(%d)", p->GetCount(), m_CurrentVideoPts.IsValid ? (float)m_CurrentVideoPts.ToClock() : 0.0f,(float)m_curFrameRate,frame_type,frame_count);
 
-            int lastVidResX=m_mpegPesParser->basicVideoInfo.width;
-            int lastVidResY=m_mpegPesParser->basicVideoInfo.height;
+//            int lastVidResX=m_mpegPesParser->basicVideoInfo.width;
+//            int lastVidResY=m_mpegPesParser->basicVideoInfo.height;
 
-            bool Gop = m_mpegPesParser->OnTsPacket(p->GetData(), p->GetCount(), true);
+            bool Gop = m_mpegPesParser->OnTsPacket(p->GetData(), p->GetCount(), true, m_mpegParserReset);
+            if (Gop)
+            {
+              m_mpegParserReset = true; //Reset next time around (so that it always searches for a full 'Gop' header)
+              if (!m_bFirstGopParsed)
+              {
+                m_bFirstGopParsed = true;
+                LogDebug("DeMultiplexer: First Gop after new PAT, %dx%d @ %d:%d, %.3fHz %s",m_mpegPesParser->basicVideoInfo.width,m_mpegPesParser->basicVideoInfo.height,m_mpegPesParser->basicVideoInfo.arx,m_mpegPesParser->basicVideoInfo.ary,(float)m_mpegPesParser->basicVideoInfo.fps, m_mpegPesParser->basicVideoInfo.isInterlaced ? "interlaced":"progressive");
+              }
+            }
+            else
+            {
+              m_mpegParserReset = false;
+            }
+
             if (Gop) m_LastValidFrameCount=-1;
 
             if ((Gop || m_bFirstGopFound) && m_filter.GetVideoPin()->IsConnected())
@@ -1633,71 +1904,119 @@ void CDeMultiplexer::FillVideoMPEG2(CTsHeader& header, byte* tsPacket)
               m_filter.GetMediaPosition(&MediaTime);
               if (m_filter.m_bStreamCompensated && m_bVideoAtEof && !m_filter.m_bRenderingClockTooFast)
               {
-                 float Delta = (float)((double)Ref.Millisecs()/1000.0)-(float)((double)(m_filter.Compensation.m_time+MediaTime)/10000000.0) ;
-                 if (Delta < m_MinVideoDelta)
-                 {
-                   m_MinVideoDelta=Delta;
-                   LogDebug("Demux : Video to render %03.3f Sec", Delta);
-                   if (Delta < 0.2)
-                   {
-                     LogDebug("Demux : Video to render too late = %03.3f Sec, rendering will be paused for a while", Delta) ;
-                     m_filter.m_bRenderingClockTooFast=true ;
-                     m_MinAudioDelta+=1.0 ;
-                     m_MinVideoDelta+=1.0 ;
-                   }
-                 }
+                float Delta = (float)((double)Ref.Millisecs()/1000.0)-(float)((double)(m_filter.Compensation.m_time+MediaTime)/10000000.0) ;
+                if (Delta < m_MinVideoDelta)
+                {
+                  m_MinVideoDelta=Delta;
+                  if (Delta < 0.2)
+                  {
+                    //_InterlockedIncrement(&m_VideoDataLowCount);              
+                    LogDebug("Demux : Video to render too late= %03.3f Sec", Delta) ;
+                    //  m_filter.m_bRenderingClockTooFast=true;
+                    m_MinAudioDelta+=1.0;
+                    m_MinVideoDelta+=1.0;                
+                  }
+                  else
+                  {
+                    LogDebug("Demux : Video to render %03.3f Sec", Delta);
+                  }
+                }
               }
               m_bVideoAtEof = false ;
 
-              // ownership is transfered to vector
-              m_vecVideoBuffers.push_back(pCurrentVideoBuffer);
+              { //Scoped for CAutoLock
+                CAutoLock lock (&m_sectionVideo);
+                if (m_vecVideoBuffers.size()<=MAX_VID_BUF_SIZE)
+                {
+                  if (m_bFirstGopFound)
+                  {
+                    // ownership is transfered to vector
+                    m_vecVideoBuffers.push_back(pCurrentVideoBuffer);
+                  }
+                  else
+                  {
+                    delete pCurrentVideoBuffer;
+                    pCurrentVideoBuffer = NULL;
+                    m_bSetVideoDiscontinuity = true;            
+                    //LogDebug("DeMultiplexer: Delete video buffer");
+                  }
+                }
+                else
+                {
+                  delete pCurrentVideoBuffer;
+                  pCurrentVideoBuffer = NULL;
+                  m_bSetVideoDiscontinuity = true;
+                  //Something is going wrong - abort play
+                  //LogDebug("DeMultiplexer: Video buffer overrun error - aborting");
+                  //m_filter.NotifyEvent(EC_ERRORABORT, 0x88780078, NULL); // forces player to abort..."No sound driver is available for use"   
+                  //SetEndOfFile(true);
+                  //m_bFlushDelegated = true;
+                  //WakeThread();            
+                }
+              }
+              
             }
             m_CurrentVideoPts.IsValid=false ;   
             
-            if (lastVidResX!=m_mpegPesParser->basicVideoInfo.width || lastVidResY!=m_mpegPesParser->basicVideoInfo.height)
+            if (Gop)
             {
-              LogDebug("DeMultiplexer: %x video format changed: res=%dx%d aspectRatio=%d:%d fps=%d isInterlaced=%d",header.Pid,m_mpegPesParser->basicVideoInfo.width,m_mpegPesParser->basicVideoInfo.height,m_mpegPesParser->basicVideoInfo.arx,m_mpegPesParser->basicVideoInfo.ary,m_mpegPesParser->basicVideoInfo.fps,m_mpegPesParser->basicVideoInfo.isInterlaced);
-              if (m_mpegParserTriggerFormatChange)
+              if (m_lastVidResX!=m_mpegPesParser->basicVideoInfo.width || m_lastVidResY!=m_mpegPesParser->basicVideoInfo.height
+                  || (m_mpegParserTriggerFormatChange && m_videoChanged && !IsAudioChanging()))
               {
-                LogDebug("DeMultiplexer: OnMediaFormatChange triggered by mpeg2Parser, aud %d, vid 1", m_audioChanged);
-                SetMediaChanging(true);
-                if (m_audioChanged)
-                  m_filter.OnMediaTypeChanged(VIDEO_CHANGE | AUDIO_CHANGE); //Video and audio
-                else
-                  m_filter.OnMediaTypeChanged(VIDEO_CHANGE); //Video only
-                m_mpegParserTriggerFormatChange=false;
+                LogDebug("DeMultiplexer: triggering OnVideoFormatChanged");
+                m_filter.OnVideoFormatChanged(m_mpegPesParser->basicVideoInfo.streamType,m_mpegPesParser->basicVideoInfo.width,m_mpegPesParser->basicVideoInfo.height,m_mpegPesParser->basicVideoInfo.arx,m_mpegPesParser->basicVideoInfo.ary,15000000,m_mpegPesParser->basicVideoInfo.isInterlaced);
+                m_filter.GetVideoPin()->SetAddPMT();
               }
-              LogDebug("DeMultiplexer: triggering OnVideoFormatChanged");
-              m_filter.OnVideoFormatChanged(m_mpegPesParser->basicVideoInfo.streamType,m_mpegPesParser->basicVideoInfo.width,m_mpegPesParser->basicVideoInfo.height,m_mpegPesParser->basicVideoInfo.arx,m_mpegPesParser->basicVideoInfo.ary,15000000,m_mpegPesParser->basicVideoInfo.isInterlaced);
-            }
-            else //video resolution is the unchanged, but there may be other format changes
-            {
-              if (m_mpegParserTriggerFormatChange && Gop)
+              
+              if ((m_lastVidResX!=m_mpegPesParser->basicVideoInfo.width || m_lastVidResY!=m_mpegPesParser->basicVideoInfo.height) && !m_filter.m_bDisableVidSizeRebuildMPEG2)
               {
-                if (m_audioChanged || m_videoChanged)
+                LogDebug("DeMultiplexer: %x video format changed, %dx%d @ %d:%d, %.3fHz %s",header.Pid,m_mpegPesParser->basicVideoInfo.width,m_mpegPesParser->basicVideoInfo.height,m_mpegPesParser->basicVideoInfo.arx,m_mpegPesParser->basicVideoInfo.ary,(float)m_mpegPesParser->basicVideoInfo.fps,m_mpegPesParser->basicVideoInfo.isInterlaced ? "interlaced":"progressive");
+                if (m_mpegParserTriggerFormatChange && !IsAudioChanging())
                 {
+                  LogDebug("DeMultiplexer: OnMediaFormatChange triggered by MPEG2 parser, aud %d, vid 1", m_audioChanged);
                   SetMediaChanging(true);
-                  LogDebug("DeMultiplexer: Got GOP after channel change detected, trigger format change, aud %d, vid %d", m_audioChanged, m_videoChanged);
-                  if (m_audioChanged && m_videoChanged)
-                    m_filter.OnMediaTypeChanged(VIDEO_CHANGE | AUDIO_CHANGE);
-                  else if (m_audioChanged)
-                    m_filter.OnMediaTypeChanged(AUDIO_CHANGE);
+                  if (m_audioChanged)
+                    m_filter.OnMediaTypeChanged(VIDEO_CHANGE | AUDIO_CHANGE); //Video and audio
                   else
-                    m_filter.OnMediaTypeChanged(VIDEO_CHANGE);
+                    m_filter.OnMediaTypeChanged(VIDEO_CHANGE); //Video only
+                  m_mpegParserTriggerFormatChange=false;
                 }
-                else
+                else if (m_mpegParserTriggerFormatChange)
                 {
-                  SetMediaChanging(false);
+                  m_videoChanged = true;
                 }
-                m_mpegParserTriggerFormatChange=false;
               }
+              else //video resolution is unchanged, but there may be other format changes
+              {
+                if (m_mpegParserTriggerFormatChange && !IsAudioChanging())
+                {
+                  LogDebug("DeMultiplexer: Got GOP after channel change detected, format change, aud %d, vid %d", m_audioChanged, m_videoChanged);
+                  if (m_audioChanged || m_videoChanged)
+                  {
+                    SetMediaChanging(true);
+                    if (m_audioChanged && m_videoChanged)
+                      m_filter.OnMediaTypeChanged(VIDEO_CHANGE | AUDIO_CHANGE);
+                    else if (m_audioChanged)
+                      m_filter.OnMediaTypeChanged(AUDIO_CHANGE);
+                    else
+                      m_filter.OnMediaTypeChanged(VIDEO_CHANGE);
+                  }
+                  else
+                  {
+                    SetMediaChanging(false);
+                  }
+                  m_mpegParserTriggerFormatChange=false;
+                }
+              }
+              m_lastVidResX=m_mpegPesParser->basicVideoInfo.width;
+              m_lastVidResY=m_mpegPesParser->basicVideoInfo.height;
             }
           }
           else
           {
-            m_bSetVideoDiscontinuity = true;
+            m_bSetVideoDiscontinuity = !m_mVideoValidPES;
           }
-          m_VideoValidPES=true ;                                    // We've just completed a frame, set flag until problem clears it 
+          //m_VideoValidPES=true ;                                    // We've just completed a frame, set flag until problem clears it 
           m_pl.RemoveAll() ;                                        
         }
         else                                                        // sequence_header_code
@@ -1723,6 +2042,8 @@ void CDeMultiplexer::FillVideoMPEG2(CTsHeader& header, byte* tsPacket)
 /// if so store it in the subtitle buffers
 void CDeMultiplexer::FillSubtitle(CTsHeader& header, byte* tsPacket)
 {
+  CAutoLock flock (&m_sectionFlushSubtitle);
+
   if (header.TScrambling) return;
   if (m_filter.GetSubtitlePin()->IsConnected()==false) return;
   if (m_iSubtitleStream<0 || m_iSubtitleStream>=m_subtitleStreams.size()) return;
@@ -1755,7 +2076,7 @@ void CDeMultiplexer::FillSubtitle(CTsHeader& header, byte* tsPacket)
       m_subtitlePcr = m_streamPcr;
       //LogDebug("FillSubtitle: PayloadUnitStart -- %lld", m_streamPcr.PcrReferenceBase );
     }
-    if (m_vecSubtitleBuffers.size()>MAX_BUF_SIZE)
+    if (m_vecSubtitleBuffers.size()>MAX_SUB_BUF_SIZE)
     {
       ivecBuffers it = m_vecSubtitleBuffers.begin() ;
       CBuffer* subtitleBuffer=*it;
@@ -1790,6 +2111,66 @@ void CDeMultiplexer::FillTeletext(CTsHeader& header, byte* tsPacket)
   }
 }
 
+int CDeMultiplexer::GetAudioBufferCnt()
+{
+  return m_vecAudioBuffers.size();
+}
+
+int CDeMultiplexer::GetVideoBufferCnt(double* frameTime)
+{
+  double fps = m_mpegPesParser->basicVideoInfo.fps;
+  if ((fps > 22.0) && (fps < 130.0))
+  {
+    *frameTime = (1000.0/fps);
+  }
+  else
+  {
+    *frameTime = 10.0;
+  }
+  return m_vecVideoBuffers.size();
+}
+
+//Decide if we need to prefetch more data
+bool CDeMultiplexer::CheckPrefetchState(bool isVid, bool isAud)
+{  
+  //Check for near-overflow conditions first
+  if (m_filter.GetAudioPin()->IsConnected() && (m_vecAudioBuffers.size() > (MAX_AUD_BUF_SIZE - 10)))
+  {
+    return false;
+  }
+  if (m_filter.GetVideoPin()->IsConnected() && (m_vecVideoBuffers.size() > (MAX_VID_BUF_SIZE - 10)))
+  {
+    return false;
+  }
+
+  //Start-of-play situation
+  if (!m_bAudioVideoReady)
+  {
+    return true;
+  }
+
+  //Normal play
+  if (isAud || isVid)
+  {
+    if (m_filter.GetAudioPin()->IsConnected() && (m_vecAudioBuffers.size() < 3))
+    {
+      return true;
+    }
+    if (m_filter.GetVideoPin()->IsConnected() && (m_vecVideoBuffers.size() < 12))
+    {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+void CDeMultiplexer::GetBufferCounts(int* ACnt, int* VCnt)
+{
+  *ACnt = m_vecAudioBuffers.size();
+  *VCnt = m_vecVideoBuffers.size();
+}
+
 int CDeMultiplexer::GetVideoBufferPts(CRefTime& First, CRefTime& Last)
 {
   First = m_FirstVideoSample;
@@ -1812,21 +2193,66 @@ void CDeMultiplexer::OnNewChannel(CChannelInfo& info)
 {
   //CAutoLock lock (&m_section);
   CPidTable pids=info.PidTable;
+  
+  //LogDebug("OnNewChannel callback, pat version:%d->%d",m_iPatVersion, info.PatVersion);
 
-  if (info.PatVersion != m_iPatVersion)
+  if ((info.PatVersion != m_iPatVersion) || m_bWaitGoodPat)
   {
-    LogDebug("OnNewChannel pat version:%d->%d",m_iPatVersion, info.PatVersion);
-    if (m_filter.m_bLiveTv && ((m_ReqPatVersion & 0x0F) != (info.PatVersion & 0x0F)) && (m_iPatVersion!=-1))
+    if (!m_bWaitGoodPat)
     {
-      LogDebug("Unexpected LiveTV PAT change due to provider, update m_ReqPatVersion to new PAT version : %d",m_ReqPatVersion);
-      // Unexpected LiveTV PAT change due to provider.
-      m_ReqPatVersion = info.PatVersion ;
+      LogDebug("OnNewChannel: PAT change detected: %d->%d",m_iPatVersion, info.PatVersion);
     }
+    
+    if (m_filter.IsTimeShifting() && (m_iPatVersion!=-1)) //TimeShifting TV channel change only
+    {
+      DWORD timeTemp = GetTickCount();
+      int PatReqDiff = (info.PatVersion & 0x0F) - (m_ReqPatVersion & 0x0F);
+      int PatIDiff = (info.PatVersion & 0x0F) - (m_iPatVersion & 0x0F);
+      
+      if (PatIDiff < 0) //Rollover
+      {
+        PatIDiff += 16;
+      }
+      
+      if ((PatIDiff > 7) && (PatReqDiff != 0)) //PAT version change too big/negative and it's not the requested PAT)
+      {      
+        //Skipped back in timeshift file or possible RTSP seek accuracy problem ?
+        if (!m_bWaitGoodPat)
+        {
+          m_bWaitGoodPat = true;
+          m_WaitGoodPatTmo = timeTemp + ((m_filter.IsRTSP() && m_filter.IsLiveTV()) ? 2500 : 1000);   // Set timeout to 1 sec (2.5 sec for live RTSP)
+          LogDebug("OnNewChannel: wait for good PAT, IDiff:%d, ReqDiff:%d ", PatIDiff, PatReqDiff);
+          return; // wait a while for correct PAT version to arrive
+        }
+        else if (timeTemp < m_WaitGoodPatTmo)
+        {
+          return; // wait for correct PAT version
+        }
+        LogDebug("OnNewChannel: 'Wait for good PAT' timeout, allow PAT update: %d->%d",m_iPatVersion, info.PatVersion);
+      }
+      
+      m_ReqPatVersion = info.PatVersion ;
+      LogDebug("OnNewChannel: found good PAT: %d", info.PatVersion);
+    }
+    
+    m_bWaitGoodPat = false;
+    
+    if ((info.PatVersion == m_iPatVersion) && (m_pids == pids)) 
+    {
+      //Fix for RTSP 'infinite loop' channel change with multiple audio streams problem 
+      LogDebug("OnNewChannel: PAT change already processed: %d", info.PatVersion);
+      return;
+    }
+
     m_iPatVersion=info.PatVersion;
     m_bSetAudioDiscontinuity=true;
     m_bSetVideoDiscontinuity=true;
-    Flush();
-//    m_filter.m_bOnZap = true ;
+    //Flushing is delegated to CDeMultiplexer::ThreadProc()
+    if (!m_bFlushDelgNow && !m_bFlushRunning) //Flush already pending
+    {
+      m_bFlushDelgNow = true;
+      WakeThread(); 
+    }
   }
   else
   {
@@ -1912,12 +2338,15 @@ void CDeMultiplexer::OnNewChannel(CChannelInfo& info)
     {
       m_videoChanged=true;
     }
+    //Temp Hack alert !!!
+    //m_videoChanged=true;
+    //LogDebug("OnNewChannel: Force video graph rebuild (temporary workaround)");    
   }
   #else
   //did the video format change?
   if (m_pids.videoPids.size() > 0 && oldVideoServiceType != m_pids.videoPids[0].VideoServiceType)
   {
-    //yes, is the audio pin connected?
+    //yes, is the video pin connected?
     if (m_filter.GetVideoPin()->IsConnected())
     {
       changed=true;
@@ -1925,7 +2354,10 @@ void CDeMultiplexer::OnNewChannel(CChannelInfo& info)
     }
   }
   #endif
-  
+
+  //Lock the audio stream variables
+  CAutoLock lock (&m_sectionSetAudioStream);
+    
   m_iAudioStream = 0;
 
   LogDebug ("Setting initial audio index to : %i", m_iAudioStream);
@@ -1957,8 +2389,20 @@ void CDeMultiplexer::OnNewChannel(CChannelInfo& info)
     {
       LogDebug("DeMultiplexer: We have a video stream, so we let the mpegParser check/trigger format changes");
       m_receivedPackets=0;
-      m_mpegParserTriggerFormatChange=true;
       SetMediaChanging(true);
+      if (m_audioStreams.size() == 1)
+      {
+        if ((m_AudioStreamType == SERVICE_TYPE_AUDIO_UNKNOWN) || (m_AudioStreamType != newAudioStreamType))
+        {
+          m_AudioStreamType = newAudioStreamType ;
+          m_audioChanged=true;
+          LogDebug("DeMultiplexer: Audio media types changed");
+        }
+      }
+      m_mpegParserTriggerFormatChange=true;
+      m_mpegParserReset = true;
+      m_bFirstGopParsed = false;
+      m_mpegPesParser->basicVideoInfo.isValid = false; 
     }
     else
     {
@@ -1989,14 +2433,14 @@ void CDeMultiplexer::OnNewChannel(CChannelInfo& info)
   //to receive an audio track change.
   if (m_audioStreams.size() >= 1)
   {
-    LogDebug("OnRequestAudioChange()");
+    LogDebug("OnNewChannel: OnRequestAudioChange()");
     SetAudioChanging(true);
     m_filter.OnRequestAudioChange();
   }
   else
     m_AudioStreamType = newAudioStreamType;
 
-  LogDebug("New Audio %d", m_AudioStreamType);
+  LogDebug("OnNewChannel: New Audio %d", m_AudioStreamType);
 
   if( pSubUpdateCallback != NULL)
   {
@@ -2010,51 +2454,13 @@ void CDeMultiplexer::OnNewChannel(CChannelInfo& info)
   }
 }
 
-///Returns whether the demuxer is allowed to block in GetAudio() or not
-bool CDeMultiplexer::HoldAudio()
-{
-  return m_bHoldAudio;
-}
-
-///Sets whether the demuxer may block in GetAudio() or not
-void CDeMultiplexer::SetHoldAudio(bool onOff)
-{
-  LogDebug("demux:set hold audio:%d", onOff);
-  m_bHoldAudio=onOff;
-}
-
-///Returns whether the demuxer is allowed to block in GetVideo() or not
-bool CDeMultiplexer::HoldVideo()
-{
-  return m_bHoldVideo;
-}
-
-///Sets whether the demuxer may block in GetVideo() or not
-void CDeMultiplexer::SetHoldVideo(bool onOff)
-{
-  LogDebug("demux:set hold video:%d", onOff);
-  m_bHoldVideo=onOff;
-}
-
-///Returns whether the demuxer is allowed to block in GetSubtitle() or not
-bool CDeMultiplexer::HoldSubtitle()
-{
-  return m_bHoldSubtitle;
-}
-
-///Sets whether the demuxer may block in GetSubtitle() or not
-void CDeMultiplexer::SetHoldSubtitle(bool onOff)
-{
-  LogDebug("demux:set hold subtitle:%d", onOff);
-  m_bHoldSubtitle=onOff;
-}
 
 void CDeMultiplexer::SetMediaChanging(bool onOff)
 {
   CAutoLock lock (&m_sectionMediaChanging);
   LogDebug("demux:Wait for media format change:%d", onOff);
   m_bWaitForMediaChange=onOff;
-  m_tWaitForMediaChange=GetTickCount() ;
+  m_tWaitForMediaChange=GET_TIME_NOW() ;
 }
 
 bool CDeMultiplexer::IsMediaChanging(void)
@@ -2063,7 +2469,7 @@ bool CDeMultiplexer::IsMediaChanging(void)
   if (!m_bWaitForMediaChange) return false ;
   else
   {
-    if (GetTickCount()-m_tWaitForMediaChange > 5000)
+    if (GET_TIME_NOW()-m_tWaitForMediaChange > 5000)
     {
       m_bWaitForMediaChange=false;
       LogDebug("demux: Alert: Wait for Media change cancelled on 5 secs timeout");
@@ -2078,7 +2484,7 @@ void CDeMultiplexer::SetAudioChanging(bool onOff)
   CAutoLock lock (&m_sectionAudioChanging);
   LogDebug("demux:Wait for Audio stream selection :%d", onOff);
   m_bWaitForAudioSelection=onOff;
-  m_tWaitForAudioSelection=GetTickCount();
+  m_tWaitForAudioSelection=GET_TIME_NOW();
 }
 
 bool CDeMultiplexer::IsAudioChanging(void)
@@ -2087,7 +2493,7 @@ bool CDeMultiplexer::IsAudioChanging(void)
   if (!m_bWaitForAudioSelection) return false;
   else
   {
-    if (GetTickCount()-m_tWaitForAudioSelection > 5000)
+    if (GET_TIME_NOW()-m_tWaitForAudioSelection > 5000)
     {
       m_bWaitForAudioSelection=false;
       LogDebug("demux: Alert: Wait for Audio stream selection cancelled on 5 secs timeout");
@@ -2102,7 +2508,14 @@ void CDeMultiplexer::RequestNewPat(void)
   m_ReqPatVersion++;
   m_ReqPatVersion &= 0x0F;
   LogDebug("Request new PAT = %d", m_ReqPatVersion);
-  m_WaitNewPatTmo=GetTickCount()+10000;
+  m_WaitNewPatTmo=GET_TIME_NOW()+10000;
+  
+  if (!m_bFlushDelgNow && !m_bFlushRunning && (m_filter.State() == State_Paused)) //Flush already pending
+  {
+    //Flush buffers to speed up zapping
+    m_bFlushDelgNow = true;
+    WakeThread(); 
+  }
 }
 
 void CDeMultiplexer::ClearRequestNewPat(void)
@@ -2141,5 +2554,60 @@ void CDeMultiplexer::CallTeletextEventCallback(int eventCode,unsigned long int e
   {
     (*pTeletextEventCallback)(eventCode,eventValue);
   }
+}
+
+
+//======================================================================
+
+//**************************************************************************************************************
+/// This method is running in its own thread
+//  Flushing after large video/audio PTS jump and PES '0-0-1 fail' errors 
+//  are delegated to this thread.
+void CDeMultiplexer::ThreadProc()
+{
+  LogDebug("CDeMultiplexer::ThreadProc start(), threadID:0x%x", GetCurrentThreadId());
+
+  DWORD timeNow = GET_TIME_NOW();
+  DWORD  lastFlushTime = timeNow;
+  DWORD  lastFileReadTime = timeNow;
+
+  ::SetThreadPriority(GetCurrentThread(),THREAD_PRIORITY_NORMAL);
+  do
+  {
+
+    timeNow = GET_TIME_NOW();
+    
+    //Flush delegated to this thread
+    if (m_bFlushDelegated || m_bFlushDelgNow)
+    {
+      if (!m_bFlushDelgNow && ((timeNow - 500) < lastFlushTime)) 
+      { 
+        // Too early for next flush
+        m_bFlushDelegated = false;
+      }
+      else
+      {
+        lastFlushTime = timeNow;
+  
+        LogDebug("CDeMultiplexer::ThreadProc - Flush");     
+        //Flush the internal data
+        Flush(true);
+        m_bFlushDelgNow = false;
+      }
+    }
+
+    //File read prefetch
+    if (m_bReadAheadFromFile && (timeNow > (lastFileReadTime + (m_filter.IsUNCfile() ? 10 : 5))) )
+    {
+      lastFileReadTime = timeNow; 
+      ReadAheadFromFile();
+      m_bReadAheadFromFile = false;
+    }
+     
+     
+    Sleep(1);
+  }
+  while (!ThreadIsStopping(11)) ;
+  LogDebug("CDeMultiplexer::ThreadProc stopped()");
 }
 

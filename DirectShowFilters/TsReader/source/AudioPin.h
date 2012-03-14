@@ -23,6 +23,8 @@
 #include "tsreader.h"
 #include "mediaseeking.h"
 
+#define NB_ASDSIZE 8
+
 class CAudioPin : public CSourceStream, public CSourceSeeking
 {
 public:
@@ -38,6 +40,7 @@ public:
   HRESULT CheckConnect(IPin *pReceivePin);
   HRESULT FillBuffer(IMediaSample *pSample);
   HRESULT BreakConnect();
+  HRESULT DoBufferProcessingLoop(void);
 
   // CSourceSeeking
   HRESULT ChangeStart();
@@ -52,11 +55,15 @@ public:
   HRESULT OnThreadStartPlay();
   void SetStart(CRefTime rtStartTime);
   bool IsConnected();
+  bool IsInFillBuffer();
   void SetDiscontinuity(bool onOff);
-  bool m_EnableSlowMotionOnZapping ;
+  LONGLONG m_sampleDuration;
+  //DWORD    m_sampleSleepTime;
+  DWORD    m_FillBuffSleepTime;
 
 protected:
-  void      UpdateFromSeek();
+  HRESULT   UpdateFromSeek();
+  void      CreateEmptySample(IMediaSample *pSample);
   
   CTsReaderFilter * const m_pTsReaderFilter;
   bool      m_bConnected;
@@ -64,6 +71,22 @@ protected:
   CCritSec* m_section;
   bool      m_bPresentSample;
   bool      m_bSubtitleCompensationSet;
+  bool      m_bInFillBuffer;
+  
+  void     ClearAverageSampleDur();
+  LONGLONG GetAverageSampleDur (LONGLONG timeStamp);
+    
+  LONGLONG  m_pllASD [NB_ASDSIZE];   // timestamp buffer for average Audio sample duration calculation
+  LONGLONG  m_llLastASDts;
+  int       m_nNextASD;
+	LONGLONG  m_fASDMean;
+	LONGLONG  m_llASDSumAvg;	
+  LONGLONG  m_llLastComp;
+  
+  DWORD m_LastFillBuffTime;
+  int   m_sampleCount;
+  bool  m_bPinNoAddPMT;
+  
 };
 
 #endif
