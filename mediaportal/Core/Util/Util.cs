@@ -638,6 +638,12 @@ namespace MediaPortal.Util
 
       if (!item.IsFolder || (item.IsFolder && VirtualDirectory.IsImageFile(Path.GetExtension(item.Path).ToLower())))
       {
+        if (item.Path.StartsWith("\\\\"))
+        {
+          Log.Debug("SetThumbnails: Path is network path skipping");
+          return;
+        }
+
         if (!IsVideo(item.Path))
         {
           Log.Debug("SetThumbnails: nothing to do.");
