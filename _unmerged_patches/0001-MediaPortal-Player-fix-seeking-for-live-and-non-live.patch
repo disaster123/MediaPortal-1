@@ -1,0 +1,27 @@
+From 7dc5bfb594f9bbfb7526b6689ec126e9ccfc19ad Mon Sep 17 00:00:00 2001
+From: Stefan Priebe <stefan@prie.be>
+Date: Mon, 7 Nov 2011 20:02:59 +0100
+Subject: [PATCH] MediaPortal / Player: fix seeking for live and non live TV
+
+---
+ mediaportal/Core/Player/g_player.cs |    4 ++--
+ 1 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/mediaportal/Core/Player/g_player.cs b/mediaportal/Core/Player/g_player.cs
+index 5b1636e..53501cf 100644
+--- a/mediaportal/Core/Player/g_player.cs
++++ b/mediaportal/Core/Player/g_player.cs
+@@ -1782,8 +1782,8 @@ namespace MediaPortal.Player
+         {
+           double dTime = (int)_currentStep + _player.CurrentPosition;
+           Log.Debug("g_Player.StepNow() - Preparing to seek to {0}:{1}", _player.CurrentPosition, _player.Duration);
+-          if (!IsTV && (dTime > _player.Duration)) dTime = _player.Duration - 5;
+-          if (IsTV && (dTime + 3 > _player.Duration)) dTime = _player.Duration - 3; // Margin for live Tv
++          if (!IsTV && (dTime + 5 > _player.Duration)) dTime = _player.Duration - 5;
++          if (IsTV && (dTime + 5 > _player.Duration)) dTime = _player.Duration - 5; // Margin for live Tv
+           if (dTime < 0) dTime = 0d;
+ 
+           Log.Debug("g_Player.StepNow() - Preparing to seek to {0}:{1}:{2} isTv {3}", (int)(dTime / 3600d),
+-- 
+1.7.8.msysgit.0
+

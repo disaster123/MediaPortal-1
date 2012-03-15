@@ -1,0 +1,25 @@
+From e2dc9034779ff929e0473f6e8ce76350bead0f5a Mon Sep 17 00:00:00 2001
+From: Stefan Priebe <stefan@prie.be>
+Date: Fri, 18 Nov 2011 21:09:25 +0100
+Subject: [PATCH] fixed programinfo
+
+---
+ .../TVLibrary/TvPlugin/TvPlugin/TVProgramInfo.cs   |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/TvEngine3/TVLibrary/TvPlugin/TvPlugin/TVProgramInfo.cs b/TvEngine3/TVLibrary/TvPlugin/TvPlugin/TVProgramInfo.cs
+index 6cd5b1a..c0aebb0 100644
+--- a/TvEngine3/TVLibrary/TvPlugin/TvPlugin/TVProgramInfo.cs
++++ b/TvEngine3/TVLibrary/TvPlugin/TvPlugin/TVProgramInfo.cs
+@@ -1291,7 +1291,7 @@ namespace TvPlugin
+           }
+           dlg.ConflictingEpisodes = (scheduleType != (int)ScheduleRecordingType.Once);
+           dlg.ConflictingRecording = false;
+-          dlg.DoModal(GetID);
++          dlg.DoModal(dialogId);
+           switch (dlg.SelectedLabel)
+           {
+             case 0: // Skip new Recording
+-- 
+1.7.8.msysgit.0
+

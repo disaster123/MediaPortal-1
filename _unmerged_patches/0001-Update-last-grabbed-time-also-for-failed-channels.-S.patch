@@ -1,0 +1,55 @@
+From feb7a10258195fdbefb08f51a51a4d156b2ff572 Mon Sep 17 00:00:00 2001
+From: Stefan Priebe <stefan@prie.be>
+Date: Sun, 6 Nov 2011 21:30:05 +0100
+Subject: [PATCH] Update last grabbed time also for failed channels. So
+ TvServer isn't looping through them all the time.
+
+---
+ TvEngine3/TVLibrary/TvService/Epg/EpgCard.cs    |    2 ++
+ TvEngine3/TVLibrary/TvService/Epg/EpgGrabber.cs |   13 ++++++++-----
+ 2 files changed, 10 insertions(+), 5 deletions(-)
+
+diff --git a/TvEngine3/TVLibrary/TvService/Epg/EpgCard.cs b/TvEngine3/TVLibrary/TvService/Epg/EpgCard.cs
+index 51b266f..09bb169 100644
+--- a/TvEngine3/TVLibrary/TvService/Epg/EpgCard.cs
++++ b/TvEngine3/TVLibrary/TvService/Epg/EpgCard.cs
+@@ -257,6 +257,8 @@ namespace TvService
+       Log.Epg("EpgCard: unable to grab epg transponder: {0} ch: {1} started on {2}",
+               TransponderList.Instance.CurrentIndex, channel.DisplayName, _user.CardId);
+       Log.Epg("{0}", _currentTransponder.Tuning.ToString());
++      _currentTransponder.CurrentChannel.LastGrabTime = DateTime.Now;
++      _currentTransponder.CurrentChannel.Persist();
+     }
+ 
+     /// <summary>
+diff --git a/TvEngine3/TVLibrary/TvService/Epg/EpgGrabber.cs b/TvEngine3/TVLibrary/TvService/Epg/EpgGrabber.cs
+index 9a5f393..7bd8a0d 100644
+--- a/TvEngine3/TVLibrary/TvService/Epg/EpgGrabber.cs
++++ b/TvEngine3/TVLibrary/TvService/Epg/EpgGrabber.cs
+@@ -290,15 +290,18 @@ namespace TvService
+           TimeSpan ts = DateTime.Now - TransponderList.Instance.CurrentTransponder.CurrentChannel.LastGrabTime;
+           if (ts.TotalMinutes < _epgReGrabAfter)
+           {
+-            //Log.Epg("Skip card:#{0} transponder #{1}/{2} channel: {3} - Less than regrab time",
+-            //         epgCard.Card.IdCard, TransponderList.Instance.CurrentIndex + 1, TransponderList.Instance.Count, ch.DisplayName);
+-            continue; // less then 2 hrs ago
++            //Log.Epg("Skip card:#{0} transponder #{1}/{2} channel: {3} - Less than regrab time. last grabbed: {4} regrab: {5}",
++            //         epgCard.Card.IdCard, TransponderList.Instance.CurrentIndex + 1, TransponderList.Instance.Count,
++            //         ch.DisplayName, TransponderList.Instance.CurrentTransponder.CurrentChannel.LastGrabTime.ToString(),
++            //         _epgReGrabAfter);
++            continue;
+           }
+           if (epgCard.Card.canTuneTvChannel(ch.IdChannel))
+           {
+-            Log.Epg("Grab for card:#{0} transponder #{1}/{2} channel: {3}",
++            Log.Epg("Grab for card:#{0} transponder #{1}/{2} channel: {3} last grabbed: {4} regrab: {5}",
+                     epgCard.Card.IdCard, TransponderList.Instance.CurrentIndex + 1, TransponderList.Instance.Count,
+-                    ch.DisplayName);
++                    ch.DisplayName, TransponderList.Instance.CurrentTransponder.CurrentChannel.LastGrabTime.ToString(),
++                    _epgReGrabAfter);
+             //start grabbing
+             epgCard.GrabEpg();
+             return;
+-- 
+1.7.8.msysgit.0
+

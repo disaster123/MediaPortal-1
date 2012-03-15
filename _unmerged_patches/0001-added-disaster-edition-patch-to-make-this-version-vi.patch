@@ -1,0 +1,485 @@
+From 8515d3595229d79a809895ade248e465f3638a1f Mon Sep 17 00:00:00 2001
+From: Stefan Priebe <stefan@prie.be>
+Date: Mon, 7 Nov 2011 19:45:42 +0100
+Subject: [PATCH] - added disaster edition patch - to make this version
+ visible in every log and screen to MP Devs (to say: hey
+ your don't get support for this freaky version)
+
+---
+ .../include/MediaPortalCurrentVersion.nsh          |    2 +-
+ TvEngine3/TVLibrary/Setup/setup.nsi                |    4 ++--
+ .../SetupControls/SettingsForm.Designer.cs         |   14 ++++++++++++++
+ TvEngine3/TVLibrary/SetupControls/SettingsForm.cs  |    6 ++++++
+ .../TVLibrary/SetupTv/Sections/Project.designer.cs |   13 +++++++++++++
+ TvEngine3/TVLibrary/SetupTv/Startup.cs             |    2 +-
+ TvEngine3/TVLibrary/TvService/Service1.cs          |    2 +-
+ mediaportal/Configuration/ConfigSplashScreen.cs    |   15 +++++++++++++++
+ .../Configuration/Sections/Project.designer.cs     |   15 ++++++++++++++-
+ mediaportal/Configuration/SettingsForm.Designer.cs |   14 ++++++++++++++
+ mediaportal/Configuration/SettingsForm.cs          |    8 +++++++-
+ mediaportal/Configuration/Startup.cs               |    2 +-
+ .../FullScreenSplashScreen.cs                      |    1 +
+ mediaportal/MediaPortal.Application/MediaPortal.cs |    2 +-
+ .../MediaPortal.Application/SplashScreen.cs        |   16 ++++++++++++++++
+ mediaportal/Setup/setup.nsi                        |    4 ++--
+ 16 files changed, 109 insertions(+), 11 deletions(-)
+
+diff --git a/Tools/InstallationScripts/include/MediaPortalCurrentVersion.nsh b/Tools/InstallationScripts/include/MediaPortalCurrentVersion.nsh
+index d2f7a85..737093b 100644
+--- a/Tools/InstallationScripts/include/MediaPortalCurrentVersion.nsh
++++ b/Tools/InstallationScripts/include/MediaPortalCurrentVersion.nsh
+@@ -77,4 +77,4 @@
+ !endif
+ 
+ 
+-!define VERSION "${VER_MAJOR}.${VER_MINOR}.${VER_REVISION}${SPC}${VER_TYPE}${VER_SVN}"
++!define VERSION "Disaster Edition ${VER_MAJOR}.${VER_MINOR}.${VER_REVISION}${SPC}${VER_TYPE}${VER_SVN}"
+diff --git a/TvEngine3/TVLibrary/Setup/setup.nsi b/TvEngine3/TVLibrary/Setup/setup.nsi
+index c76af34..ed07ec0 100644
+--- a/TvEngine3/TVLibrary/Setup/setup.nsi
++++ b/TvEngine3/TVLibrary/Setup/setup.nsi
+@@ -62,7 +62,7 @@
+ # DEFINES
+ #---------------------------------------------------------------------------
+ !define PRODUCT_NAME          "MediaPortal TV Server / Client"
+-!define PRODUCT_PUBLISHER     "Team MediaPortal"
++!define PRODUCT_PUBLISHER     "Team MediaPortal and Disaster123"
+ !define PRODUCT_WEB_SITE      "www.team-mediaportal.com"
+ 
+ !define REG_UNINSTALL         "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\MediaPortal TV Server"
+@@ -207,7 +207,7 @@ BrandingText  "${PRODUCT_NAME} ${VERSION} by ${PRODUCT_PUBLISHER}"
+ !if ${VER_BUILD} == 0       # it's an official release
+   OutFile "${git_OUT}\package-tvengine.exe"
+ !else                       # it's a git release
+-  OutFile "${git_OUT}\Setup-TvEngine-git-${VER_MAJOR}.${VER_MINOR}.${VER_REVISION}.${VER_BUILD}.exe"
++  OutFile "${git_OUT}\Setup-TvEngine-Disaster123-git-${VER_MAJOR}.${VER_MINOR}.${VER_REVISION}.${VER_BUILD}.exe"
+ !endif
+ InstallDir ""
+ CRCCheck on
+diff --git a/TvEngine3/TVLibrary/SetupControls/SettingsForm.Designer.cs b/TvEngine3/TVLibrary/SetupControls/SettingsForm.Designer.cs
+index 89999fe..c662830 100644
+--- a/TvEngine3/TVLibrary/SetupControls/SettingsForm.Designer.cs
++++ b/TvEngine3/TVLibrary/SetupControls/SettingsForm.Designer.cs
+@@ -38,6 +38,7 @@
+       this.toolStrip1 = new System.Windows.Forms.ToolStrip();
+       this.helpToolStripSplitButton = new System.Windows.Forms.ToolStripButton();
+       this.configToolStripSplitButton = new System.Windows.Forms.ToolStripButton();
++	  this.linkLabelDisaster = new System.Windows.Forms.LinkLabel();
+       this.toolStrip1.SuspendLayout();
+       this.SuspendLayout();
+       // 
+@@ -176,6 +177,17 @@
+       this.configToolStripSplitButton.Text = "Open Log directory";
+       this.configToolStripSplitButton.Click += new System.EventHandler(this.configToolStripSplitButton_ButtonClick);
+       // 
++      // linkLabelDisaster
++      // 
++      this.linkLabelDisaster.AutoSize = true;
++      this.linkLabelDisaster.Location = new System.Drawing.Point(142, 511);
++      this.linkLabelDisaster.Name = "linkLabelDisaster";
++      this.linkLabelDisaster.Size = new System.Drawing.Size(80, 13);
++      this.linkLabelDisaster.TabIndex = 14;
++      this.linkLabelDisaster.TabStop = true;
++      this.linkLabelDisaster.Text = "Disaster Edition";
++      this.linkLabelDisaster.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.linkLabelDisaster_LinkClicked);
++      // 
+       // SettingsForm
+       // 
+       this.AcceptButton = this.okButton;
+@@ -183,6 +195,7 @@
+       this.AutoScroll = true;
+       this.CancelButton = this.cancelButton;
+       this.ClientSize = new System.Drawing.Size(716, 537);
++      this.Controls.Add(this.linkLabelDisaster);
+       this.Controls.Add(this.toolStrip1);
+       this.Controls.Add(this.linkLabel1);
+       this.Controls.Add(this.applyButton);
+@@ -214,6 +227,7 @@
+     protected System.Windows.Forms.Panel holderPanel;
+     private MediaPortal.UserInterface.Controls.MPGradientLabel headerLabel;
+     private System.Windows.Forms.LinkLabel linkLabel1;
++	private System.Windows.Forms.LinkLabel linkLabelDisaster;
+     protected System.Windows.Forms.ToolStrip toolStrip1;
+     protected System.Windows.Forms.ToolStripButton helpToolStripSplitButton;
+     protected System.Windows.Forms.ToolStripButton configToolStripSplitButton;
+diff --git a/TvEngine3/TVLibrary/SetupControls/SettingsForm.cs b/TvEngine3/TVLibrary/SetupControls/SettingsForm.cs
+index f215c30..439c400 100644
+--- a/TvEngine3/TVLibrary/SetupControls/SettingsForm.cs
++++ b/TvEngine3/TVLibrary/SetupControls/SettingsForm.cs
+@@ -43,6 +43,7 @@ namespace SetupControls
+       InitializeComponent();
+ 
+       linkLabel1.Links.Add(0, linkLabel1.Text.Length, "http://www.team-mediaportal.com/donate.html");
++      linkLabelDisaster.Links.Add(0, linkLabelDisaster.Text.Length, "http://forum.team-mediaportal.com/mediaportal-plugins-47/new-mp-1-0-features-fixes-network-share-monitoring-new-schedule-option-48181/");
+     }
+ 
+     public virtual void AddSection(SectionSettings section)
+@@ -130,6 +131,11 @@ namespace SetupControls
+ 
+     private void holderPanel_Paint(object sender, PaintEventArgs e) {}
+ 
++    private void linkLabelDisaster_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
++    {
++       System.Diagnostics.Process.Start((string)e.Link.LinkData);
++    }
++
+     private void linkLabel1_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+     {
+       System.Diagnostics.Process.Start((string)e.Link.LinkData);
+diff --git a/TvEngine3/TVLibrary/SetupTv/Sections/Project.designer.cs b/TvEngine3/TVLibrary/SetupTv/Sections/Project.designer.cs
+index b3acf0f..3b193b6 100644
+--- a/TvEngine3/TVLibrary/SetupTv/Sections/Project.designer.cs
++++ b/TvEngine3/TVLibrary/SetupTv/Sections/Project.designer.cs
+@@ -50,6 +50,7 @@ namespace SetupTv.Sections
+       this.labelVersion2 = new System.Windows.Forms.Label();
+       this.labelVersion1 = new System.Windows.Forms.Label();
+       this.paypalPictureBox = new System.Windows.Forms.PictureBox();
++	  this.label1 = new System.Windows.Forms.Label();
+       this.groupBoxInfo.SuspendLayout();
+       this.groupBoxContact.SuspendLayout();
+       this.mpGroupBoxAbout.SuspendLayout();
+@@ -223,6 +224,7 @@ namespace SetupTv.Sections
+       // 
+       this.mpGroupBoxAbout.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
+                   | System.Windows.Forms.AnchorStyles.Right)));
++      this.mpGroupBoxAbout.Controls.Add(this.label1);
+       this.mpGroupBoxAbout.Controls.Add(this.labelVersion3);
+       this.mpGroupBoxAbout.Controls.Add(this.labelVersion2);
+       this.mpGroupBoxAbout.Controls.Add(this.labelVersion1);
+@@ -274,6 +276,16 @@ namespace SetupTv.Sections
+       this.paypalPictureBox.TabStop = false;
+       this.paypalPictureBox.Click += new System.EventHandler(this.paypalPictureBox_Click);
+       // 
++      // label1
++      // 
++      this.label1.AutoSize = true;
++      this.label1.ForeColor = System.Drawing.Color.Red;
++      this.label1.Location = new System.Drawing.Point(59, 34);
++      this.label1.Name = "label1";
++      this.label1.Size = new System.Drawing.Size(80, 13);
++      this.label1.TabIndex = 4;
++      this.label1.Text = "Disaster Edition";
++      // 
+       // Project
+       // 
+       this.Controls.Add(this.paypalPictureBox);
+@@ -316,5 +328,6 @@ namespace SetupTv.Sections
+     private System.Windows.Forms.Label labelVersion2;
+     private System.Windows.Forms.Label labelVersion1;
+     private System.Windows.Forms.PictureBox paypalPictureBox;
++	private System.Windows.Forms.Label label1;
+   }
+ }
+diff --git a/TvEngine3/TVLibrary/SetupTv/Startup.cs b/TvEngine3/TVLibrary/SetupTv/Startup.cs
+index 86c51c4..a31e152 100644
+--- a/TvEngine3/TVLibrary/SetupTv/Startup.cs
++++ b/TvEngine3/TVLibrary/SetupTv/Startup.cs
+@@ -158,7 +158,7 @@ namespace SetupTv
+ 
+       FileVersionInfo versionInfo = FileVersionInfo.GetVersionInfo(Application.ExecutablePath);
+ 
+-      Log.Info("---- SetupTv v" + versionInfo.FileVersion + " is starting up on " + OSInfo.OSInfo.GetOSDisplayVersion());
++      Log.Info("---- SetupTv Disaster Edition v" + versionInfo.FileVersion + " is starting up on " + OSInfo.OSInfo.GetOSDisplayVersion());
+ #if DEBUG
+       Log.Info("Debug build: " + Application.ProductVersion);
+ #else
+diff --git a/TvEngine3/TVLibrary/TvService/Service1.cs b/TvEngine3/TVLibrary/TvService/Service1.cs
+index 5a55649..d51b07e 100644
+--- a/TvEngine3/TVLibrary/TvService/Service1.cs
++++ b/TvEngine3/TVLibrary/TvService/Service1.cs
+@@ -815,7 +815,7 @@ namespace TvService
+ 
+           FileVersionInfo versionInfo = FileVersionInfo.GetVersionInfo(Application.ExecutablePath);
+ 
+-          Log.WriteFile("TVService v" + versionInfo.FileVersion + " is starting up on " +
++          Log.WriteFile("TVService Disaster Edition v" + versionInfo.FileVersion + " is starting up on " +
+                         OSInfo.OSInfo.GetOSDisplayVersion());
+ #if DEBUG
+           Log.Info("Debug build: " + Application.ProductVersion);
+diff --git a/mediaportal/Configuration/ConfigSplashScreen.cs b/mediaportal/Configuration/ConfigSplashScreen.cs
+index ee56fd8..123bc1e 100644
+--- a/mediaportal/Configuration/ConfigSplashScreen.cs
++++ b/mediaportal/Configuration/ConfigSplashScreen.cs
+@@ -153,6 +153,7 @@ namespace MediaPortal.Configuration
+       private Panel panel1;
+       private Label versionLabel;
+       private Label informationLabel;
++      private Label disasterLabel;
+ 
+       /// <summary>
+       /// Required designer variable.
+@@ -239,6 +240,7 @@ namespace MediaPortal.Configuration
+       {
+         this.panel1 = new System.Windows.Forms.Panel();
+         this.informationLabel = new System.Windows.Forms.Label();
++      this.disasterLabel = new System.Windows.Forms.Label();
+         this.versionLabel = new System.Windows.Forms.Label();
+         this.panel1.SuspendLayout();
+         this.SuspendLayout();
+@@ -248,6 +250,7 @@ namespace MediaPortal.Configuration
+         this.panel1.BackColor = System.Drawing.Color.Transparent;
+         this.panel1.BorderStyle = System.Windows.Forms.BorderStyle.None;
+         this.panel1.Controls.Add(this.informationLabel);
++      this.panel1.Controls.Add(this.disasterLabel);
+         this.panel1.Controls.Add(this.versionLabel);
+         this.panel1.Dock = System.Windows.Forms.DockStyle.Fill;
+         this.panel1.Location = new System.Drawing.Point(0, 0);
+@@ -286,6 +289,18 @@ namespace MediaPortal.Configuration
+         this.versionLabel.Size = new System.Drawing.Size(100, 16);
+         this.versionLabel.TabIndex = 5;
+         this.versionLabel.TextAlign = System.Drawing.ContentAlignment.TopRight;
++
++      this.disasterLabel.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
++                   | System.Windows.Forms.AnchorStyles.Right)));
++      this.disasterLabel.BackColor = System.Drawing.Color.Transparent;
++      this.disasterLabel.Font = new System.Drawing.Font("Arial", 7F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
++      this.disasterLabel.Location = new System.Drawing.Point(10, 113);
++      this.disasterLabel.Name = "disasterLabel";
++      this.disasterLabel.Size = new System.Drawing.Size(100, 16);
++      this.disasterLabel.TabIndex = 5;
++      this.disasterLabel.TextAlign = System.Drawing.ContentAlignment.TopRight;
++      this.disasterLabel.Text = "Disaster Edition";
++
+         // 
+         // SplashForm
+         // 
+diff --git a/mediaportal/Configuration/Sections/Project.designer.cs b/mediaportal/Configuration/Sections/Project.designer.cs
+index 038afe3..5e588db 100644
+--- a/mediaportal/Configuration/Sections/Project.designer.cs
++++ b/mediaportal/Configuration/Sections/Project.designer.cs
+@@ -50,6 +50,7 @@ namespace MediaPortal.Configuration.Sections
+       this.labelVersion2 = new System.Windows.Forms.Label();
+       this.labelVersion1 = new System.Windows.Forms.Label();
+       this.paypalPictureBox = new System.Windows.Forms.PictureBox();
++	  this.label1 = new System.Windows.Forms.Label();
+       this.groupBoxInfo.SuspendLayout();
+       this.groupBoxContact.SuspendLayout();
+       this.mpGroupBoxAbout.SuspendLayout();
+@@ -222,7 +223,8 @@ namespace MediaPortal.Configuration.Sections
+       // mpGroupBoxAbout
+       // 
+       this.mpGroupBoxAbout.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
+-                  | System.Windows.Forms.AnchorStyles.Right)));
++              | System.Windows.Forms.AnchorStyles.Right)));
++      this.mpGroupBoxAbout.Controls.Add(this.label1);
+       this.mpGroupBoxAbout.Controls.Add(this.labelVersion3);
+       this.mpGroupBoxAbout.Controls.Add(this.labelVersion2);
+       this.mpGroupBoxAbout.Controls.Add(this.labelVersion1);
+@@ -274,6 +276,16 @@ namespace MediaPortal.Configuration.Sections
+       this.paypalPictureBox.TabStop = false;
+       this.paypalPictureBox.Click += new System.EventHandler(this.paypalPictureBox_Click);
+       // 
++      // label1
++      // 
++      this.label1.AutoSize = true;
++      this.label1.ForeColor = System.Drawing.Color.Red;
++      this.label1.Location = new System.Drawing.Point(59, 36);
++      this.label1.Name = "label1";
++      this.label1.Size = new System.Drawing.Size(80, 13);
++      this.label1.TabIndex = 3;
++      this.label1.Text = "Disaster Edition";
++      // 
+       // Project
+       // 
+       this.Controls.Add(this.paypalPictureBox);
+@@ -316,5 +328,6 @@ namespace MediaPortal.Configuration.Sections
+     private System.Windows.Forms.Label labelVersion2;
+     private System.Windows.Forms.Label labelVersion1;
+     private System.Windows.Forms.PictureBox paypalPictureBox;
++	private System.Windows.Forms.Label label1;
+   }
+ }
+diff --git a/mediaportal/Configuration/SettingsForm.Designer.cs b/mediaportal/Configuration/SettingsForm.Designer.cs
+index ad42c75..aa830df 100644
+--- a/mediaportal/Configuration/SettingsForm.Designer.cs
++++ b/mediaportal/Configuration/SettingsForm.Designer.cs
+@@ -6,6 +6,7 @@
+     /// Required designer variable.
+     /// </summary>
+     private System.ComponentModel.IContainer components = null;
++    private System.Windows.Forms.LinkLabel linkLabelDisaster;
+     private System.Windows.Forms.LinkLabel linkLabel1;
+     private System.Windows.Forms.ToolStrip toolStrip1;
+     private System.Windows.Forms.ToolStripButton helpToolStripSplitButton;
+@@ -55,6 +56,7 @@
+       this.holderPanel = new System.Windows.Forms.Panel();
+       this.beveledLine1 = new MediaPortal.UserInterface.Controls.MPBeveledLine();
+       this.applyButton = new MediaPortal.UserInterface.Controls.MPButton();
++	  this.linkLabelDisaster = new System.Windows.Forms.LinkLabel();
+       this.linkLabel1 = new System.Windows.Forms.LinkLabel();
+       this.toolStrip1 = new System.Windows.Forms.ToolStrip();
+       this.helpToolStripSplitButton = new System.Windows.Forms.ToolStripButton();
+@@ -174,6 +176,17 @@
+       this.applyButton.Visible = false;
+       this.applyButton.Click += new System.EventHandler(this.applyButton_Click);
+       // 
++      // linkLabelDisaster
++      // 
++      this.linkLabelDisaster.AutoSize = true;
++      this.linkLabelDisaster.Location = new System.Drawing.Point(141, 518);
++      this.linkLabelDisaster.Name = "linkLabelDisaster";
++      this.linkLabelDisaster.Size = new System.Drawing.Size(80, 13);
++      this.linkLabelDisaster.TabIndex = 11;
++      this.linkLabelDisaster.TabStop = true;
++      this.linkLabelDisaster.Text = "Disaster Edition";
++      this.linkLabelDisaster.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.linkLabelDisaster_LinkClicked);
++      // 
+       // linkLabel1
+       // 
+       this.linkLabel1.Anchor =
+@@ -286,6 +299,7 @@
+       this.ClientSize = new System.Drawing.Size(712, 568);
+       this.Controls.Add(this.toolStrip1);
+       this.Controls.Add(this.linkLabel1);
++      this.Controls.Add(this.linkLabelDisaster);
+       this.Controls.Add(this.applyButton);
+       this.Controls.Add(this.beveledLine1);
+       this.Controls.Add(this.holderPanel);
+diff --git a/mediaportal/Configuration/SettingsForm.cs b/mediaportal/Configuration/SettingsForm.cs
+index 5e6588c..0740113 100644
+--- a/mediaportal/Configuration/SettingsForm.cs
++++ b/mediaportal/Configuration/SettingsForm.cs
+@@ -1,4 +1,4 @@
+-﻿#region Copyright (C) 2005-2011 Team MediaPortal
++#region Copyright (C) 2005-2011 Team MediaPortal
+ 
+ // Copyright (C) 2005-2011 Team MediaPortal
+ // http://www.team-mediaportal.com
+@@ -161,6 +161,7 @@ namespace MediaPortal.Configuration
+       // Required for Windows Form Designer support
+       InitializeComponent();
+       this.linkLabel1.Links.Add(0, linkLabel1.Text.Length, "http://www.team-mediaportal.com/donate.html");
++      this.linkLabelDisaster.Links.Add(0, linkLabelDisaster.Text.Length, "http://forum.team-mediaportal.com/mediaportal-plugins-47/new-mp-1-0-features-fixes-network-share-monitoring-new-schedule-option-48181/");
+       // Build options tree
+       if (splashScreen != null)
+       {
+@@ -1108,5 +1109,10 @@ namespace MediaPortal.Configuration
+       ToggleSectionVisibility(toolStripButtonSwitchAdvanced.Checked);
+       toolStripButtonSwitchAdvanced.Text = AdvancedMode ? "Switch to standard mode" : "Switch to expert mode";
+     }
++
++    private void linkLabelDisaster_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
++    {
++      Process.Start((string)e.Link.LinkData);
++    }
+   }
+ }
+\ No newline at end of file
+diff --git a/mediaportal/Configuration/Startup.cs b/mediaportal/Configuration/Startup.cs
+index be4247a..ccf097d 100644
+--- a/mediaportal/Configuration/Startup.cs
++++ b/mediaportal/Configuration/Startup.cs
+@@ -63,7 +63,7 @@ namespace MediaPortal.Configuration
+ 
+       FileVersionInfo versionInfo = FileVersionInfo.GetVersionInfo(Application.ExecutablePath);
+ 
+-      Log.Info("Configuration v" + versionInfo.FileVersion + " is starting up on " + OSInfo.OSInfo.GetOSDisplayVersion());
++      Log.Info("Configuration Disaster Edition v" + versionInfo.FileVersion + " is starting up on " + OSInfo.OSInfo.GetOSDisplayVersion());
+ #if DEBUG
+       Log.Info("Debug build: " + Application.ProductVersion);
+ #else
+diff --git a/mediaportal/MediaPortal.Application/FullScreenSplashScreen.cs b/mediaportal/MediaPortal.Application/FullScreenSplashScreen.cs
+index f7cdbf2..b292320 100644
+--- a/mediaportal/MediaPortal.Application/FullScreenSplashScreen.cs
++++ b/mediaportal/MediaPortal.Application/FullScreenSplashScreen.cs
+@@ -42,6 +42,7 @@ namespace MediaPortal
+     {
+       string[] strVersion = version.Split('-');
+       lblVersion.Text = strVersion[0];
++      lblVersion.Text += " Disaster Edition";
+       Log.Info("Version: Application {0}", strVersion[0]);
+       if (strVersion.Length > 1)
+       {
+diff --git a/mediaportal/MediaPortal.Application/MediaPortal.cs b/mediaportal/MediaPortal.Application/MediaPortal.cs
+index f7f3fe7..5695f83 100644
+--- a/mediaportal/MediaPortal.Application/MediaPortal.cs
++++ b/mediaportal/MediaPortal.Application/MediaPortal.cs
+@@ -355,7 +355,7 @@ public class MediaPortalApp : D3DApp, IRender
+       //Log MediaPortal version build and operating system level
+       FileVersionInfo versionInfo = FileVersionInfo.GetVersionInfo(Application.ExecutablePath);
+ 
+-      Log.Info("Main: MediaPortal v" + versionInfo.FileVersion + " is starting up on " +
++      Log.Info("Main: MediaPortal Disaster Edition v" + versionInfo.FileVersion + " is starting up on " +
+                OSInfo.OSInfo.GetOSDisplayVersion());
+ #if DEBUG
+       Log.Info("Debug build: " + Application.ProductVersion);
+diff --git a/mediaportal/MediaPortal.Application/SplashScreen.cs b/mediaportal/MediaPortal.Application/SplashScreen.cs
+index 0cea147..0335cea 100644
+--- a/mediaportal/MediaPortal.Application/SplashScreen.cs
++++ b/mediaportal/MediaPortal.Application/SplashScreen.cs
+@@ -299,6 +299,7 @@ namespace MediaPortal
+       private Label versionLabel;
+       private Label cvsLabel;
+       private Label informationLabel;
++      private Label disasterLabel;
+ 
+       /// <summary>
+       /// Required designer variable.
+@@ -327,6 +328,7 @@ namespace MediaPortal
+       {
+         string[] strVersion = version.Split('-');
+         versionLabel.Text = strVersion[0];
++      disasterLabel.Text = "Disaster Edition";
+         Log.Info("Version: Application {0}", strVersion[0]);
+         if (strVersion.Length > 1)
+         {
+@@ -387,6 +389,7 @@ namespace MediaPortal
+         this.panel1 = new System.Windows.Forms.Panel();
+         this.informationLabel = new System.Windows.Forms.Label();
+         this.versionLabel = new System.Windows.Forms.Label();
++      this.disasterLabel = new System.Windows.Forms.Label();
+         this.cvsLabel = new System.Windows.Forms.Label();
+         this.panel1.SuspendLayout();
+         this.SuspendLayout();
+@@ -397,6 +400,7 @@ namespace MediaPortal
+         this.panel1.BackgroundImageLayout = System.Windows.Forms.ImageLayout.Zoom;
+         this.panel1.Controls.Add(this.informationLabel);
+         this.panel1.Controls.Add(this.versionLabel);
++      this.panel1.Controls.Add(this.disasterLabel);
+         this.panel1.Controls.Add(this.cvsLabel);
+         this.panel1.Dock = System.Windows.Forms.DockStyle.Fill;
+         this.panel1.Location = new System.Drawing.Point(0, 0);
+@@ -436,6 +440,18 @@ namespace MediaPortal
+         this.versionLabel.Size = new System.Drawing.Size(111, 16);
+         this.versionLabel.TabIndex = 5;
+         this.versionLabel.TextAlign = System.Drawing.ContentAlignment.TopRight;
++
++      this.disasterLabel.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
++                   | System.Windows.Forms.AnchorStyles.Right)));
++      this.disasterLabel.BackColor = System.Drawing.Color.Transparent;
++      this.disasterLabel.Font = new System.Drawing.Font("Arial", 7F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
++      this.disasterLabel.Location = new System.Drawing.Point(10, 113);
++      this.disasterLabel.Name = "disasterLabel";
++      this.disasterLabel.Size = new System.Drawing.Size(100, 16);
++      this.disasterLabel.TabIndex = 5;
++      this.disasterLabel.TextAlign = System.Drawing.ContentAlignment.TopRight;
++      this.disasterLabel.Text = "Disaster Edition";
++        
+         // 
+         // cvsLabel
+         // 
+diff --git a/mediaportal/Setup/setup.nsi b/mediaportal/Setup/setup.nsi
+index 9e4beb4..3a4dd7f 100644
+--- a/mediaportal/Setup/setup.nsi
++++ b/mediaportal/Setup/setup.nsi
+@@ -68,7 +68,7 @@
+ # DEFINES
+ #---------------------------------------------------------------------------
+ !define PRODUCT_NAME          "MediaPortal"
+-!define PRODUCT_PUBLISHER     "Team MediaPortal"
++!define PRODUCT_PUBLISHER     "Team MediaPortal and Disaster123"
+ !define PRODUCT_WEB_SITE      "www.team-mediaportal.com"
+ 
+ !define REG_UNINSTALL         "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\MediaPortal"
+@@ -211,7 +211,7 @@ BrandingText  "${PRODUCT_NAME} ${VERSION} by ${PRODUCT_PUBLISHER}"
+ !if ${VER_BUILD} == 0       # it's an official release
+   OutFile "${git_OUT}\package-mediaportal.exe"
+ !else                       # it's a git release
+-  OutFile "${git_OUT}\Setup-MediaPortal-git-${VER_MAJOR}.${VER_MINOR}.${VER_REVISION}.${VER_BUILD}.exe"
++  OutFile "${git_OUT}\Setup-MediaPortal-Disaster123-git-${VER_MAJOR}.${VER_MINOR}.${VER_REVISION}.${VER_BUILD}.exe"
+ !endif
+ InstallDir ""
+ CRCCheck on
+-- 
+1.7.8.msysgit.0
+

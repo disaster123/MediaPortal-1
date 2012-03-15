@@ -1,0 +1,68 @@
+From e4508a1b2306f98a959b28add41f981646fcf202 Mon Sep 17 00:00:00 2001
+From: Stefan Priebe <stefan@prie.be>
+Date: Mon, 7 Nov 2011 20:01:17 +0100
+Subject: [PATCH] TvEngine / SetupTV: show only visible channels in drop down
+ box
+
+---
+ .../TVLibrary/SetupTv/Sections/TestChannels.cs     |    2 +-
+ .../SetupTv/Sections/TestService.Designer.cs       |    2 ++
+ .../TVLibrary/SetupTv/Sections/TestService.cs      |    2 ++
+ 3 files changed, 5 insertions(+), 1 deletions(-)
+
+diff --git a/TvEngine3/TVLibrary/SetupTv/Sections/TestChannels.cs b/TvEngine3/TVLibrary/SetupTv/Sections/TestChannels.cs
+index 8d9857c..7a2cd3d 100644
+--- a/TvEngine3/TVLibrary/SetupTv/Sections/TestChannels.cs
++++ b/TvEngine3/TVLibrary/SetupTv/Sections/TestChannels.cs
+@@ -257,7 +257,7 @@ namespace SetupTv.Sections
+         foreach (GroupMap map in maps)
+         {
+           Channel ch = map.ReferencedChannel();
+-          if (ch.IsTv)
++          if (ch.IsTv && ch.VisibleInGuide)
+           {
+             channelsO.Add(ch);
+           }
+diff --git a/TvEngine3/TVLibrary/SetupTv/Sections/TestService.Designer.cs b/TvEngine3/TVLibrary/SetupTv/Sections/TestService.Designer.cs
+index b4670f4..2932cb7 100644
+--- a/TvEngine3/TVLibrary/SetupTv/Sections/TestService.Designer.cs
++++ b/TvEngine3/TVLibrary/SetupTv/Sections/TestService.Designer.cs
+@@ -382,6 +382,7 @@ namespace SetupTv.Sections
+       this.mpComboBoxChannels.Location = new System.Drawing.Point(64, 220);
+       this.mpComboBoxChannels.Name = "mpComboBoxChannels";
+       this.mpComboBoxChannels.Size = new System.Drawing.Size(151, 21);
++      this.mpComboBoxChannels.Sorted = true;
+       this.mpComboBoxChannels.TabIndex = 54;
+       // 
+       // comboBoxGroups
+@@ -393,6 +394,7 @@ namespace SetupTv.Sections
+       this.comboBoxGroups.Location = new System.Drawing.Point(64, 196);
+       this.comboBoxGroups.Name = "comboBoxGroups";
+       this.comboBoxGroups.Size = new System.Drawing.Size(151, 21);
++      this.comboBoxGroups.Sorted = true;
+       this.comboBoxGroups.TabIndex = 61;
+       this.comboBoxGroups.SelectedIndexChanged += new System.EventHandler(this.comboBoxGroups_SelectedIndexChanged);
+       // 
+diff --git a/TvEngine3/TVLibrary/SetupTv/Sections/TestService.cs b/TvEngine3/TVLibrary/SetupTv/Sections/TestService.cs
+index 195a6a0..b3a77ff 100644
+--- a/TvEngine3/TVLibrary/SetupTv/Sections/TestService.cs
++++ b/TvEngine3/TVLibrary/SetupTv/Sections/TestService.cs
+@@ -615,6 +615,7 @@ namespace SetupTv.Sections
+         foreach (Channel ch in channels)
+         {
+           if (ch.IsTv == false) continue;
++          if (ch.VisibleInGuide == false) continue;
+           bool hasFta = false;
+           bool hasScrambled = false;
+           IList<TuningDetail> tuningDetails = ch.ReferringTuningDetail();
+@@ -656,6 +657,7 @@ namespace SetupTv.Sections
+         {
+           Channel ch = map.ReferencedChannel();
+           if (ch.IsTv == false) continue;
++          if (ch.VisibleInGuide == false) continue;
+           bool hasFta = false;
+           bool hasScrambled = false;
+           IList<TuningDetail> tuningDetails = ch.ReferringTuningDetail();
+-- 
+1.7.8.msysgit.0
+

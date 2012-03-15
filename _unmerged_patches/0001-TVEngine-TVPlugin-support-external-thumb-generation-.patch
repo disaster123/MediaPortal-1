@@ -1,0 +1,51 @@
+From 54658289e18ec5c7c65574c03862dd15765b65f8 Mon Sep 17 00:00:00 2001
+From: Stefan Priebe <stefan@prie.be>
+Date: Mon, 7 Nov 2011 20:05:50 +0100
+Subject: [PATCH] TVEngine / TVPlugin: support external thumb generation
+ utilities (thumbs in the same path as ts are supported)
+
+---
+ .../TVLibrary/TvPlugin/TvPlugin/TvRecorded.cs      |   27 +++++++++++++++++++-
+ 1 files changed, 26 insertions(+), 1 deletions(-)
+
+diff --git a/TvEngine3/TVLibrary/TvPlugin/TvPlugin/TvRecorded.cs b/TvEngine3/TVLibrary/TvPlugin/TvPlugin/TvRecorded.cs
+index 81c74ba..1ce2e46 100644
+--- a/TvEngine3/TVLibrary/TvPlugin/TvPlugin/TvRecorded.cs
++++ b/TvEngine3/TVLibrary/TvPlugin/TvPlugin/TvRecorded.cs
+@@ -1040,7 +1040,32 @@ namespace TvPlugin
+           SmallThumb = StationLogo;
+         }
+ 
+-        // Display previews only if the option to create them is active                
++        if (!Utils.FileExistsInCache(previewThumb) && TVHome.RecordingPath().Length > 0)
++        {
++          previewThumb = Path.ChangeExtension(aRecording.FileName, Utils.GetThumbExtension());
++          //use user defined recording folder as either UNC or network drive
++          string fileName = Path.GetFileName(previewThumb);
++          string fileNameSimple = TVHome.RecordingPath() + "\\" + fileName;
++
++          if (!File.Exists(fileNameSimple))
++          //maybe file exist in folder, schedules recs often appear in folders, no way to intelligently determine this.
++          {
++            DirectoryInfo dirInfo = Directory.GetParent(aRecording.FileName);
++            if (dirInfo != null)
++            {
++              string parentFolderName = dirInfo.Name;
++              fileNameSimple = TVHome.RecordingPath() + "\\" + parentFolderName + "\\" + fileName;
++              if (!File.Exists(fileNameSimple)) {
++                // set it to old filename where we had simply changed the extension
++                fileNameSimple = previewThumb;
++              }
++            }
++          }
++
++          previewThumb = fileNameSimple;
++        }
++
++        // Display previews only if the option to create them is active
+         if (Utils.FileExistsInCache(previewThumb))
+         {
+           // Search a larger one
+-- 
+1.7.8.msysgit.0
+

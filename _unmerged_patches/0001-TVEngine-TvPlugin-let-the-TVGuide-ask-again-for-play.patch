@@ -1,0 +1,41 @@
+From a23b0d28d3116bc14f53e2e00a68026418747409 Mon Sep 17 00:00:00 2001
+From: Stefan Priebe <stefan@prie.be>
+Date: Mon, 7 Nov 2011 20:07:45 +0100
+Subject: [PATCH] TVEngine / TvPlugin: let the TVGuide ask again for playing
+ running recordings
+
+---
+ .../TVLibrary/TvPlugin/TvPlugin/TvGuideBase.cs     |   11 ++++++++++-
+ 1 files changed, 10 insertions(+), 1 deletions(-)
+
+diff --git a/TvEngine3/TVLibrary/TvPlugin/TvPlugin/TvGuideBase.cs b/TvEngine3/TVLibrary/TvPlugin/TvPlugin/TvGuideBase.cs
+index 8e40c12..9449e1f 100644
+--- a/TvEngine3/TVLibrary/TvPlugin/TvPlugin/TvGuideBase.cs
++++ b/TvEngine3/TVLibrary/TvPlugin/TvPlugin/TvGuideBase.cs
+@@ -3270,13 +3270,22 @@ namespace TvPlugin
+           {
+             string fileName = "";
+             bool isRec = _currentProgram.IsRecording;
++            bool isRecNOepg = IsRecordingNoEPG(_currentProgram.ReferencedChannel());
+ 
+             Recording rec = null;
+             if (isRec)
+             {
+               rec = Recording.ActiveRecording(_currentProgram.Title, _currentProgram.IdChannel);
+             }
+-
++            else if (isRecNOepg)
++            {
++              Schedule schedule = Schedule.FindNoEPGSchedule(_currentProgram.ReferencedChannel());
++
++              if (schedule != null)
++              {
++                rec = Recording.ActiveRecording(schedule.IdSchedule);
++              }
++            }
+ 
+             if (rec != null)
+             {
+-- 
+1.7.8.msysgit.0
+
