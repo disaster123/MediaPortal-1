@@ -401,12 +401,12 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
         m_bPresentSample = true ;
         
         CRefTime RefTime, cRefTime;
-        bool HasTimestamp;
         double fTime = 0.0;
         double clock = 0.0;
         double stallPoint = 1.0;
         //check if it has a timestamp
-        if ((HasTimestamp=buffer->MediaTime(RefTime)))
+        bool HasTimestamp=buffer->MediaTime(RefTime);
+        if (HasTimestamp)
         {
           bool ForcePresent = false;
           CRefTime compTemp = m_pTsReaderFilter->GetCompensation();
