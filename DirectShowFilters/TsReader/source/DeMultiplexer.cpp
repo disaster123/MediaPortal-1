@@ -54,6 +54,10 @@
 //#define INITIAL_READ_SIZE (READ_SIZE * 1024)
 #define INITIAL_READ_SIZE (READ_SIZE * 512)
 
+//Macro borrowed from LAV splitter...
+#define MOVE_TO_H264_START_CODE(b, e) while(b <= e-4 && !((*(DWORD *)b == 0x01000000) || ((*(DWORD *)b & 0x00FFFFFF) == 0x00010000))) b++; if((b <= e-4) && *(DWORD *)b == 0x01000000) b++;
+
+
 extern void LogDebug(const char *fmt, ...);
 extern DWORD m_tGTStartTime;
 
@@ -1360,16 +1364,12 @@ void CDeMultiplexer::FillVideoH264(CTsHeader& header, byte* tsPacket)
     }
   }
 
-//define borrowed from LAV splitter...
-#define MOVE_TO_H264_START_CODE(b, e) while(b <= e-4 && !((*(DWORD *)b == 0x01000000) || ((*(DWORD *)b & 0x00FFFFFF) == 0x00010000))) b++; if((b <= e-4) && *(DWORD *)b == 0x01000000) b++;
-
   if (m_p->GetCount())
   {
     BYTE* start = m_p->GetData();
     BYTE* end = start + m_p->GetCount();
 
     MOVE_TO_H264_START_CODE(start, end);
-    //while(start <= end-4 && *(DWORD*)start != 0x01000000) start++;
 
     while(start <= end-4)
     {
@@ -1380,7 +1380,6 @@ void CDeMultiplexer::FillVideoH264(CTsHeader& header, byte* tsPacket)
       }
 
       MOVE_TO_H264_START_CODE(next, end);
-      //while(next <= end-4 && *(DWORD*)next != 0x01000000) next++;
 
       if(next >= end-4)
       {

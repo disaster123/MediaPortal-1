@@ -1273,10 +1273,10 @@ bool CFrameHeaderParser::Read(avchdr& h, int len, CMediaType* pmt, bool reset)
 		{
 			//LogDebug("SPS found");
 
-			__int64			num_units_in_tick;
-			__int64			time_scale;
+			double			num_units_in_tick;
+			double			time_scale;
 			__int64			pos;
-			long			fixed_frame_rate_flag;
+			bool			fixed_frame_rate_flag;
 
 			// Copy the full SPS packet in case the PPS is not found in the same packet,
 			// but make sure we don't change the current position in the buffer.
@@ -1404,28 +1404,19 @@ bool CFrameHeaderParser::Read(avchdr& h, int len, CMediaType* pmt, bool reset)
 				}
 				if (gb.BitRead(1))						// timing_info_present_flag
 				{
-					num_units_in_tick		= gb.BitRead(32);
-					time_scale				= gb.BitRead(32);
-					fixed_frame_rate_flag	= gb.BitRead(1);
+					num_units_in_tick		  = (double)gb.BitRead(32);
+					time_scale				    = (double)gb.BitRead(32);
+					fixed_frame_rate_flag	= (bool)gb.BitRead(1);
 
-					// Trick for weird parameters (10x to Madshi)!
-					if ((num_units_in_tick < 1000) || (num_units_in_tick > 1001))
+					if ((time_scale > 0) && fixed_frame_rate_flag)
 					{
-						if  ((time_scale % num_units_in_tick != 0) && ((time_scale*1001) % num_units_in_tick == 0))
-						{
-							time_scale			= (time_scale * 1001) / num_units_in_tick;
-							num_units_in_tick	= 1001;
-						}
-						else
-						{
-							time_scale			= (time_scale * 1000) / num_units_in_tick;
-							num_units_in_tick	= 1000;
-						}
-					}
-					time_scale = time_scale / 2;	// VUI consider fields even for progressive stream : divide by 2!
-
-					if (time_scale)
-						h.AvgTimePerFrame = (10000000I64*num_units_in_tick)/time_scale;
+						// VUI consider fields even for progressive stream : multiply num_units_in_tick by 2
+						h.AvgTimePerFrame = (REFERENCE_TIME)((20000000.0 * num_units_in_tick)/time_scale);
+				  }
+				  else //variable frame rate, so guess ?
+				  {
+						h.AvgTimePerFrame = 370000; // lets go for 27Hz :-)
+				  }
 				}
 			}
 
