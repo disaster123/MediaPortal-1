@@ -5,9 +5,9 @@
 -- -----------------------------------------------------------
 -- Entity Designer DDL Script for MySQL Server 4.1 and higher
 -- -----------------------------------------------------------
--- Date Created: 01/09/2012 19:28:23
--- Generated from EDMX file: D:\svnroot\MediaPortal-1-commit_Compare\TvEngine3\Mediaportal\TV\Server\TVDatabase\EntityModel\Model.edmx
--- Target version: 2.0.0.0
+-- Date Created: 03/18/2012 21:23:27
+-- Generated from EDMX file: C:\Users\spriebe\Desktop\MP\MediaPortal_TVE_3.5\TvEngine3\Mediaportal\TV\Server\TVDatabase\EntityModel\Model.edmx
+-- Target version: 3.0.0.0
 -- --------------------------------------------------
 
 DROP DATABASE IF EXISTS `tve35mysql`;
