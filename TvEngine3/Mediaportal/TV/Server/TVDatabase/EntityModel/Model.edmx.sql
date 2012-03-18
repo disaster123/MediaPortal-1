@@ -2,8 +2,8 @@
 -- --------------------------------------------------
 -- Entity Designer DDL Script for SQL Server 2005, 2008, and Azure
 -- --------------------------------------------------
--- Date Created: 11/21/2011 14:50:00
--- Generated from EDMX file: C:\Development\tve3.exp.test2\Mediaportal\TV\Server\TVDatabase\EntityModel\Model.edmx
+-- Date Created: 03/18/2012 20:11:10
+-- Generated from EDMX file: C:\Users\spriebe\Desktop\MP\MediaPortal_TVE_3.5\TvEngine3\Mediaportal\TV\Server\TVDatabase\EntityModel\Model.edmx
 -- --------------------------------------------------
 
 SET QUOTED_IDENTIFIER OFF;
@@ -17,74 +17,38 @@ GO
 -- Dropping existing FOREIGN KEY constraints
 -- --------------------------------------------------
 
-IF OBJECT_ID(N'[dbo].[FK_CardChannelMap]', 'F') IS NOT NULL
-    ALTER TABLE [dbo].[ChannelMaps] DROP CONSTRAINT [FK_CardChannelMap];
-GO
-IF OBJECT_ID(N'[dbo].[FK_CardConflict]', 'F') IS NOT NULL
-    ALTER TABLE [dbo].[Conflicts] DROP CONSTRAINT [FK_CardConflict];
-GO
-IF OBJECT_ID(N'[dbo].[FK_CardGroupMapCard]', 'F') IS NOT NULL
-    ALTER TABLE [dbo].[CardGroupMaps] DROP CONSTRAINT [FK_CardGroupMapCard];
-GO
-IF OBJECT_ID(N'[dbo].[FK_CardGroupMapCardGroup]', 'F') IS NOT NULL
-    ALTER TABLE [dbo].[CardGroupMaps] DROP CONSTRAINT [FK_CardGroupMapCardGroup];
-GO
-IF OBJECT_ID(N'[dbo].[FK_ChannelChannelMap]', 'F') IS NOT NULL
-    ALTER TABLE [dbo].[ChannelMaps] DROP CONSTRAINT [FK_ChannelChannelMap];
-GO
-IF OBJECT_ID(N'[dbo].[FK_ChannelConflict]', 'F') IS NOT NULL
-    ALTER TABLE [dbo].[Conflicts] DROP CONSTRAINT [FK_ChannelConflict];
-GO
-IF OBJECT_ID(N'[dbo].[FK_ChannelHistory]', 'F') IS NOT NULL
-    ALTER TABLE [dbo].[Histories] DROP CONSTRAINT [FK_ChannelHistory];
-GO
-IF OBJECT_ID(N'[dbo].[FK_ChannelLinkMap]', 'F') IS NOT NULL
-    ALTER TABLE [dbo].[ChannelLinkageMaps] DROP CONSTRAINT [FK_ChannelLinkMap];
-GO
-IF OBJECT_ID(N'[dbo].[FK_ChannelPortalMap]', 'F') IS NOT NULL
-    ALTER TABLE [dbo].[ChannelLinkageMaps] DROP CONSTRAINT [FK_ChannelPortalMap];
-GO
-IF OBJECT_ID(N'[dbo].[FK_ChannelProgram]', 'F') IS NOT NULL
-    ALTER TABLE [dbo].[Programs] DROP CONSTRAINT [FK_ChannelProgram];
-GO
-IF OBJECT_ID(N'[dbo].[FK_ChannelRecording]', 'F') IS NOT NULL
-    ALTER TABLE [dbo].[Recordings] DROP CONSTRAINT [FK_ChannelRecording];
-GO
-IF OBJECT_ID(N'[dbo].[FK_ChannelSchedule]', 'F') IS NOT NULL
-    ALTER TABLE [dbo].[Schedules] DROP CONSTRAINT [FK_ChannelSchedule];
-GO
-IF OBJECT_ID(N'[dbo].[FK_ChannelTuningDetail]', 'F') IS NOT NULL
-    ALTER TABLE [dbo].[TuningDetails] DROP CONSTRAINT [FK_ChannelTuningDetail];
-GO
-IF OBJECT_ID(N'[dbo].[FK_ChannelTvMovieMapping]', 'F') IS NOT NULL
-    ALTER TABLE [dbo].[TvMovieMappings] DROP CONSTRAINT [FK_ChannelTvMovieMapping];
-GO
-IF OBJECT_ID(N'[dbo].[FK_DisEqcMotorCard]', 'F') IS NOT NULL
-    ALTER TABLE [dbo].[DisEqcMotors] DROP CONSTRAINT [FK_DisEqcMotorCard];
-GO
-IF OBJECT_ID(N'[dbo].[FK_DisEqcMotorSatellite]', 'F') IS NOT NULL
-    ALTER TABLE [dbo].[DisEqcMotors] DROP CONSTRAINT [FK_DisEqcMotorSatellite];
+IF OBJECT_ID(N'[dbo].[FK_GroupMapChannelGroup]', 'F') IS NOT NULL
+    ALTER TABLE [dbo].[GroupMaps] DROP CONSTRAINT [FK_GroupMapChannelGroup];
 GO
 IF OBJECT_ID(N'[dbo].[FK_GroupMapChannel]', 'F') IS NOT NULL
     ALTER TABLE [dbo].[GroupMaps] DROP CONSTRAINT [FK_GroupMapChannel];
 GO
-IF OBJECT_ID(N'[dbo].[FK_GroupMapChannelGroup]', 'F') IS NOT NULL
-    ALTER TABLE [dbo].[GroupMaps] DROP CONSTRAINT [FK_GroupMapChannelGroup];
+IF OBJECT_ID(N'[dbo].[FK_CardGroupMapCard]', 'F') IS NOT NULL
+    ALTER TABLE [dbo].[CardGroupMaps] DROP CONSTRAINT [FK_CardGroupMapCard];
 GO
-IF OBJECT_ID(N'[dbo].[FK_KeywordKeywordMap]', 'F') IS NOT NULL
-    ALTER TABLE [dbo].[KeywordMaps] DROP CONSTRAINT [FK_KeywordKeywordMap];
+IF OBJECT_ID(N'[dbo].[FK_DisEqcMotorCard]', 'F') IS NOT NULL
+    ALTER TABLE [dbo].[DisEqcMotors] DROP CONSTRAINT [FK_DisEqcMotorCard];
 GO
-IF OBJECT_ID(N'[dbo].[FK_KeywordMapChannelGroup]', 'F') IS NOT NULL
-    ALTER TABLE [dbo].[KeywordMaps] DROP CONSTRAINT [FK_KeywordMapChannelGroup];
+IF OBJECT_ID(N'[dbo].[FK_ChannelRecording]', 'F') IS NOT NULL
+    ALTER TABLE [dbo].[Recordings] DROP CONSTRAINT [FK_ChannelRecording];
 GO
-IF OBJECT_ID(N'[dbo].[FK_KeywordPersonalTVGuideMap]', 'F') IS NOT NULL
-    ALTER TABLE [dbo].[PersonalTVGuideMaps] DROP CONSTRAINT [FK_KeywordPersonalTVGuideMap];
+IF OBJECT_ID(N'[dbo].[FK_CardGroupMapCardGroup]', 'F') IS NOT NULL
+    ALTER TABLE [dbo].[CardGroupMaps] DROP CONSTRAINT [FK_CardGroupMapCardGroup];
 GO
-IF OBJECT_ID(N'[dbo].[FK_ProgramCategoryHistory]', 'F') IS NOT NULL
-    ALTER TABLE [dbo].[Histories] DROP CONSTRAINT [FK_ProgramCategoryHistory];
+IF OBJECT_ID(N'[dbo].[FK_ChannelProgram]', 'F') IS NOT NULL
+    ALTER TABLE [dbo].[Programs] DROP CONSTRAINT [FK_ChannelProgram];
 GO
-IF OBJECT_ID(N'[dbo].[FK_ProgramPersonalTVGuideMap]', 'F') IS NOT NULL
-    ALTER TABLE [dbo].[PersonalTVGuideMaps] DROP CONSTRAINT [FK_ProgramPersonalTVGuideMap];
+IF OBJECT_ID(N'[dbo].[FK_CardChannelMap]', 'F') IS NOT NULL
+    ALTER TABLE [dbo].[ChannelMaps] DROP CONSTRAINT [FK_CardChannelMap];
+GO
+IF OBJECT_ID(N'[dbo].[FK_ChannelChannelMap]', 'F') IS NOT NULL
+    ALTER TABLE [dbo].[ChannelMaps] DROP CONSTRAINT [FK_ChannelChannelMap];
+GO
+IF OBJECT_ID(N'[dbo].[FK_ChannelSchedule]', 'F') IS NOT NULL
+    ALTER TABLE [dbo].[Schedules] DROP CONSTRAINT [FK_ChannelSchedule];
+GO
+IF OBJECT_ID(N'[dbo].[FK_ScheduleParentSchedule]', 'F') IS NOT NULL
+    ALTER TABLE [dbo].[Schedules] DROP CONSTRAINT [FK_ScheduleParentSchedule];
 GO
 IF OBJECT_ID(N'[dbo].[FK_ProgramProgramCategory]', 'F') IS NOT NULL
     ALTER TABLE [dbo].[Programs] DROP CONSTRAINT [FK_ProgramProgramCategory];
@@ -92,8 +56,32 @@ GO
 IF OBJECT_ID(N'[dbo].[FK_ProgramProgramCredit]', 'F') IS NOT NULL
     ALTER TABLE [dbo].[ProgramCredits] DROP CONSTRAINT [FK_ProgramProgramCredit];
 GO
-IF OBJECT_ID(N'[dbo].[FK_RecordingProgramCategory]', 'F') IS NOT NULL
-    ALTER TABLE [dbo].[Recordings] DROP CONSTRAINT [FK_RecordingProgramCategory];
+IF OBJECT_ID(N'[dbo].[FK_ChannelHistory]', 'F') IS NOT NULL
+    ALTER TABLE [dbo].[Histories] DROP CONSTRAINT [FK_ChannelHistory];
+GO
+IF OBJECT_ID(N'[dbo].[FK_ChannelTuningDetail]', 'F') IS NOT NULL
+    ALTER TABLE [dbo].[TuningDetails] DROP CONSTRAINT [FK_ChannelTuningDetail];
+GO
+IF OBJECT_ID(N'[dbo].[FK_ChannelTvMovieMapping]', 'F') IS NOT NULL
+    ALTER TABLE [dbo].[TvMovieMappings] DROP CONSTRAINT [FK_ChannelTvMovieMapping];
+GO
+IF OBJECT_ID(N'[dbo].[FK_DisEqcMotorSatellite]', 'F') IS NOT NULL
+    ALTER TABLE [dbo].[DisEqcMotors] DROP CONSTRAINT [FK_DisEqcMotorSatellite];
+GO
+IF OBJECT_ID(N'[dbo].[FK_ProgramPersonalTVGuideMap]', 'F') IS NOT NULL
+    ALTER TABLE [dbo].[PersonalTVGuideMaps] DROP CONSTRAINT [FK_ProgramPersonalTVGuideMap];
+GO
+IF OBJECT_ID(N'[dbo].[FK_KeywordPersonalTVGuideMap]', 'F') IS NOT NULL
+    ALTER TABLE [dbo].[PersonalTVGuideMaps] DROP CONSTRAINT [FK_KeywordPersonalTVGuideMap];
+GO
+IF OBJECT_ID(N'[dbo].[FK_ScheduleRecording]', 'F') IS NOT NULL
+    ALTER TABLE [dbo].[Recordings] DROP CONSTRAINT [FK_ScheduleRecording];
+GO
+IF OBJECT_ID(N'[dbo].[FK_KeywordKeywordMap]', 'F') IS NOT NULL
+    ALTER TABLE [dbo].[KeywordMaps] DROP CONSTRAINT [FK_KeywordKeywordMap];
+GO
+IF OBJECT_ID(N'[dbo].[FK_KeywordMapChannelGroup]', 'F') IS NOT NULL
+    ALTER TABLE [dbo].[KeywordMaps] DROP CONSTRAINT [FK_KeywordMapChannelGroup];
 GO
 IF OBJECT_ID(N'[dbo].[FK_RecordingRecordingCredit]', 'F') IS NOT NULL
     ALTER TABLE [dbo].[RecordingCredits] DROP CONSTRAINT [FK_RecordingRecordingCredit];
@@ -101,17 +89,29 @@ GO
 IF OBJECT_ID(N'[dbo].[FK_ScheduleCanceledSchedule]', 'F') IS NOT NULL
     ALTER TABLE [dbo].[CanceledSchedules] DROP CONSTRAINT [FK_ScheduleCanceledSchedule];
 GO
+IF OBJECT_ID(N'[dbo].[FK_ChannelLinkMap]', 'F') IS NOT NULL
+    ALTER TABLE [dbo].[ChannelLinkageMaps] DROP CONSTRAINT [FK_ChannelLinkMap];
+GO
+IF OBJECT_ID(N'[dbo].[FK_ChannelPortalMap]', 'F') IS NOT NULL
+    ALTER TABLE [dbo].[ChannelLinkageMaps] DROP CONSTRAINT [FK_ChannelPortalMap];
+GO
+IF OBJECT_ID(N'[dbo].[FK_RecordingProgramCategory]', 'F') IS NOT NULL
+    ALTER TABLE [dbo].[Recordings] DROP CONSTRAINT [FK_RecordingProgramCategory];
+GO
+IF OBJECT_ID(N'[dbo].[FK_CardConflict]', 'F') IS NOT NULL
+    ALTER TABLE [dbo].[Conflicts] DROP CONSTRAINT [FK_CardConflict];
+GO
+IF OBJECT_ID(N'[dbo].[FK_ChannelConflict]', 'F') IS NOT NULL
+    ALTER TABLE [dbo].[Conflicts] DROP CONSTRAINT [FK_ChannelConflict];
+GO
 IF OBJECT_ID(N'[dbo].[FK_ScheduleConflict]', 'F') IS NOT NULL
     ALTER TABLE [dbo].[Conflicts] DROP CONSTRAINT [FK_ScheduleConflict];
 GO
 IF OBJECT_ID(N'[dbo].[FK_ScheduleConflict1]', 'F') IS NOT NULL
     ALTER TABLE [dbo].[Conflicts] DROP CONSTRAINT [FK_ScheduleConflict1];
 GO
-IF OBJECT_ID(N'[dbo].[FK_ScheduleParentSchedule]', 'F') IS NOT NULL
-    ALTER TABLE [dbo].[Schedules] DROP CONSTRAINT [FK_ScheduleParentSchedule];
-GO
-IF OBJECT_ID(N'[dbo].[FK_ScheduleRecording]', 'F') IS NOT NULL
-    ALTER TABLE [dbo].[Recordings] DROP CONSTRAINT [FK_ScheduleRecording];
+IF OBJECT_ID(N'[dbo].[FK_ProgramCategoryHistory]', 'F') IS NOT NULL
+    ALTER TABLE [dbo].[Histories] DROP CONSTRAINT [FK_ProgramCategoryHistory];
 GO
 
 -- --------------------------------------------------
@@ -121,14 +121,17 @@ GO
 IF OBJECT_ID(N'[dbo].[CanceledSchedules]', 'U') IS NOT NULL
     DROP TABLE [dbo].[CanceledSchedules];
 GO
-IF OBJECT_ID(N'[dbo].[CardGroupMaps]', 'U') IS NOT NULL
-    DROP TABLE [dbo].[CardGroupMaps];
+IF OBJECT_ID(N'[dbo].[Cards]', 'U') IS NOT NULL
+    DROP TABLE [dbo].[Cards];
 GO
 IF OBJECT_ID(N'[dbo].[CardGroups]', 'U') IS NOT NULL
     DROP TABLE [dbo].[CardGroups];
 GO
-IF OBJECT_ID(N'[dbo].[Cards]', 'U') IS NOT NULL
-    DROP TABLE [dbo].[Cards];
+IF OBJECT_ID(N'[dbo].[CardGroupMaps]', 'U') IS NOT NULL
+    DROP TABLE [dbo].[CardGroupMaps];
+GO
+IF OBJECT_ID(N'[dbo].[Channels]', 'U') IS NOT NULL
+    DROP TABLE [dbo].[Channels];
 GO
 IF OBJECT_ID(N'[dbo].[ChannelGroups]', 'U') IS NOT NULL
     DROP TABLE [dbo].[ChannelGroups];
@@ -138,9 +141,6 @@ IF OBJECT_ID(N'[dbo].[ChannelLinkageMaps]', 'U') IS NOT NULL
 GO
 IF OBJECT_ID(N'[dbo].[ChannelMaps]', 'U') IS NOT NULL
     DROP TABLE [dbo].[ChannelMaps];
-GO
-IF OBJECT_ID(N'[dbo].[Channels]', 'U') IS NOT NULL
-    DROP TABLE [dbo].[Channels];
 GO
 IF OBJECT_ID(N'[dbo].[Conflicts]', 'U') IS NOT NULL
     DROP TABLE [dbo].[Conflicts];
@@ -157,11 +157,11 @@ GO
 IF OBJECT_ID(N'[dbo].[Histories]', 'U') IS NOT NULL
     DROP TABLE [dbo].[Histories];
 GO
-IF OBJECT_ID(N'[dbo].[KeywordMaps]', 'U') IS NOT NULL
-    DROP TABLE [dbo].[KeywordMaps];
-GO
 IF OBJECT_ID(N'[dbo].[Keywords]', 'U') IS NOT NULL
     DROP TABLE [dbo].[Keywords];
+GO
+IF OBJECT_ID(N'[dbo].[KeywordMaps]', 'U') IS NOT NULL
+    DROP TABLE [dbo].[KeywordMaps];
 GO
 IF OBJECT_ID(N'[dbo].[PendingDeletions]', 'U') IS NOT NULL
     DROP TABLE [dbo].[PendingDeletions];
@@ -169,17 +169,14 @@ GO
 IF OBJECT_ID(N'[dbo].[PersonalTVGuideMaps]', 'U') IS NOT NULL
     DROP TABLE [dbo].[PersonalTVGuideMaps];
 GO
+IF OBJECT_ID(N'[dbo].[Programs]', 'U') IS NOT NULL
+    DROP TABLE [dbo].[Programs];
+GO
 IF OBJECT_ID(N'[dbo].[ProgramCategories]', 'U') IS NOT NULL
     DROP TABLE [dbo].[ProgramCategories];
 GO
 IF OBJECT_ID(N'[dbo].[ProgramCredits]', 'U') IS NOT NULL
     DROP TABLE [dbo].[ProgramCredits];
-GO
-IF OBJECT_ID(N'[dbo].[Programs]', 'U') IS NOT NULL
-    DROP TABLE [dbo].[Programs];
-GO
-IF OBJECT_ID(N'[dbo].[RecordingCredits]', 'U') IS NOT NULL
-    DROP TABLE [dbo].[RecordingCredits];
 GO
 IF OBJECT_ID(N'[dbo].[Recordings]', 'U') IS NOT NULL
     DROP TABLE [dbo].[Recordings];
@@ -190,11 +187,11 @@ GO
 IF OBJECT_ID(N'[dbo].[Satellites]', 'U') IS NOT NULL
     DROP TABLE [dbo].[Satellites];
 GO
-IF OBJECT_ID(N'[dbo].[ScheduleRulesTemplates]', 'U') IS NOT NULL
-    DROP TABLE [dbo].[ScheduleRulesTemplates];
-GO
 IF OBJECT_ID(N'[dbo].[Schedules]', 'U') IS NOT NULL
     DROP TABLE [dbo].[Schedules];
+GO
+IF OBJECT_ID(N'[dbo].[ScheduleRulesTemplates]', 'U') IS NOT NULL
+    DROP TABLE [dbo].[ScheduleRulesTemplates];
 GO
 IF OBJECT_ID(N'[dbo].[Settings]', 'U') IS NOT NULL
     DROP TABLE [dbo].[Settings];
@@ -213,6 +210,9 @@ IF OBJECT_ID(N'[dbo].[TvMovieMappings]', 'U') IS NOT NULL
 GO
 IF OBJECT_ID(N'[dbo].[Versions]', 'U') IS NOT NULL
     DROP TABLE [dbo].[Versions];
+GO
+IF OBJECT_ID(N'[dbo].[RecordingCredits]', 'U') IS NOT NULL
+    DROP TABLE [dbo].[RecordingCredits];
 GO
 
 -- --------------------------------------------------
