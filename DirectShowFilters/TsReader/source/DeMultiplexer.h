@@ -146,6 +146,8 @@ public:
   bool m_bFlushRunning;
   bool m_bReadAheadFromFile;
 
+  bool m_bVideoSampleLate;
+  bool m_bAudioSampleLate;
   //  long m_AudioDataLowCount;
   //  long m_VideoDataLowCount;
   long m_AVDataLowCount;
@@ -202,7 +204,6 @@ private:
 
   CBuffer* m_pCurrentTeletextBuffer;
   CBuffer* m_pCurrentSubtitleBuffer;
-//  CBuffer* m_pCurrentVideoBuffer;
   CBuffer* m_pCurrentAudioBuffer;
   CPcr     m_streamPcr;
   CPcr     m_lastVideoPTS;

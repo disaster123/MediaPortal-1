@@ -181,7 +181,7 @@ CTsReaderFilter::CTsReaderFilter(IUnknown *pUnk, HRESULT *phr):
   GetLogFile(filename);
   ::DeleteFile(filename);
   LogDebug("----- Experimental noStopMod version -----");
-  LogDebug("---------- v0.0.49 XXX -------------------");
+  LogDebug("---------- v0.0.51 XXX -------------------");
   
   m_fileReader=NULL;
   m_fileDuration=NULL;
@@ -395,6 +395,12 @@ void CTsReaderFilter::OnRequestAudioChange()
 {
   if ( m_pRequestAudioCallback ) m_pRequestAudioCallback->OnRequestAudioChange();
 }
+
+bool CTsReaderFilter::CheckAudioCallback()
+{
+  return (m_pRequestAudioCallback != NULL);
+}
+
 
 void CTsReaderFilter::OnVideoFormatChanged(int streamType,int width,int height,int aspectRatioX,int aspectRatioY,int bitrate,int isInterlaced)
 {
@@ -1335,8 +1341,7 @@ HRESULT CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
              && !m_bStopping && (m_State != State_Stopped) && !m_demultiplexer.EndOfFile() )
       {
         LogDebug("CTsReaderFilter: SeekPreStart: NotDeliveredSample error!! - set EOF");
-        NotifyEvent(EC_ERRORABORT, 0x88780078, NULL); // forces player to abort..."No sound driver is available for use"   
-        m_demultiplexer.SetEndOfFile(true);
+        SetErrorAbort();
         SetWaitDataAfterSeek(false);           
         return E_FAIL;
       }
@@ -1431,14 +1436,14 @@ void CTsReaderFilter::ThreadProc()
     }
     else if (m_isUNCfile)
     {
-      pauseWaitTime = 2000;
-      underRunLimit = 15;
+      pauseWaitTime = 3000;
+      underRunLimit = 10;
       longPause = false;
     }
     else
     {
-      pauseWaitTime = 2000;
-      underRunLimit = 30;
+      pauseWaitTime = 3000;
+      underRunLimit = 20;
       longPause = false;
     }
 
@@ -1464,11 +1469,15 @@ void CTsReaderFilter::ThreadProc()
         }
         _InterlockedAnd(&m_demultiplexer.m_AVDataLowCount, 0);
         m_bRenderingClockTooFast=false ;
+        m_demultiplexer.m_bVideoSampleLate=false;
+        m_demultiplexer.m_bAudioSampleLate=false;
       }
       else
       {
         lastDataLowTime = timeNow;
         _InterlockedAnd(&m_demultiplexer.m_AVDataLowCount, 0);
+        m_demultiplexer.m_bVideoSampleLate=false;
+        m_demultiplexer.m_bAudioSampleLate=false;
       }
     }
     
@@ -1672,7 +1681,7 @@ void CTsReaderFilter::ThreadProc()
           audSampleSleep = m_pAudioPin->m_FillBuffSleepTime;
         }
         
-        if ((cntA < 1) || (cntV < 1) || (cntA > 100) || (cntV > 100))
+        if ( ((cntA < 1) && (cntV < 1)) || (cntA > 100) || (cntV > 100))
         {
           LogDebug("Buffers : A/V = %d/%d, A last : %03.3f, V Last : %03.3f, ADur : %03.3f ms, ASlp : %d ms", cntA, cntV, (float)lastAudio.Millisecs()/1000.0f,(float)lastVideo.Millisecs()/1000.0f, audSampleDur, audSampleSleep);
         }
@@ -2117,6 +2126,23 @@ void CTsReaderFilter::WriteRegistryKeyDword(HKEY hKey, LPCTSTR& lpSubKey, DWORD&
   {
     LogDebug("Error writing to Registry - subkey: %s error: %d", lpSubKey, result);
   }
+}
+
+void CTsReaderFilter::SetErrorAbort()
+{
+  m_demultiplexer.SetEndOfFile(true);
+
+  if (GetAudioPin()->IsConnected())
+  {
+    GetAudioPin()->DeliverEndOfStream();
+  }
+
+  if (GetVideoPin()->IsConnected())
+  {
+    GetVideoPin()->DeliverEndOfStream();
+  }
+  
+  NotifyEvent(EC_ERRORABORT, 0x88780078, NULL); // forces MP player to abort..."No sound driver is available for use"   
 }
 
 

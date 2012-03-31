@@ -370,8 +370,9 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
             {
               if (lastAudio.Millisecs() - 500 < firstVideo.Millisecs()) //Less than 500ms A/V overlap
               {
-                BestCompensation = lastAudio - (500*10000) - m_pTsReaderFilter->m_RandomCompensation - m_rtStart ;
+                BestCompensation = lastAudio - (450*10000) - m_pTsReaderFilter->m_RandomCompensation - m_rtStart ;
                 AddVideoCompensation = firstVideo - (lastAudio - (300*10000)) ;
+                //AddVideoCompensation = firstVideo - (lastAudio - (200*10000)) ;
                 AddVideoCompensation = (AddVideoCompensation > (2500*10000)) ? (2500*10000) : AddVideoCompensation; //Limit to 2.5 seconds
                 LogDebug("Compensation : ( Rnd : %d mS ) Audio pts greatly ahead Video pts . Add %03.3f sec of extra video comp to start now !...( real time TV )",(DWORD)m_pTsReaderFilter->m_RandomCompensation/10000,(float)AddVideoCompensation.Millisecs()/1000.0f) ;
               }
@@ -466,9 +467,20 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
           cRefTime -= m_pTsReaderFilter->m_ClockOnStart.m_time;
           if ((cRefTime.m_time >= 0) && (fTime > ((cRefTime.m_time >= FS_TIM_LIM) ? -0.3 : -0.5)) && (fTime < 2.0))
           {
+            if ((fTime < 0.1) && (m_dRateSeeking == 1.0))
+            {              
+              if (!demux.m_bAudioSampleLate) 
+              {
+                LogDebug("audPin : Audio to render late= %03.3f", (float)fTime) ;
+              }
+             //Samples times are getting close to presentation time
+              demux.m_bAudioSampleLate = true;   
+            }
+
             //Slowly increase stall point threshold over the first 8 seconds of play
             //to allow audio renderer buffer to build up to 0.4s
-            stallPoint = min(0.4, (0.2 + (((double)cRefTime.m_time)/400000000.0)));
+            // stallPoint = min(0.4, (0.2 + (((double)cRefTime.m_time)/400000000.0)));
+            stallPoint = 0.4;
             if ((fTime > stallPoint) && (m_pTsReaderFilter->State() == State_Running))
             {
               //Too early - stall to avoid over-filling of audio decode/renderer buffers

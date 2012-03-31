@@ -236,6 +236,9 @@ public:
 
   CLSID           GetCLSIDFromPin(IPin* pPin);
   
+  void            SetErrorAbort();
+  bool            CheckAudioCallback();
+  
 protected:
   void ThreadProc();
 
@@ -248,7 +251,7 @@ private:
   void    BufferingPause(bool longPause);
   void    ReadRegistryKeyDword(HKEY hKey, LPCTSTR& lpSubKey, DWORD& data);
   void    WriteRegistryKeyDword(HKEY hKey, LPCTSTR& lpSubKey, DWORD& data);
-
+  
   CAudioPin*	    m_pAudioPin;
   CVideoPin*	    m_pVideoPin;
   CSubtitlePin*	  m_pSubtitlePin;
