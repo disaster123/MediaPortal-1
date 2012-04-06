@@ -2455,16 +2455,16 @@ void CDeMultiplexer::SetMediaChanging(bool onOff)
   m_bWaitForMediaChange=onOff;
   m_tWaitForMediaChange=GET_TIME_NOW() ;
   
-  if (m_filter.GetAudioPin())
-  {
-    m_filter.GetAudioPin()->SetDiscontinuity(true);
-    m_filter.GetAudioPin()->SetAddPMT();
-  }
-  if (m_filter.GetVideoPin())
-  {
-    m_filter.GetVideoPin()->SetDiscontinuity(true);
-    m_filter.GetVideoPin()->SetAddPMT();
-  }
+//  if (m_filter.GetAudioPin())
+//  {
+//    m_filter.GetAudioPin()->SetDiscontinuity(true);
+//    m_filter.GetAudioPin()->SetAddPMT();
+//  }
+//  if (m_filter.GetVideoPin())
+//  {
+//    m_filter.GetVideoPin()->SetDiscontinuity(true);
+//    m_filter.GetVideoPin()->SetAddPMT();
+//  }
 }
 
 bool CDeMultiplexer::IsMediaChanging(void)

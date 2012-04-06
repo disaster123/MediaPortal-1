@@ -234,7 +234,6 @@ HRESULT CAudioPin::DoBufferProcessingLoop(void)
         {
           hr = Deliver(pSample);     
           m_sampleCount++ ;
-          m_bAddPMT = false; //Only add once
         }
         else
         {
@@ -538,7 +537,7 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
               demux.GetAudioStreamType(audioIndex, mt);
               pSample->SetMediaType(&mt);            
               LogDebug("audPin: Add pmt and set discontinuity L:%d B:%d fTime:%03.3f SampCnt:%d", m_bDiscontinuity, buffer->GetDiscontinuity(), (float)fTime, m_sampleCount);
-              // m_bAddPMT = false; //Only add once
+              m_bAddPMT = false; //Only add once
             }   
             else
             {        

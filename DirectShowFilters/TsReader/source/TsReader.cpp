@@ -181,7 +181,7 @@ CTsReaderFilter::CTsReaderFilter(IUnknown *pUnk, HRESULT *phr):
   GetLogFile(filename);
   ::DeleteFile(filename);
   LogDebug("----- Experimental noStopMod version -----");
-  LogDebug("---------- v0.0.51c XXX -------------------");
+  LogDebug("---------- v0.0.51d XXX -------------------");
   
   m_fileReader=NULL;
   m_fileDuration=NULL;
@@ -389,6 +389,17 @@ int CTsReaderFilter::GetPinCount()
 void CTsReaderFilter::OnMediaTypeChanged(int mediaTypes)
 {
   if ( m_pCallback ) m_pCallback->OnMediaTypeChanged(mediaTypes);
+  
+  if (GetAudioPin() && (mediaTypes & AUDIO_CHANGE))
+  {
+    GetAudioPin()->SetDiscontinuity(true);
+    GetAudioPin()->SetAddPMT();
+  }
+  if (GetVideoPin() && (mediaTypes & VIDEO_CHANGE))
+  {
+    GetVideoPin()->SetDiscontinuity(true);
+    GetVideoPin()->SetAddPMT();
+  }
 }
 
 void CTsReaderFilter::OnRequestAudioChange()
