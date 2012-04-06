@@ -76,7 +76,7 @@ bool CVideoPin::IsInFillBuffer()
 
 bool CVideoPin::HasDeliveredSample()
 {
-  return (m_sampleCount > 1);
+  return ((m_sampleCount > 0) || !m_bConnected);
 }
 
 bool CVideoPin::IsConnected()
@@ -358,7 +358,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
         // Avoid excessive video Fill buffer preemption
         // and slow down emptying rate when data available gets really low
           //        double frameTime;
-          //        int buffCnt = demux.GetVideoBufferCnt(&frameTime);
+          //        int buffCnt = demux.GetVideoBuffCntFt(&frameTime);
           //        DWORD sampSleepTime = max(1,(DWORD)(frameTime/4.0));       
           //        if ((buffCnt == 0) || (buffCnt > 5) || (m_dRateSeeking != 1.0))
           //        {
@@ -367,8 +367,12 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
           //        //Sleep(min(10,sampSleepTime));
           //        m_FillBuffSleepTime = min(8,sampSleepTime);
 
-        m_FillBuffSleepTime = 2;
-                 
+          //        int buffCnt = demux.GetVideoBufferCnt();
+          //        if ((buffCnt != 0) && (m_dRateSeeking == 1.0) && (m_pTsReaderFilter->State() == State_Running))
+          //        {
+          //          m_FillBuffSleepTime = 2;
+          //        }
+                        
         //CAutoLock flock (&demux.m_sectionFlushVideo);
         // Get next video buffer from demultiplexer
         buffer=demux.GetVideo(earlyStall);
@@ -394,7 +398,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
       if (buffer == NULL)
       {
         //Sleep(10);
-        m_FillBuffSleepTime = 10;
+        m_FillBuffSleepTime = 5;
       }
       else
       {
@@ -566,14 +570,14 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
               cntA = demux.GetAudioBufferPts(firstAudio, lastAudio); 
               cntV = demux.GetVideoBufferPts(firstVideo, lastVideo) + 1;
 
-              LogDebug("Vid/Ref : %03.3f, Late %c-frame(%02d), Compensated = %03.3f ( %0.3f A/V buffers=%02d/%02d), Clk : %f, SampCnt %d, stallPt %03.3f", (float)RefTime.Millisecs()/1000.0f,buffer->GetFrameType(),buffer->GetFrameCount(), (float)cRefTime.Millisecs()/1000.0f, fTime, cntA,cntV,clock, m_sampleCount, (float)stallPoint);              
+              LogDebug("Vid/Ref : %03.3f, %c-frame(%02d), Compensated = %03.3f ( %0.3f A/V buffers=%02d/%02d), Clk : %f, SampCnt %d, stallPt %03.3f", (float)RefTime.Millisecs()/1000.0f,buffer->GetFrameType(),buffer->GetFrameCount(), (float)cRefTime.Millisecs()/1000.0f, fTime, cntA,cntV,clock, m_sampleCount, (float)stallPoint);              
             }
 
             if ((fTime < 0.02) && (m_dRateSeeking == 1.0) && (m_sampleCount > 50))
             {              
               //Samples are running very late - check if this is a persistant problem by counting over a period of time 
               //(m_AVDataLowCount is checked in CTsReaderFilter::ThreadProc())
-              _InterlockedExchangeAdd(&demux.m_AVDataLowCount, 2);   
+              _InterlockedExchangeAdd(&demux.m_AVDataLowCount, 1);   
             }
             
             if (m_pTsReaderFilter->m_ShowBufferVideo) m_pTsReaderFilter->m_ShowBufferVideo--;

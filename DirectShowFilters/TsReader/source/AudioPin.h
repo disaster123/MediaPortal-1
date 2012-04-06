@@ -56,6 +56,7 @@ public:
   void SetStart(CRefTime rtStartTime);
   bool IsConnected();
   bool IsInFillBuffer();
+  bool HasDeliveredSample();
   void SetDiscontinuity(bool onOff);
   LONGLONG m_sampleDuration;
   //DWORD    m_sampleSleepTime;

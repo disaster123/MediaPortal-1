@@ -36,8 +36,8 @@
 #define AUDIO_CHANGE 0x1
 #define VIDEO_CHANGE 0x2
 
-#define INIT_SHOWBUFFERVIDEO 20
-#define INIT_SHOWBUFFERAUDIO 10
+#define INIT_SHOWBUFFERVIDEO 5
+#define INIT_SHOWBUFFERAUDIO 5
 #define FS_TIM_LIM (2000*10000) //2 seconds in hns units
 #define FS_ADDON_LIM (1000*10000) //1 second in hns units (must not be zero)
 

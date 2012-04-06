@@ -124,6 +124,7 @@ CDeMultiplexer::CDeMultiplexer(CTsDuration& duration,CTsReaderFilter& filter)
   m_FirstVideoSample = 0x7FFFFFFF00000000LL;
   m_LastVideoSample = 0;
   m_LastDataFromRtsp = GET_TIME_NOW();
+  m_targetAVready = m_LastDataFromRtsp;
   m_mpegPesParser = new CMpegPesParser();
   
   LogDebug("demux: Start file read thread");
@@ -648,6 +649,7 @@ CBuffer* CDeMultiplexer::GetAudio(bool earlyStall)
     }
 
     m_bAudioVideoReady=true ;
+    m_targetAVready = GET_TIME_NOW() + 100;
   }
 
   //Return the next buffer
@@ -2099,7 +2101,12 @@ int CDeMultiplexer::GetAudioBufferCnt()
   return m_vecAudioBuffers.size();
 }
 
-int CDeMultiplexer::GetVideoBufferCnt(double* frameTime)
+int CDeMultiplexer::GetVideoBufferCnt()
+{
+  return m_vecVideoBuffers.size();
+}
+
+int CDeMultiplexer::GetVideoBuffCntFt(double* frameTime)
 {
   double fps = m_mpegPesParser->basicVideoInfo.fps;
   if ((fps > 22.0) && (fps < 130.0))
@@ -2236,6 +2243,7 @@ void CDeMultiplexer::OnNewChannel(CChannelInfo& info)
       m_bFlushDelgNow = true;
       WakeThread(); 
     }
+    m_filter.m_bForceSeekOnStop=true; // Force a seek if requested by player
   }
   else
   {
