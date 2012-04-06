@@ -225,6 +225,7 @@ void CVideoPin::SetDiscontinuity(bool onOff)
 void CVideoPin::SetAddPMT()
 {
   m_bAddPMT = true;
+  m_sampleCount = 0;
 }
 
 void CVideoPin::CreateEmptySample(IMediaSample *pSample)
@@ -270,6 +271,11 @@ HRESULT CVideoPin::DoBufferProcessingLoop(void)
         if ((pSample->GetActualDataLength() > 0)&& !m_pTsReaderFilter->IsSeeking() && !m_pTsReaderFilter->IsStopping())
         {
           hr = Deliver(pSample);     
+          m_sampleCount++ ;
+        }
+        else
+        {
+          m_bDiscontinuity = true;
         }
 		
         pSample->Release();
@@ -598,7 +604,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
           // delete the buffer
           delete buffer;
           demux.EraseVideoBuff();
-          m_sampleCount++ ;         
+          //m_sampleCount++ ;         
         }
         else
         { // Buffer was not displayed because it was out of date, search for next.

@@ -58,6 +58,7 @@ public:
   bool IsInFillBuffer();
   bool HasDeliveredSample();
   void SetDiscontinuity(bool onOff);
+  void SetAddPMT();
   LONGLONG m_sampleDuration;
   //DWORD    m_sampleSleepTime;
   DWORD    m_FillBuffSleepTime;
@@ -87,6 +88,7 @@ protected:
   DWORD m_LastFillBuffTime;
   int   m_sampleCount;
   bool  m_bPinNoAddPMT;
+  bool  m_bAddPMT;
   
 };
 

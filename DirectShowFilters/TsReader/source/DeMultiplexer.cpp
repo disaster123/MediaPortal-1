@@ -105,8 +105,6 @@ CDeMultiplexer::CDeMultiplexer(CTsDuration& duration,CTsReaderFilter& filter)
   m_mpegParserReset = true;
   m_videoChanged=false;
   m_audioChanged=false;
-  SetMediaChanging(false);
-  SetAudioChanging(false);
   m_DisableDiscontinuitiesFiltering = false;
 
   m_AudioPrevCC = -1;
@@ -123,8 +121,14 @@ CDeMultiplexer::CDeMultiplexer(CTsDuration& duration,CTsReaderFilter& filter)
   m_lastVidResY=-1 ;
   m_FirstVideoSample = 0x7FFFFFFF00000000LL;
   m_LastVideoSample = 0;
+  
   m_LastDataFromRtsp = GET_TIME_NOW();
   m_targetAVready = m_LastDataFromRtsp;
+  m_tWaitForMediaChange=m_LastDataFromRtsp ;
+  m_tWaitForAudioSelection=m_LastDataFromRtsp;
+  m_bWaitForMediaChange=false;
+  m_bWaitForAudioSelection=false;
+
   m_mpegPesParser = new CMpegPesParser();
   
   LogDebug("demux: Start file read thread");
@@ -222,6 +226,7 @@ bool CDeMultiplexer::SetAudioStream(int stream)
   }
   else
   {
+    m_filter.GetAudioPin()->SetAddPMT();
     m_filter.GetAudioPin()->SetDiscontinuity(true);
   }
 
@@ -2449,12 +2454,32 @@ void CDeMultiplexer::SetMediaChanging(bool onOff)
   LogDebug("demux:Wait for media format change:%d", onOff);
   m_bWaitForMediaChange=onOff;
   m_tWaitForMediaChange=GET_TIME_NOW() ;
+  
+  if (m_filter.GetAudioPin())
+  {
+    m_filter.GetAudioPin()->SetDiscontinuity(true);
+    m_filter.GetAudioPin()->SetAddPMT();
+  }
+  if (m_filter.GetVideoPin())
+  {
+    m_filter.GetVideoPin()->SetDiscontinuity(true);
+    m_filter.GetVideoPin()->SetAddPMT();
+  }
 }
 
 bool CDeMultiplexer::IsMediaChanging(void)
 {
   CAutoLock lock (&m_sectionMediaChanging);
-  if (!m_bWaitForMediaChange) return false ;
+  if (!m_bWaitForMediaChange)
+  { 
+    return false ;
+  }
+  else if (!m_filter.CheckCallback() && (GET_TIME_NOW()-m_tWaitForMediaChange > 200))
+  {
+    m_bWaitForMediaChange=false;
+    LogDebug("demux: No callback - Wait for Media change cancelled");
+    return false;
+  }
   else
   {
     if (GET_TIME_NOW()-m_tWaitForMediaChange > 5000)

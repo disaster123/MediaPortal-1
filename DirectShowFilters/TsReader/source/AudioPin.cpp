@@ -75,6 +75,7 @@ CAudioPin::CAudioPin(LPUNKNOWN pUnk, CTsReaderFilter *pFilter, HRESULT *phr,CCri
   m_bSubtitleCompensationSet=false;
   m_bInFillBuffer=false;
   m_bPinNoAddPMT = false;
+  m_bAddPMT = false;
 }
 
 CAudioPin::~CAudioPin()
@@ -112,6 +113,13 @@ void CAudioPin::SetDiscontinuity(bool onOff)
   m_bDiscontinuity=onOff;
 }
 
+void CAudioPin::SetAddPMT()
+{
+  LogDebug("audPin:SetAddPMT()");
+  m_bAddPMT = true;
+  m_sampleCount = 0;
+}
+
 HRESULT CAudioPin::CheckConnect(IPin *pReceivePin)
 {
   //LogDebug("audPin:CheckConnect()");
@@ -146,6 +154,7 @@ HRESULT CAudioPin::CompleteConnect(IPin *pReceivePin)
 {
   m_bInFillBuffer = false;
   m_bPinNoAddPMT = false;
+  m_bAddPMT = true;
   LogDebug("audPin:CompleteConnect()");
   HRESULT hr = CBaseOutputPin::CompleteConnect(pReceivePin);
   if (SUCCEEDED(hr))
@@ -224,6 +233,12 @@ HRESULT CAudioPin::DoBufferProcessingLoop(void)
         if ((pSample->GetActualDataLength() > 0) && !m_pTsReaderFilter->IsSeeking() && !m_pTsReaderFilter->IsStopping())
         {
           hr = Deliver(pSample);     
+          m_sampleCount++ ;
+          m_bAddPMT = false; //Only add once
+        }
+        else
+        {
+          m_bDiscontinuity = true;
         }
 		
         pSample->Release();
@@ -303,8 +318,6 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
         //Sleep(20);
         m_FillBuffSleepTime = 5;
         CreateEmptySample(pSample);
-        //m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
-        //m_sampleCount = 0;
         m_bInFillBuffer = false;
         return NOERROR;
       }
@@ -319,7 +332,7 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
       else
       {
         buffer=NULL;
-        //Force discon and add pmt to next good sample
+        //Force discon and add PMT to next sample
         m_sampleCount = 0;
         m_bDiscontinuity=true;
       }
@@ -516,7 +529,7 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
             //ifso, set it
             pSample->SetDiscontinuity(TRUE);
 
-            if ((m_sampleCount == 0) && !m_pTsReaderFilter->m_bDisableAddPMT && !m_bPinNoAddPMT)
+            if ((m_sampleCount == 0) && m_bAddPMT && !m_pTsReaderFilter->m_bDisableAddPMT && !m_bPinNoAddPMT)
             {
               //Add MediaType info to first sample after OnThreadStartPlay()
               CMediaType mt; 
@@ -525,7 +538,7 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
               demux.GetAudioStreamType(audioIndex, mt);
               pSample->SetMediaType(&mt);            
               LogDebug("audPin: Add pmt and set discontinuity L:%d B:%d fTime:%03.3f SampCnt:%d", m_bDiscontinuity, buffer->GetDiscontinuity(), (float)fTime, m_sampleCount);
-              m_bPinNoAddPMT = true; //Only add on first play (not after a seek)
+              // m_bAddPMT = false; //Only add once
             }   
             else
             {        
@@ -566,7 +579,7 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
           delete buffer;
           demux.EraseAudioBuff();
           //Sleep(sampSleepTime) ;
-          m_sampleCount++ ;
+          //m_sampleCount++ ;
         }
         else
         { // Buffer was not displayed because it was out of date, search for next.

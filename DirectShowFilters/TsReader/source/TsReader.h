@@ -238,6 +238,7 @@ public:
   
   void            SetErrorAbort();
   bool            CheckAudioCallback();
+  bool            CheckCallback();
   
 protected:
   void ThreadProc();

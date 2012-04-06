@@ -181,7 +181,7 @@ CTsReaderFilter::CTsReaderFilter(IUnknown *pUnk, HRESULT *phr):
   GetLogFile(filename);
   ::DeleteFile(filename);
   LogDebug("----- Experimental noStopMod version -----");
-  LogDebug("---------- v0.0.51 XXX -------------------");
+  LogDebug("---------- v0.0.51c XXX -------------------");
   
   m_fileReader=NULL;
   m_fileDuration=NULL;
@@ -399,6 +399,11 @@ void CTsReaderFilter::OnRequestAudioChange()
 bool CTsReaderFilter::CheckAudioCallback()
 {
   return (m_pRequestAudioCallback != NULL);
+}
+
+bool CTsReaderFilter::CheckCallback()
+{
+  return (m_pCallback != NULL);
 }
 
 
