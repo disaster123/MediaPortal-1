@@ -457,7 +457,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
                                                                       
           if (m_dRateSeeking == 1.0)
           {
-            if (fTime < 0.2)
+            if ((fTime < 0.3) && (m_pTsReaderFilter->State() == State_Running))
             {              
               if (!demux.m_bVideoSampleLate) 
               {
@@ -674,24 +674,13 @@ bool CVideoPin::TimestampDisconChecker(REFERENCE_TIME timeStamp)
   return mtdDiscontinuity;
 }
 
-
 //******************************************************
 /// Called when thread is about to start delivering data to the codec
 ///
 HRESULT CVideoPin::OnThreadStartPlay()
 {  
-  // DWORD thrdID = GetCurrentThreadId();
-  // LogDebug("vidPin:OnThreadStartPlay(%f), rate:%02.2f, threadID:0x%x, GET_TIME_NOW:0x%x", (float)m_rtStart.Millisecs()/1000.0f, m_dRateSeeking, thrdID, GET_TIME_NOW());
-
-  //start playing
-  
-  DeliverNewSegment(m_rtStart, m_rtStop, m_dRateSeeking);
-  return CSourceStream::OnThreadStartPlay( );
-}
-
-HRESULT CVideoPin::DeliverNewSegment(REFERENCE_TIME tStart, REFERENCE_TIME tStop, double dRate)
-{
-  LogDebug("vidPin:DeliverNewSegment(start %f, stop %f), rate:%02.2f", (float)tStart/10000000.0f, (float)tStop/10000000.0f, dRate);
+  //DWORD thrdID = GetCurrentThreadId();
+  //LogDebug("vidPin:OnThreadStartPlay(%f), rate:%02.2f, threadID:0x%x, GET_TIME_NOW:0x%x", (float)m_rtStart.Millisecs()/1000.0f, m_dRateSeeking, thrdID, GET_TIME_NOW());
 
   //set discontinuity flag indicating to codec that the new data
   //is not belonging to any previous data
@@ -703,12 +692,27 @@ HRESULT CVideoPin::DeliverNewSegment(REFERENCE_TIME tStart, REFERENCE_TIME tStop
   m_sampleCount = 0;
   m_bInFillBuffer=false;
 
+  m_pTsReaderFilter->m_ShowBufferVideo = 4;
+
   m_llLastComp = 0;
   m_llLastMTDts = 0;
   m_nNextMTD = 0;
 	m_fMTDMean = 0;
 	m_llMTDSumAvg = 0;
   ZeroMemory((void*)&m_pllMTD, sizeof(REFERENCE_TIME) * NB_MTDSIZE);
+
+  //Downstream flush
+  DeliverBeginFlush();
+  DeliverEndFlush();
+
+  //start playing
+  DeliverNewSegment(m_rtStart, m_rtStop, m_dRateSeeking);
+  return CSourceStream::OnThreadStartPlay( );
+}
+
+HRESULT CVideoPin::DeliverNewSegment(REFERENCE_TIME tStart, REFERENCE_TIME tStop, double dRate)
+{
+  LogDebug("vidPin:DeliverNewSegment(start %f, stop %f), rate:%02.2f", (float)tStart/10000000.0f, (float)tStop/10000000.0f, dRate);
 
   return CBaseOutputPin::DeliverNewSegment(tStart, tStop, dRate);
 }

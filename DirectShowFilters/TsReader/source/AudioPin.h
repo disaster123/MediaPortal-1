@@ -53,6 +53,7 @@ public:
   STDMETHODIMP Notify(IBaseFilter * pSender, Quality q);
 
   HRESULT OnThreadStartPlay();
+  HRESULT DeliverNewSegment(REFERENCE_TIME tStart, REFERENCE_TIME tStop, double dRate);
   void SetStart(CRefTime rtStartTime);
   bool IsConnected();
   bool IsInFillBuffer();
@@ -72,7 +73,6 @@ protected:
   BOOL      m_bDiscontinuity;
   CCritSec* m_section;
   bool      m_bPresentSample;
-  bool      m_bSubtitleCompensationSet;
   bool      m_bInFillBuffer;
   
   void     ClearAverageSampleDur();

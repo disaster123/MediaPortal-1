@@ -128,6 +128,7 @@ CDeMultiplexer::CDeMultiplexer(CTsDuration& duration,CTsReaderFilter& filter)
   m_tWaitForAudioSelection=m_LastDataFromRtsp;
   m_bWaitForMediaChange=false;
   m_bWaitForAudioSelection=false;
+  m_bSubtitleCompensationSet=false;
 
   m_mpegPesParser = new CMpegPesParser();
   
@@ -522,7 +523,7 @@ void CDeMultiplexer::Flush(bool clearAVready)
   if (clearAVready)
   {
     m_filter.m_bStreamCompensated=false ;
-    m_bAudioVideoReady=false ;
+    //m_bAudioVideoReady=false ;
   }
   
   m_bFlushRunning = false;
@@ -614,7 +615,7 @@ void CDeMultiplexer::EraseVideoBuff()
 ///
 ///Returns the next audio packet
 // or NULL if there is none available
-CBuffer* CDeMultiplexer::GetAudio(bool earlyStall)
+CBuffer* CDeMultiplexer::GetAudio(bool earlyStall, CRefTime rtStartTime)
 {
   if (m_bFlushDelgNow || m_bFlushRunning || m_bStarting) return NULL; //Flush pending or Start() active
   if ((m_iAudioStream == -1) || IsAudioChanging()) return NULL;
@@ -634,27 +635,9 @@ CBuffer* CDeMultiplexer::GetAudio(bool earlyStall)
     WakeThread();
   }
 
-  // when there are no audio packets at the moment
-  // then try to read some from the current file
-  if (!m_bAudioVideoReady && (m_vecAudioBuffers.size()>0))
+  if (!CheckCompensation(rtStartTime)) 
   {
-    // Goal is to start with at least 500mS audio and 300mS video ahead. ( LiveTv and RTSP as TsReader cannot go ahead by itself)
-    if (m_LastAudioSample.Millisecs() - m_FirstAudioSample.Millisecs() < 510) return NULL ;       // Not enough audio to start.
-
-    if (m_filter.GetVideoPin()->IsConnected())
-    {
-      if (!m_bFrame0Found) return NULL ;
-      //if (m_LastVideoSample.Millisecs() - m_FirstVideoSample.Millisecs() < 310) return NULL ;   // Not enough video to start.
-      if (m_LastVideoSample.Millisecs() - m_FirstVideoSample.Millisecs() < 410) return NULL ;   // Not enough video to start.
-      
-      if (!m_filter.m_EnableSlowMotionOnZapping)
-      {
-        if (m_LastAudioSample.Millisecs() - m_FirstVideoSample.Millisecs() < 10) return NULL ;   // Not enough simultaneous audio & video to start.
-      }       
-    }
-
-    m_bAudioVideoReady=true ;
-    m_targetAVready = GET_TIME_NOW() + 100;
+    return NULL; //Not enough audio/video to start
   }
 
   //Return the next buffer
@@ -682,6 +665,126 @@ void CDeMultiplexer::EraseAudioBuff()
   }
 }
 
+bool CDeMultiplexer::CheckCompensation(CRefTime rtStartTime)
+{
+  if (!m_filter.m_bStreamCompensated && (m_vecAudioBuffers.size()>0))
+  {
+    int cntA,cntV ;
+    CRefTime firstAudio, lastAudio;
+    CRefTime firstVideo, lastVideo;
+    cntA = GetAudioBufferPts(firstAudio, lastAudio); // this one...
+    cntV = GetVideoBufferPts(firstVideo, lastVideo);
+    
+    // Goal is to start with at least 500mS audio and 400mS video ahead. ( LiveTv and RTSP as TsReader cannot go ahead by itself)
+    if (lastAudio.Millisecs() - firstAudio.Millisecs() < (510+INITIAL_BUFF_DELAY)) return false ;       // Not enough audio to start.
+
+    if (m_filter.GetVideoPin()->IsConnected())
+    {
+      if (!m_bFrame0Found) return NULL ;
+        
+      //if (lastVideo.Millisecs() - firstVideo.Millisecs() < 310) return NULL ;   // Not enough video to start.
+      if (lastVideo.Millisecs() - firstVideo.Millisecs() < (410+INITIAL_BUFF_DELAY)) return false ;   // Not enough video to start.
+      
+      if (!m_filter.m_EnableSlowMotionOnZapping)
+      {
+        if (lastAudio.Millisecs() - firstVideo.Millisecs() < 10) return false ;   // Not enough simultaneous audio & video to start.
+      }       
+    }
+
+    // Ambass : Find out the best compensation to apply in order to have fast Audio/Video delivery
+    CRefTime BestCompensation ;
+    CRefTime AddVideoCompensation ;
+    LogDebug("Audio Samples : %d, First : %03.3f, Last : %03.3f",cntA, (float)firstAudio.Millisecs()/1000.0f,(float)lastAudio.Millisecs()/1000.0f);
+    LogDebug("Video Samples : %d, First : %03.3f, Last : %03.3f",cntV, (float)firstVideo.Millisecs()/1000.0f,(float)lastVideo.Millisecs()/1000.0f);
+              
+    if (m_filter.GetVideoPin()->IsConnected())
+    {
+      if (firstAudio.Millisecs() < firstVideo.Millisecs())
+      {
+        BestCompensation = firstAudio - m_filter.m_RandomCompensation - rtStartTime ;
+        AddVideoCompensation = firstVideo - firstAudio;
+        AddVideoCompensation = (AddVideoCompensation > (2000*10000)) ? (2000*10000) : AddVideoCompensation; //Limit to 2.0 seconds
+        LogDebug("Compensation : ( Rnd : %d mS ) Audio pts ahead Video pts . Add %03.3f sec of extra video comp to start now !...",(DWORD)m_filter.m_RandomCompensation/10000,(float)AddVideoCompensation.Millisecs()/1000.0f) ;
+       
+        //        if ((lastAudio.Millisecs() - (500+INITIAL_BUFF_DELAY)) < firstVideo.Millisecs()) //Less than (500+INITIAL_BUFF_DELAY)ms A/V overlap
+        //        {
+        //          BestCompensation = lastAudio - ((450+INITIAL_BUFF_DELAY)*10000) - m_filter.m_RandomCompensation - rtStartTime ;
+        //          AddVideoCompensation = firstVideo - (lastAudio - ((450+INITIAL_BUFF_DELAY)*10000)) ;
+        //          AddVideoCompensation = (AddVideoCompensation > (2500*10000)) ? (2500*10000) : AddVideoCompensation; //Limit to 2.5 seconds
+        //          LogDebug("Compensation : ( Rnd : %d mS ) Audio pts greatly ahead Video pts . Add %03.3f sec of extra video comp to start now !...( real time TV )",(DWORD)m_filter.m_RandomCompensation/10000,(float)AddVideoCompensation.Millisecs()/1000.0f) ;
+        //        }
+        //        else
+        //        {
+        //          BestCompensation = firstVideo - m_filter.m_RandomCompensation - rtStartTime ;
+        //          AddVideoCompensation = 0 ; // ( demux.m_IframeSample-firstAudio ) ;
+        //          LogDebug("Compensation : ( Rnd : %d mS ) Audio pts ahead Video Pts ( Recover skipping Audio ) ....",m_filter.m_RandomCompensation/10000) ;
+        //        }
+      }
+      else
+      {
+        BestCompensation = firstAudio-rtStartTime ;
+        AddVideoCompensation = 0 ;
+        LogDebug("Compensation : Audio pts behind Video Pts ( Recover skipping Video ) ....") ;
+      }
+      m_filter.m_RandomCompensation += 500000 ;   // Stupid feature required to have FFRW working with DVXA ( at least ATI.. ) to avoid frozen picture. ( it just moves the sample time a bit !! )
+      m_filter.m_RandomCompensation = m_filter.m_RandomCompensation % 1000000 ;
+    }
+    else
+    {
+      BestCompensation = firstAudio-rtStartTime - 4000000 ;   // Need add delay before playing...
+      AddVideoCompensation = 0 ;
+    }
+
+    // Here, clock filter should be running, but : EVR  is generally running and need to be compensated accordingly
+    //                                             with current elapsed time from "RUN" to avoid beeing late.
+    //                                             VMR9 is generally waiting I-frame + 1 or 2 frames to start clock and "RUN"
+    // Apply a margin of 200 mS seems safe to avoid being late.
+    if (m_filter.State() == State_Running)
+    {
+      REFERENCE_TIME RefClock = 0;
+      m_filter.GetMediaPosition(&RefClock) ;
+
+      m_filter.m_ClockOnStart = RefClock - rtStartTime.m_time ;
+      if (m_filter.m_bLiveTv)
+      {
+        LogDebug("CheckCompensation() - Elapsed time from pause to Audio/Video ( total zapping time ) : %d mS",GET_TIME_NOW()-m_filter.m_lastPause);
+      }
+    }
+    else
+    {
+      m_filter.m_ClockOnStart=0 ;
+    }
+
+    // set the current compensation
+    CRefTime compTemp;
+    compTemp.m_time=(BestCompensation.m_time - m_filter.m_ClockOnStart.m_time) - PRESENT_DELAY ;
+    m_filter.SetCompensation(compTemp);
+    m_filter.AddVideoComp = (AddVideoCompensation < 0) ? 0 : AddVideoCompensation;
+
+    LogDebug("demux:Compensation:%03.3f, Clock on start %03.3f m_rtStart:%d ",(float)m_filter.Compensation.Millisecs()/1000.0f, m_filter.m_ClockOnStart.Millisecs()/1000.0f, rtStartTime.Millisecs());
+
+    //set flag to false so we dont keep compensating
+    m_filter.m_bStreamCompensated = true;
+    m_bSubtitleCompensationSet = false;
+
+    //m_bAudioVideoReady=true ;
+    m_targetAVready = GET_TIME_NOW() + AV_READY_DELAY;
+  }
+
+  // Subtitle filter is "found" only after Run() has been completed
+  if(!m_bSubtitleCompensationSet)
+  {
+    IDVBSubtitle* pDVBSubtitleFilter(m_filter.GetSubtitleFilter());
+    if(pDVBSubtitleFilter)
+    {
+      LogDebug("demux:pDVBSubtitleFilter->SetTimeCompensation");
+      pDVBSubtitleFilter->SetTimeCompensation(m_filter.GetCompensation());
+      m_bSubtitleCompensationSet=true;
+    }
+  }
+  return true;
+}
+
 /// Starts the demuxer
 /// This method will read the file until we found the pat/sdt
 /// with all the audio/video pids
@@ -703,7 +806,7 @@ void CDeMultiplexer::Start()
   m_bSetAudioDiscontinuity=false;
   m_bSetVideoDiscontinuity=false;
   m_bReadAheadFromFile = false;
-  m_bAudioVideoReady=false;
+  //m_bAudioVideoReady=false;
   m_filter.m_bStreamCompensated=false ;
   int dwBytesProcessed=0;
   DWORD m_Time = GET_TIME_NOW();
@@ -778,7 +881,7 @@ int CDeMultiplexer::ReadAheadFromFile()
     m_bVideoSampleLate=false;
     m_bAudioSampleLate=false;
   }
-  else if (m_bAudioVideoReady 
+  else if (m_filter.m_bStreamCompensated 
            && (SizeRead >= 0) 
            && (SizeRead < (m_filter.IsUNCfile() ? MIN_READ_SIZE_UNC : MIN_READ_SIZE)))
   {
@@ -2139,7 +2242,7 @@ bool CDeMultiplexer::CheckPrefetchState(bool isVid, bool isAud)
   }
 
   //Start-of-play situation
-  if (!m_bAudioVideoReady)
+  if (!m_filter.m_bStreamCompensated)
   {
     return true;
   }
@@ -2248,7 +2351,6 @@ void CDeMultiplexer::OnNewChannel(CChannelInfo& info)
       m_bFlushDelgNow = true;
       WakeThread(); 
     }
-    m_filter.m_bForceSeekOnStop=true; // Force a seek if requested by player
   }
   else
   {

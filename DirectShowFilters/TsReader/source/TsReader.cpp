@@ -181,7 +181,7 @@ CTsReaderFilter::CTsReaderFilter(IUnknown *pUnk, HRESULT *phr):
   GetLogFile(filename);
   ::DeleteFile(filename);
   LogDebug("----- Experimental noStopMod version -----");
-  LogDebug("---------- v0.0.51d XXX -------------------");
+  LogDebug("---------- v0.0.51g XXX -------------------");
   
   m_fileReader=NULL;
   m_fileDuration=NULL;
@@ -238,6 +238,8 @@ CTsReaderFilter::CTsReaderFilter(IUnknown *pUnk, HRESULT *phr):
     
     RegCloseKey(key);
   }
+  
+  //CheckForMPAR();
 
   // Set default filtering mode (normal), if not overriden externaly (see ITSReader::SetRelaxedMode)
   m_demultiplexer.m_DisableDiscontinuitiesFiltering = false;
@@ -505,23 +507,26 @@ STDMETHODIMP CTsReaderFilter::GetState(DWORD dwMilliSecsTimeout, FILTER_STATE *p
       }
     }
 
-    bool isAVReady =  m_demultiplexer.m_bAudioVideoReady
-                      && GetVideoPin()->HasDeliveredSample()
-                      && GetAudioPin()->HasDeliveredSample()
-                      && (GET_TIME_NOW() > m_demultiplexer. m_targetAVready);
+    //    bool isAVReady =  m_bStreamCompensated
+    //              && GetVideoPin()->HasDeliveredSample()
+    //              && GetAudioPin()->HasDeliveredSample()
+    //              && (GET_TIME_NOW() > m_demultiplexer. m_targetAVready);
+
+    bool isAVReady =  m_bStreamCompensated
+              && (GET_TIME_NOW() > m_demultiplexer. m_targetAVready);
     
     //FFWD is more responsive if we return VFW_S_CANT_CUE when rate != 1.0
     if (isAVReady || (playRate != 1.0))
     {
-      //LogDebug("CTsReaderFilter::GetState(), VFW_S_CANT_CUE, playRate %f",(float)playRate);
+      LogDebug("CTsReaderFilter::GetState(), VFW_S_CANT_CUE, playRate %f",(float)playRate);
       return VFW_S_CANT_CUE;
     }
     else
     {
       //Stall for a while...
-      //LogDebug("CTsReaderFilter::GetState(), VFW_S_STATE_INTERMEDIATE");
+      //LogDebug("CTsReaderFilter::GetState(), wait isAVReady, loop %d", loopCnt);
       return VFW_S_STATE_INTERMEDIATE;
-    }   
+    }
   }
   else
   {
@@ -542,11 +547,11 @@ STDMETHODIMP CTsReaderFilter::Run(REFERENCE_TIME tStart)
 
   if (m_bStreamCompensated && m_bLiveTv)
   {
-    LogDebug("Elapsed time from pause to Audio/Video ( total zapping time ) : %d mS",GET_TIME_NOW()-m_lastPause);
+    LogDebug("Run() - Elapsed time from pause to Audio/Video ( total zapping time ) : %d mS",GET_TIME_NOW()-m_lastPause);
   }
  
   CAutoLock cObjectLock(m_pLock);
-
+ 
   //Wait for seeking to finish
   while (IsSeeking()) 
   {
@@ -671,11 +676,6 @@ STDMETHODIMP CTsReaderFilter::Pause()
   {
     m_ShowBufferVideo = 2;
     m_ShowBufferAudio = 2;
-  }
-  else
-  {
-    m_ShowBufferVideo = INIT_SHOWBUFFERVIDEO;
-    m_ShowBufferAudio = INIT_SHOWBUFFERAUDIO;
   }
 
   LogDebug("CTsReaderFilter::Pause() - IsTimeShifting = %d - state = %d", IsTimeShifting(), m_State);
@@ -1266,7 +1266,7 @@ HRESULT CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
     else
     {
       m_bStreamCompensated=false ;
-      m_demultiplexer.m_bAudioVideoReady=false ;
+      //m_demultiplexer.m_bAudioVideoReady=false ;
     }
 
 
@@ -1278,7 +1278,7 @@ HRESULT CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
       //LogDebug("CTsReaderFilter::--SeekPreStart() Do Seek"); 
       Seek(rtSeek, true);
     }
-    
+        
     if (m_fileDuration != NULL)
     {
       if (rtSeek >= m_duration.Duration())
@@ -1287,8 +1287,8 @@ HRESULT CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
       }
     }
 
-    m_ShowBufferVideo = 3;
-    m_ShowBufferAudio = 3;
+    //m_ShowBufferVideo = INIT_SHOWBUFFERVIDEO;
+    //m_ShowBufferAudio = INIT_SHOWBUFFERVIDEO;
 
     //Update the start positions on all pins
     GetVideoPin()->SetStart(rtAbsSeek) ;
@@ -1536,7 +1536,7 @@ void CTsReaderFilter::ThreadProc()
           isLiveCount = 2;
         }      
         //no, then get the duration from the local file
-        if (m_demultiplexer.m_bAudioVideoReady) //Normal play started
+        if (m_bStreamCompensated) //Normal play started
         {          
           if((durationUpdateLoop == 2) || m_bRecording || (m_State==State_Paused))
           {
@@ -1624,7 +1624,7 @@ void CTsReaderFilter::ThreadProc()
         }
         else
         {
-          m_bRecording = true; //Force duration update next time m_bAudioVideoReady is true
+          m_bRecording = true; //Force duration update next time m_bStreamCompensated is true
           lastDurUpdate = 0;
         }
       }
@@ -2005,8 +2005,8 @@ void CTsReaderFilter::BufferingPause(bool longPause)
     if (m_bPauseOnClockTooFast)
       return ;                  // Do not re-enter !
       
-    //Don't pause within 1s after a seek
-    if (((m_MediaPos/10000)-m_absSeekTime.Millisecs()) < (1*1000))
+    //Don't pause within 2s after a seek
+    if (((m_MediaPos/10000)-m_absSeekTime.Millisecs()) < (2*1000))
     {
       return ;                  
     }
@@ -2094,7 +2094,6 @@ void CTsReaderFilter::GetMediaPosition(REFERENCE_TIME *pMediaPos)
   return ; 
 }
 
-
 //----------------------------------------------------
 // Derived from FFDShow code
 CLSID CTsReaderFilter::GetCLSIDFromPin(IPin* pPin)
@@ -2166,6 +2165,28 @@ void CTsReaderFilter::SetErrorAbort()
   NotifyEvent(EC_ERRORABORT, 0x88780078, NULL); // forces MP player to abort..."No sound driver is available for use"   
 }
 
+//bool CTsReaderFilter::CheckForMPAR()
+//{
+//  LogDebug("CheckForMPAR 1");
+//
+////  FILTER_INFO filterInfo;
+////  ZeroMemory(&filterInfo, sizeof(filterInfo));
+////  QueryFilterInfo(&filterInfo); // This addref's the pGraph member
+////  LogDebug("CheckForMPAR 2");
+//
+//  CComPtr<IBaseFilter> pBaseFilter;
+//
+//  HRESULT hr = m_pGraph->FindFilterByName(L"MediaPortal - Audio Renderer", &pBaseFilter);
+//  LogDebug("CheckForMPAR 3 %d", hr);
+//  //filterInfo.pGraph->Release();
+//  if (hr != S_OK)
+//  {
+//    LogDebug("failed to find MediaPortal - Audio Renderer filter!");
+//    return false;
+//  }
+//  LogDebug("Found MediaPortal - Audio Renderer filter!");
+//  return true;
+//}
 
 ////////////////////////////////////////////////////////////////////////
 //

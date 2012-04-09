@@ -67,7 +67,7 @@ public:
   void       Start();
   void       Flush(bool clearAVready);
   CBuffer*   GetVideo(bool earlyStall);
-  CBuffer*   GetAudio(bool earlyStall);
+  CBuffer*   GetAudio(bool earlyStall, CRefTime rtStartTime);
   CBuffer*   GetSubtitle();
   void       EraseAudioBuff();
   void       EraseVideoBuff();
@@ -83,6 +83,7 @@ public:
   void       FillTeletext(CTsHeader& header, byte* tsPacket);
   void       SetEndOfFile(bool bEndOfFile);
   CPidTable  GetPidTable();
+  bool       CheckCompensation(CRefTime rtStartTime);
 
   int        GetAudioBufferPts(CRefTime& First, CRefTime& Last) ;
   int        GetAudioBufferCnt();
@@ -141,7 +142,7 @@ public:
 
   bool m_DisableDiscontinuitiesFiltering;
   DWORD m_LastDataFromRtsp;
-  bool m_bAudioVideoReady;
+  //bool m_bAudioVideoReady;
   bool m_bFlushDelegated;
   bool m_bFlushDelgNow;
   bool m_bFlushRunning;
@@ -153,6 +154,7 @@ public:
   //  long m_VideoDataLowCount;
   long m_AVDataLowCount;
   DWORD m_targetAVready;
+  bool  m_bSubtitleCompensationSet;
 
 private:
   struct stAudioStream
