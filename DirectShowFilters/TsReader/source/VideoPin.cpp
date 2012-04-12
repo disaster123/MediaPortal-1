@@ -269,7 +269,7 @@ HRESULT CVideoPin::DoBufferProcessingLoop(void)
       if (hr == S_OK) 
       {
         // Some decoders seem to crash when we provide empty samples 
-        if ((pSample->GetActualDataLength() > 0)&& !m_pTsReaderFilter->IsSeeking() && !m_pTsReaderFilter->IsStopping())
+        if ((pSample->GetActualDataLength() > 0) && !m_pTsReaderFilter->IsStopping())
         {
           hr = Deliver(pSample);     
           m_sampleCount++ ;

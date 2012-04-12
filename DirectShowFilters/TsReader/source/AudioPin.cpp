@@ -230,7 +230,7 @@ HRESULT CAudioPin::DoBufferProcessingLoop(void)
       if (hr == S_OK) 
       {
         // Some decoders seem to crash when we provide empty samples 
-        if ((pSample->GetActualDataLength() > 0) && !m_pTsReaderFilter->IsSeeking() && !m_pTsReaderFilter->IsStopping())
+        if ((pSample->GetActualDataLength() > 0) && !m_pTsReaderFilter->IsStopping())
         {
           hr = Deliver(pSample);     
           m_sampleCount++ ;
@@ -382,7 +382,7 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
           //and samples outside a sensible timing window during play 
           //(helps with signal corruption recovery)
           cRefTime -= m_pTsReaderFilter->m_ClockOnStart.m_time;
-          if ((cRefTime.m_time >= 0) && (fTime > ((cRefTime.m_time >= FS_TIM_LIM) ? -0.3 : -0.5)) && (fTime < 2.0))
+          if ((cRefTime.m_time >= (PRESENT_DELAY-(50*10000))) && (fTime > ((cRefTime.m_time >= FS_TIM_LIM) ? -0.3 : -0.5)) && (fTime < 2.0))
           {
             if ((fTime < 0.3) && (m_dRateSeeking == 1.0) && (m_pTsReaderFilter->State() == State_Running))
             {              
