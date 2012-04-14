@@ -292,10 +292,11 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
     CBuffer* buffer=NULL;
     bool earlyStall = false;
     
+    //get file-duration and set m_rtDuration
+    GetDuration(NULL);
+    
     do
     {
-      //get file-duration and set m_rtDuration
-      GetDuration(NULL);
 
       //Check if we need to wait for a while
       DWORD timeNow = GET_TIME_NOW();
@@ -382,7 +383,7 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
           //and samples outside a sensible timing window during play 
           //(helps with signal corruption recovery)
           cRefTime -= m_pTsReaderFilter->m_ClockOnStart.m_time;
-          if ((cRefTime.m_time >= (PRESENT_DELAY-(50*10000))) && (fTime > ((cRefTime.m_time >= FS_TIM_LIM) ? -0.3 : -0.5)) && (fTime < 2.0))
+          if ((cRefTime.m_time >= PRESENT_DELAY) && (fTime > ((cRefTime.m_time >= FS_TIM_LIM) ? -0.3 : -0.5)) && (fTime < 2.0))
           {
             if ((fTime < 0.3) && (m_dRateSeeking == 1.0) && (m_pTsReaderFilter->State() == State_Running))
             {              
@@ -494,6 +495,7 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
           delete buffer;
           demux.EraseAudioBuff();
           buffer=NULL ;
+          m_FillBuffSleepTime = (m_dRateSeeking == 1.0) ? 0 : 5;
           m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
           //Sleep(1) ;
         }
@@ -649,6 +651,9 @@ HRESULT CAudioPin::OnThreadStartPlay()
   m_LastFillBuffTime = GET_TIME_NOW();
   
   ClearAverageSampleDur();
+
+  //get file-duration and set m_rtDuration
+  GetDuration(NULL);
 
   //Downstream flush
   DeliverBeginFlush();

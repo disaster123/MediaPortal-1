@@ -38,11 +38,13 @@
 
 #define INIT_SHOWBUFFERVIDEO 5
 #define INIT_SHOWBUFFERAUDIO 5
+
+//Buffer control and start-of-play timing control constants
 #define FS_TIM_LIM (2000*10000) //2 seconds in hns units
 #define FS_ADDON_LIM (1000*10000) //1 second in hns units (must not be zero)
-#define INITIAL_BUFF_DELAY 100      // in ms units
-#define AV_READY_DELAY 0     // in ms units
-#define PRESENT_DELAY (200*10000) //100ms in hns units - compensation offset
+#define INITIAL_BUFF_DELAY 0      // ms units
+#define AV_READY_DELAY 0     // ms units
+#define PRESENT_DELAY (300*10000) // hns units - timestamp compensation offset
 
 using namespace std;
 

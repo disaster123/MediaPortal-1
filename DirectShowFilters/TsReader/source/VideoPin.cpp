@@ -331,11 +331,11 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
     CBuffer* buffer = NULL;    
     bool earlyStall = false;
 
+    //get file-duration and set m_rtDuration
+    GetDuration(NULL);
+
     do
     {
-      //get file-duration and set m_rtDuration
-      GetDuration(NULL);
-
       //Check if we need to wait for a while
       DWORD timeNow = GET_TIME_NOW();
       while (timeNow < (m_LastFillBuffTime + m_FillBuffSleepTime))
@@ -414,7 +414,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
         CRefTime RefTime, cRefTime;
         double fTime = 0.0;
         double clock = 0.0;
-        double stallPoint = 1.0;
+        double stallPoint = 1.2;
         //check if it has a timestamp
         bool HasTimestamp=buffer->MediaTime(RefTime);
         if (HasTimestamp)
@@ -471,7 +471,6 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
             //stallPoint = min(1.8, (1.3 + (((double)cRefTime.m_time)/160000000.0)));
             //stallPoint = min(1.3, (0.8 + (((double)cRefTime.m_time)/160000000.0)));
             //stallPoint = min(1.1, (0.8 + (((double)cRefTime.m_time)/160000000.0)));
-            stallPoint = 1.2;
             
             //Discard late samples at start of play,
             //and samples outside a sensible timing window during play 
@@ -613,6 +612,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
           demux.EraseVideoBuff();
           m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
           buffer = NULL;
+          m_FillBuffSleepTime = (m_dRateSeeking == 1.0) ? 0 : 5;
         }
       }      
       earlyStall = false;
@@ -700,6 +700,9 @@ HRESULT CVideoPin::OnThreadStartPlay()
 	m_fMTDMean = 0;
 	m_llMTDSumAvg = 0;
   ZeroMemory((void*)&m_pllMTD, sizeof(REFERENCE_TIME) * NB_MTDSIZE);
+
+  //get file-duration and set m_rtDuration
+  GetDuration(NULL);
 
   //Downstream flush
   DeliverBeginFlush();
