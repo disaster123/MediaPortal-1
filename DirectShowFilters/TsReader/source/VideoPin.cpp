@@ -353,7 +353,6 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
       //we dont try to read any packets, but simply return...
       if (m_pTsReaderFilter->IsSeeking() || m_pTsReaderFilter->IsStopping())
       {
-        //Sleep(5);
         m_FillBuffSleepTime = 5;
         CreateEmptySample(pSample);
         m_bInFillBuffer = false;
@@ -361,25 +360,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
       }
             
       if (m_pTsReaderFilter->m_bStreamCompensated && !demux.m_bFlushRunning)
-      {       
-        // Avoid excessive video Fill buffer preemption
-        // and slow down emptying rate when data available gets really low
-          //        double frameTime;
-          //        int buffCnt = demux.GetVideoBuffCntFt(&frameTime);
-          //        DWORD sampSleepTime = max(1,(DWORD)(frameTime/4.0));       
-          //        if ((buffCnt == 0) || (buffCnt > 5) || (m_dRateSeeking != 1.0))
-          //        {
-          //      	  sampSleepTime = 1;
-          //        }                       
-          //        //Sleep(min(10,sampSleepTime));
-          //        m_FillBuffSleepTime = min(8,sampSleepTime);
-
-          //        int buffCnt = demux.GetVideoBufferCnt();
-          //        if ((buffCnt != 0) && (m_dRateSeeking == 1.0) && (m_pTsReaderFilter->State() == State_Running))
-          //        {
-          //          m_FillBuffSleepTime = 2;
-          //        }
-                        
+      {                               
         //CAutoLock flock (&demux.m_sectionFlushVideo);
         // Get next video buffer from demultiplexer
         buffer=demux.GetVideo(earlyStall);
@@ -404,7 +385,6 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
 
       if (buffer == NULL)
       {
-        //Sleep(10);
         m_FillBuffSleepTime = 5;
       }
       else
@@ -414,7 +394,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
         CRefTime RefTime, cRefTime;
         double fTime = 0.0;
         double clock = 0.0;
-        double stallPoint = 1.2;
+        double stallPoint = 2.5;
         //check if it has a timestamp
         bool HasTimestamp=buffer->MediaTime(RefTime);
         if (HasTimestamp)
@@ -467,20 +447,16 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
               demux.m_bVideoSampleLate = true;   
             }
 
-            //Slowly increase stall point threshold over the first 8 seconds of play
-            //stallPoint = min(1.8, (1.3 + (((double)cRefTime.m_time)/160000000.0)));
-            //stallPoint = min(1.3, (0.8 + (((double)cRefTime.m_time)/160000000.0)));
-            //stallPoint = min(1.1, (0.8 + (((double)cRefTime.m_time)/160000000.0)));
-            
             //Discard late samples at start of play,
             //and samples outside a sensible timing window during play 
             //(helps with signal corruption recovery)
             if ((fTime > (ForcePresent ? -0.5 : -0.3)) && (fTime < 3.5))
             {
-              if ((fTime > stallPoint) && (m_pTsReaderFilter->State() == State_Running))
+              //if ((fTime > stallPoint) && (m_pTsReaderFilter->State() == State_Running))
+              if ((fTime > stallPoint) && (m_sampleCount > 10))
               {
-                //Too early - stall for a while to avoid over-filling of video pipeline buffers
-                //Sleep(10);
+                //Too early - stall for a while to avoid over-filling of video pipeline buffers,
+                //but don't enable at start of play to make sure graph starts properly
                 m_FillBuffSleepTime = 10;
                 buffer = NULL;
                 earlyStall = true;
@@ -612,7 +588,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
           demux.EraseVideoBuff();
           m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
           buffer = NULL;
-          m_FillBuffSleepTime = (m_dRateSeeking == 1.0) ? 0 : 5;
+          m_FillBuffSleepTime = 1;
         }
       }      
       earlyStall = false;

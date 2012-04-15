@@ -181,7 +181,7 @@ CTsReaderFilter::CTsReaderFilter(IUnknown *pUnk, HRESULT *phr):
   GetLogFile(filename);
   ::DeleteFile(filename);
   LogDebug("----- Experimental noStopMod version -----");
-  LogDebug("---------- v0.0.52 XXX -------------------");
+  LogDebug("---------- v0.0.54 XXX -------------------");
   
   m_fileReader=NULL;
   m_fileDuration=NULL;
@@ -578,11 +578,15 @@ STDMETHODIMP CTsReaderFilter::Run(REFERENCE_TIME tStart)
 
   m_demultiplexer.m_LastDataFromRtsp=GET_TIME_NOW();
   //Set our StreamTime Reference offset to zero
-  HRESULT hr= CSource::Run(tStart);
   SetMediaPosnUpdate(m_MediaPos) ;   // reset offset.
+
+  HRESULT hr= CSource::Run(tStart);
 
   FindSubtitleFilter();
   m_bPauseOnClockTooFast=false ;
+
+  m_ShowBufferVideo = 3;
+  m_ShowBufferAudio = 3;
   
   LogDebug("CTsReaderFilter::Run(%05.2f) state %d -->done",msec,m_State);
   return hr;
@@ -672,11 +676,14 @@ bool CTsReaderFilter::IsLiveTV()
 
 STDMETHODIMP CTsReaderFilter::Pause()
 {
-  if (m_bPauseOnClockTooFast)
-  {
-    m_ShowBufferVideo = 2;
-    m_ShowBufferAudio = 2;
-  }
+//  if (m_bPauseOnClockTooFast)
+//  {
+//    m_ShowBufferVideo = 2;
+//    m_ShowBufferAudio = 2;
+//  }
+
+  m_ShowBufferVideo = 3;
+  m_ShowBufferAudio = 3;
 
   LogDebug("CTsReaderFilter::Pause() - IsTimeShifting = %d - state = %d", IsTimeShifting(), m_State);
   HRESULT hr = S_FALSE;
@@ -794,6 +801,7 @@ STDMETHODIMP CTsReaderFilter::Pause()
   }
     
   LogDebug("CTsReaderFilter::Pause() - END - state = %d", m_State);
+  SetMediaPosnUpdate(m_MediaPos) ;   // reset offset.
   
   m_bForcePosnUpdate = true;
   WakeThread();
