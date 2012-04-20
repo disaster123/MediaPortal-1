@@ -34,7 +34,8 @@ public:
   STDMETHODIMP NonDelegatingQueryInterface( REFIID riid, void ** ppv );
 
   //CSourceStream
-  HRESULT GetMediaType(CMediaType *pMediaType);
+  HRESULT CheckMediaType(const CMediaType* pmt);
+  HRESULT GetMediaType(int iPosition, CMediaType *pMediaType);
   HRESULT DecideBufferSize(IMemAllocator *pAlloc, ALLOCATOR_PROPERTIES *pRequest);
   HRESULT CompleteConnect(IPin *pReceivePin);
   HRESULT CheckConnect(IPin *pReceivePin);

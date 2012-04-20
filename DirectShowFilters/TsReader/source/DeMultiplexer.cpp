@@ -84,6 +84,7 @@ CDeMultiplexer::CDeMultiplexer(CTsDuration& duration,CTsReaderFilter& filter)
   m_iAudioIdx = -1;
   m_iPatVersion = -1;
   m_ReqPatVersion = -1;
+  m_bPatParsed = false;
   m_bWaitGoodPat = false;
   m_receivedPackets = 0;
   m_bSetAudioDiscontinuity = false;
@@ -676,14 +677,14 @@ bool CDeMultiplexer::CheckCompensation(CRefTime rtStartTime)
     cntV = GetVideoBufferPts(firstVideo, lastVideo);
     
     // Goal is to start with at least 500mS audio and 400mS video ahead. ( LiveTv and RTSP as TsReader cannot go ahead by itself)
-    if (lastAudio.Millisecs() - firstAudio.Millisecs() < (510+INITIAL_BUFF_DELAY)) return false ;       // Not enough audio to start.
+    if (lastAudio.Millisecs() - firstAudio.Millisecs() < (310+INITIAL_BUFF_DELAY)) return false ;       // Not enough audio to start.
 
     if (m_filter.GetVideoPin()->IsConnected())
     {
       if (!m_bFrame0Found) return NULL ;
         
       //if (lastVideo.Millisecs() - firstVideo.Millisecs() < 310) return NULL ;   // Not enough video to start.
-      if (lastVideo.Millisecs() - firstVideo.Millisecs() < (410+INITIAL_BUFF_DELAY)) return false ;   // Not enough video to start.
+      if (lastVideo.Millisecs() - firstVideo.Millisecs() < (210+INITIAL_BUFF_DELAY)) return false ;   // Not enough video to start.
       
       if (!m_filter.m_EnableSlowMotionOnZapping)
       {
@@ -701,26 +702,17 @@ bool CDeMultiplexer::CheckCompensation(CRefTime rtStartTime)
     {
       if (firstAudio.Millisecs() < firstVideo.Millisecs())
       {
-        CRefTime targFirstAudio = ((firstVideo - firstAudio) > (800*10000)) ? (firstVideo - (800*10000)) : firstAudio; //Limit to 800ms difference
+        CRefTime targFirstAudio = ((firstVideo - firstAudio) > (500*10000)) ? (firstVideo - (500*10000)) : firstAudio; //Limit to 500ms difference
+          
+        if (targFirstAudio > (lastAudio-(100*10000))) //Make sure there is an audio sample available at the start
+        {
+          targFirstAudio = lastAudio-(100*10000);
+        }
         
         BestCompensation = targFirstAudio - m_filter.m_RandomCompensation - rtStartTime ;
         AddVideoCompensation = firstVideo - targFirstAudio;
         AddVideoCompensation = (AddVideoCompensation > (2000*10000)) ? (2000*10000) : AddVideoCompensation; //Limit to 2.0 seconds
-        LogDebug("Compensation : ( Rnd : %d mS ) Audio pts ahead Video pts . Add %03.3f sec of extra video comp to start now !...",(DWORD)m_filter.m_RandomCompensation/10000,(float)AddVideoCompensation.Millisecs()/1000.0f) ;
-       
-        //        if ((lastAudio.Millisecs() - (500+INITIAL_BUFF_DELAY)) < firstVideo.Millisecs()) //Less than (500+INITIAL_BUFF_DELAY)ms A/V overlap
-        //        {
-        //          BestCompensation = lastAudio - ((450+INITIAL_BUFF_DELAY)*10000) - m_filter.m_RandomCompensation - rtStartTime ;
-        //          AddVideoCompensation = firstVideo - (lastAudio - ((450+INITIAL_BUFF_DELAY)*10000)) ;
-        //          AddVideoCompensation = (AddVideoCompensation > (2500*10000)) ? (2500*10000) : AddVideoCompensation; //Limit to 2.5 seconds
-        //          LogDebug("Compensation : ( Rnd : %d mS ) Audio pts greatly ahead Video pts . Add %03.3f sec of extra video comp to start now !...( real time TV )",(DWORD)m_filter.m_RandomCompensation/10000,(float)AddVideoCompensation.Millisecs()/1000.0f) ;
-        //        }
-        //        else
-        //        {
-        //          BestCompensation = firstVideo - m_filter.m_RandomCompensation - rtStartTime ;
-        //          AddVideoCompensation = 0 ; // ( demux.m_IframeSample-firstAudio ) ;
-        //          LogDebug("Compensation : ( Rnd : %d mS ) Audio pts ahead Video Pts ( Recover skipping Audio ) ....",m_filter.m_RandomCompensation/10000) ;
-        //        }
+        LogDebug("Compensation : ( Rnd : %d mS ) Audio pts ahead Video pts . Add %03.3f sec of extra video comp to start now !...",(DWORD)m_filter.m_RandomCompensation/10000,(float)AddVideoCompensation.Millisecs()/1000.0f) ;       
       }
       else
       {
@@ -733,7 +725,7 @@ bool CDeMultiplexer::CheckCompensation(CRefTime rtStartTime)
     }
     else
     {
-      BestCompensation = firstAudio-rtStartTime - 4000000 ;   // Need add delay before playing...
+      BestCompensation = firstAudio-rtStartTime;
       AddVideoCompensation = 0 ;
     }
 
@@ -804,6 +796,7 @@ void CDeMultiplexer::Start()
   m_bEndOfFile=false;
   m_iPatVersion=-1;
   m_ReqPatVersion=-1;
+  m_bPatParsed = false;
   m_bWaitGoodPat = false;
   m_bSetAudioDiscontinuity=false;
   m_bSetVideoDiscontinuity=false;
@@ -2549,6 +2542,8 @@ void CDeMultiplexer::OnNewChannel(CChannelInfo& info)
       SetSubtitleStream(bitmap_index);
     }
   }
+  
+  m_bPatParsed = true;
 }
 
 
@@ -2637,6 +2632,26 @@ bool CDeMultiplexer::IsNewPatReady(void)
 void CDeMultiplexer::ResetPatInfo(void)
 {
   m_pids.Reset();
+}
+
+bool CDeMultiplexer::VidPidGood(void)
+{
+  return (m_pids.videoPids.size() > 0);
+}
+
+bool CDeMultiplexer::AudPidGood(void)
+{
+  return (m_pids.audioPids.size() > 0);
+}
+
+bool CDeMultiplexer::SubPidGood(void)
+{
+  return (m_pids.subtitlePids.size() > 0);
+}
+
+bool CDeMultiplexer::PatParsed(void)
+{
+  return m_bPatParsed;
 }
 
 void CDeMultiplexer::SetTeletextEventCallback(int (CALLBACK *pTeletextEventCallback)(int eventcode, DWORD64 eval))

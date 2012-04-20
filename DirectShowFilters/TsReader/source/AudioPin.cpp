@@ -95,16 +95,77 @@ STDMETHODIMP CAudioPin::NonDelegatingQueryInterface( REFIID riid, void ** ppv )
   return CSourceStream::NonDelegatingQueryInterface(riid, ppv);
 }
 
-HRESULT CAudioPin::GetMediaType(CMediaType *pmt)
+HRESULT CAudioPin::CheckMediaType(const CMediaType* pmt)
 {
-  //LogDebug("audPin:GetMediaType()");
   CDeMultiplexer& demux=m_pTsReaderFilter->GetDemultiplexer();
 
+  if (!demux.PatParsed())
+  {
+    return E_FAIL;
+  }
+  if (!demux.AudPidGood())
+  {
+    return E_FAIL;
+  }
+
+  CMediaType pmti;
   int audioIndex = 0;
   demux.GetAudioStream(audioIndex);
+  demux.GetAudioStreamType(audioIndex, pmti);
+  CMediaType* ppmti = &pmti;
 
-  //demux.GetAudioStreamType(demux.GetAudioStream(), *pmt);
-  demux.GetAudioStreamType(audioIndex, *pmt);
+  if(*pmt == *ppmti)
+  {
+    LogDebug("audPin:CheckMediaType() ok");  
+    return S_OK;
+  }
+
+  //LogDebug("audPin:CheckMediaType() fail");  
+  return E_FAIL;
+}
+
+HRESULT CAudioPin::GetMediaType(int iPosition, CMediaType *pmt)
+{
+  CheckPointer(pmt, E_POINTER);
+
+  //LogDebug("audPin:GetMediaType() index = %d", iPosition);
+  
+  // This should never happen          
+  if (iPosition < 0) 
+  {              
+    return E_INVALIDARG;
+  }                                        
+  if (iPosition > 0)   
+  {           
+    return VFW_S_NO_MORE_ITEMS;
+  }   
+
+  CDeMultiplexer& demux=m_pTsReaderFilter->GetDemultiplexer();
+
+  for (int i=0; i < 200; i++) //Wait up to 1 sec for pmt to be valid
+  {
+    if (demux.PatParsed())
+    {
+      if (!demux.AudPidGood())
+      {
+        //No audio stream
+        //LogDebug("audPin:GetMediaType() - no pid");
+        return VFW_S_NO_MORE_ITEMS;
+      }
+      else
+      {
+        //LogDebug("audPin:GetMediaType() - good pid");
+        int audioIndex = 0;
+        demux.GetAudioStream(audioIndex);
+        demux.GetAudioStreamType(audioIndex, *pmt);
+        return S_OK;
+      }
+    }
+    Sleep(5);
+  }
+
+  //Return a null media type
+  pmt->InitMediaType();
   return S_OK;
 }
 
@@ -155,11 +216,11 @@ HRESULT CAudioPin::CompleteConnect(IPin *pReceivePin)
   m_bInFillBuffer = false;
   m_bPinNoAddPMT = false;
   m_bAddPMT = true;
-  LogDebug("audPin:CompleteConnect()");
+  //LogDebug("audPin:CompleteConnect()");
   HRESULT hr = CBaseOutputPin::CompleteConnect(pReceivePin);
   if (SUCCEEDED(hr))
   {
-    LogDebug("audPin:CompleteConnect() done");
+    LogDebug("audPin:CompleteConnect() ok");
     m_bConnected=true;
   }
   else
@@ -180,14 +241,22 @@ HRESULT CAudioPin::CompleteConnect(IPin *pReceivePin)
     m_pTsReaderFilter->GetDuration(&refTime);
     m_rtDuration=CRefTime(refTime);
   }
-  //LogDebug("audPin:CompleteConnect() ok");
+  LogDebug("audPin:CompleteConnect() end");
   return hr;
 }
 
 HRESULT CAudioPin::BreakConnect()
 {
+  //  LogDebug("audPin:BreakConnect() start");
+  //  int i=0;
+  //  while ((i < 1000) && m_pTsReaderFilter->IsSeeking())
+  //  {
+  //    Sleep(1);
+  //    i++;
+  //  } 
+  //  LogDebug("audPin:BreakConnect() ok");
+  
   m_bConnected=false;
-  //LogDebug("audPin:BreakConnect()");
   return CSourceStream::BreakConnect();
 }
 
@@ -385,7 +454,7 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
           if ((cRefTime.m_time >= PRESENT_DELAY) && 
               (fTime > ((cRefTime.m_time >= FS_TIM_LIM) ? -0.3 : -0.5)) && (fTime < 2.5))
           {
-            if ((fTime < 0.3) && (m_dRateSeeking == 1.0) && (m_pTsReaderFilter->State() == State_Running))
+            if ((fTime < 0.2) && (m_dRateSeeking == 1.0) && (m_pTsReaderFilter->State() == State_Running))
             {              
               if (!demux.m_bAudioSampleLate) 
               {
@@ -449,13 +518,13 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
             pSample->SetSyncPoint(TRUE);
 
             pSample->SetTime(&refTime,&refTime);
-            if (m_pTsReaderFilter->m_ShowBufferAudio || fTime < 0.02)
+            if (m_pTsReaderFilter->m_ShowBufferAudio || fTime < 0.02 || (m_sampleCount < 3))
             {
               int cntA, cntV;
               CRefTime firstAudio, lastAudio;
               CRefTime firstVideo, lastVideo;
               cntA = demux.GetAudioBufferPts(firstAudio, lastAudio); 
-              cntV = demux.GetVideoBufferPts(firstVideo, lastVideo) + 1;
+              cntV = demux.GetVideoBufferPts(firstVideo, lastVideo);
               
               LogDebug("Aud/Ref : %03.3f, Compensated = %03.3f ( %0.3f A/V buffers=%02d/%02d), Clk : %f, SampCnt %d, Sleep %d ms, stallPt %03.3f", (float)RefTime.Millisecs()/1000.0f, (float)cRefTime.Millisecs()/1000.0f, fTime,cntA,cntV, clock, m_sampleCount, m_FillBuffSleepTime, (float)stallPoint);
             }
@@ -567,7 +636,7 @@ LONGLONG CAudioPin::GetAverageSampleDur(LONGLONG timeStamp)
 
 bool CAudioPin::IsInFillBuffer()
 {
-  return m_bInFillBuffer;
+  return (m_bInFillBuffer && m_bConnected);
 }
 
 bool CAudioPin::HasDeliveredSample()
@@ -615,8 +684,8 @@ HRESULT CAudioPin::ChangeRate()
 ///
 HRESULT CAudioPin::OnThreadStartPlay()
 {
-  //DWORD thrdID = GetCurrentThreadId();
-  //LogDebug("audPin:OnThreadStartPlay(%f), rate:%02.2f, threadID:0x%x, GET_TIME_NOW:0x%x", (float)m_rtStart.Millisecs()/1000.0f, m_dRateSeeking, thrdID, GET_TIME_NOW());
+  DWORD thrdID = GetCurrentThreadId();
+  LogDebug("audPin:OnThreadStartPlay(%f), rate:%02.2f, threadID:0x%x, GET_TIME_NOW:0x%x", (float)m_rtStart.Millisecs()/1000.0f, m_dRateSeeking, thrdID, GET_TIME_NOW());
 
   //set flag to compensate any differences in the stream time & file time
   m_pTsReaderFilter->m_bStreamCompensated = false;

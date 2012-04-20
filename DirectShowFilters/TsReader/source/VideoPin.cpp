@@ -71,7 +71,7 @@ CVideoPin::~CVideoPin()
 
 bool CVideoPin::IsInFillBuffer()
 {
-  return m_bInFillBuffer;
+  return (m_bInFillBuffer && m_bConnected);
 }
 
 bool CVideoPin::HasDeliveredSample()
@@ -97,20 +97,72 @@ STDMETHODIMP CVideoPin::NonDelegatingQueryInterface( REFIID riid, void ** ppv )
   return CSourceStream::NonDelegatingQueryInterface(riid, ppv);
 }
 
-HRESULT CVideoPin::GetMediaType(CMediaType *pmt)
+HRESULT CVideoPin::CheckMediaType(const CMediaType* pmt)
 {
   CDeMultiplexer& demux=m_pTsReaderFilter->GetDemultiplexer();
-  //LogDebug("vidPin:GetMediaType() 0");
-  for (int i=0; i < 1000; i++) //Wait up to 1 sec for pmt to be valid
+  
+  if (!demux.PatParsed())
   {
-    if (demux.GetVideoStreamType(*pmt)) 
-    {
-      //LogDebug("vidPin:GetMediaType() 1");
-      return S_OK;
-    }
-    Sleep(1);
+    return E_FAIL;
   }
-  //LogDebug("vidPin:GetMediaType() 2");
+  if (!demux.VidPidGood())
+  {
+    return E_FAIL;
+  }
+
+  CMediaType pmti;  
+  demux.GetVideoStreamType(pmti);
+  CMediaType* ppmti = &pmti;
+
+  if(*pmt == *ppmti)
+  {
+    LogDebug("vidPin:CheckMediaType() ok");  
+    return S_OK;
+  }
+
+  //LogDebug("vidPin:CheckMediaType() fail");  
+  return E_FAIL;
+}
+
+HRESULT CVideoPin::GetMediaType(int iPosition, CMediaType *pmt)
+{
+  CheckPointer(pmt, E_POINTER);
+
+  //LogDebug("vidPin:GetMediaType() index = %d", iPosition);
+  
+  // This should never happen          
+  if (iPosition < 0) 
+  {              
+    return E_INVALIDARG;
+  }                                        
+  if (iPosition > 0)   
+  {           
+    return VFW_S_NO_MORE_ITEMS;
+  }   
+
+  CDeMultiplexer& demux=m_pTsReaderFilter->GetDemultiplexer();
+  
+  for (int i=0; i < 200; i++) //Wait up to 1 sec for pmt to be valid
+  {
+    if (demux.PatParsed())
+    {
+      if (!demux.VidPidGood())
+      {
+        //No video stream
+        //LogDebug("vidPin:GetMediaType() - no pid");
+        return VFW_S_NO_MORE_ITEMS;
+      }
+      else if (demux.GetVideoStreamType(*pmt))
+      {
+        //LogDebug("vidPin:GetMediaType() - good pid");
+        return S_OK;
+      }
+    }
+    Sleep(5);
+  }
+
+  //Return a null media type
+  pmt->InitMediaType();
   return S_OK;
 }
 
@@ -186,7 +238,7 @@ HRESULT CVideoPin::CompleteConnect(IPin *pReceivePin)
     }
     
     m_bConnected=true;    
-    LogDebug("vidPin:CompleteConnect() done");
+    LogDebug("vidPin:CompleteConnect() ok");
   }
   else
   {
@@ -206,13 +258,21 @@ HRESULT CVideoPin::CompleteConnect(IPin *pReceivePin)
     m_pTsReaderFilter->GetDuration(&refTime);
     m_rtDuration=CRefTime(refTime);
   }
-  //LogDebug("vidPin:CompleteConnect() ok");
+  LogDebug("vidPin:CompleteConnect() end");
   return hr;
 }
 
 HRESULT CVideoPin::BreakConnect()
 {
-  //LogDebug("vidPin:BreakConnect() ok");
+  //  LogDebug("vidPin:BreakConnect() start");
+  //  int i=0;
+  //  while ((i < 1000) && m_pTsReaderFilter->IsSeeking())
+  //  {
+  //    Sleep(1);
+  //    i++;
+  //  }
+  //  LogDebug("vidPin:BreakConnect() ok");
+  
   m_bConnected=false;
   return CSourceStream::BreakConnect();
 }
@@ -544,13 +604,13 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
               }                             
             }
 
-            if (m_pTsReaderFilter->m_ShowBufferVideo || ((fTime < 0.02) && (m_dRateSeeking == 1.0)))
+            if (m_pTsReaderFilter->m_ShowBufferVideo || ((fTime < 0.02) && (m_dRateSeeking == 1.0)) || (m_sampleCount < 3))
             {
               int cntA, cntV;
               CRefTime firstAudio, lastAudio;
               CRefTime firstVideo, lastVideo;
               cntA = demux.GetAudioBufferPts(firstAudio, lastAudio); 
-              cntV = demux.GetVideoBufferPts(firstVideo, lastVideo) + 1;
+              cntV = demux.GetVideoBufferPts(firstVideo, lastVideo);
 
               LogDebug("Vid/Ref : %03.3f, %c-frame(%02d), Compensated = %03.3f ( %0.3f A/V buffers=%02d/%02d), Clk : %f, SampCnt %d, stallPt %03.3f", (float)RefTime.Millisecs()/1000.0f,buffer->GetFrameType(),buffer->GetFrameCount(), (float)cRefTime.Millisecs()/1000.0f, fTime, cntA,cntV,clock, m_sampleCount, (float)stallPoint);              
             }
@@ -655,8 +715,8 @@ bool CVideoPin::TimestampDisconChecker(REFERENCE_TIME timeStamp)
 ///
 HRESULT CVideoPin::OnThreadStartPlay()
 {  
-  //DWORD thrdID = GetCurrentThreadId();
-  //LogDebug("vidPin:OnThreadStartPlay(%f), rate:%02.2f, threadID:0x%x, GET_TIME_NOW:0x%x", (float)m_rtStart.Millisecs()/1000.0f, m_dRateSeeking, thrdID, GET_TIME_NOW());
+  DWORD thrdID = GetCurrentThreadId();
+  LogDebug("vidPin:OnThreadStartPlay(%f), rate:%02.2f, threadID:0x%x, GET_TIME_NOW:0x%x", (float)m_rtStart.Millisecs()/1000.0f, m_dRateSeeking, thrdID, GET_TIME_NOW());
 
   //set discontinuity flag indicating to codec that the new data
   //is not belonging to any previous data

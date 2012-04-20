@@ -66,7 +66,7 @@ CSubtitlePin::~CSubtitlePin()
 
 bool CSubtitlePin::IsInFillBuffer()
 {
-  return m_bInFillBuffer;
+  return (m_bInFillBuffer && m_bConnected);
 }
 
 bool CSubtitlePin::IsConnected()
@@ -90,13 +90,29 @@ STDMETHODIMP CSubtitlePin::NonDelegatingQueryInterface( REFIID riid, void ** ppv
 
 HRESULT CSubtitlePin::GetMediaType(CMediaType *pmt)
 {
-  pmt->InitMediaType();
-  pmt->SetType      (& MEDIATYPE_Stream);
-  pmt->SetSubtype   (& MEDIASUBTYPE_MPEG2_TRANSPORT);
-  pmt->SetSampleSize(1);
-  pmt->SetTemporalCompression(FALSE);
-  pmt->SetVariableSize();
+  CheckPointer(pmt, E_POINTER);
 
+  //LogDebug("subPin:GetMediaType()");
+  
+  CDeMultiplexer& demux=m_pTsReaderFilter->GetDemultiplexer();
+
+  for (int i=0; i < 200; i++) //Wait up to 1 sec for pmt to be valid
+  {
+    if (demux.PatParsed())
+    {
+      pmt->InitMediaType();
+      pmt->SetType      (& MEDIATYPE_Stream);
+      pmt->SetSubtype   (& MEDIASUBTYPE_MPEG2_TRANSPORT);
+      pmt->SetSampleSize(1);
+      pmt->SetTemporalCompression(FALSE);
+      pmt->SetVariableSize();    
+      return S_OK;
+    }
+    Sleep(5);
+  }
+
+  //Return a null media type
+  pmt->InitMediaType();
   return S_OK;
 }
 
@@ -162,15 +178,16 @@ HRESULT CSubtitlePin::CheckConnect(IPin *pReceivePin)
   }
   return CBaseOutputPin::CheckConnect(pReceivePin);
 }
+
 HRESULT CSubtitlePin::CompleteConnect(IPin *pReceivePin)
 {
   m_bInFillBuffer=false;
-  LogDebug("subPin:CompleteConnect()");
+  //LogDebug("subPin:CompleteConnect()");
   HRESULT hr = CBaseOutputPin::CompleteConnect(pReceivePin);
 
   if (SUCCEEDED(hr))
   {
-    LogDebug("subPin:CompleteConnect() done");
+    LogDebug("subPin:CompleteConnect() ok");
     m_bConnected=true;
   }
   else
@@ -191,14 +208,22 @@ HRESULT CSubtitlePin::CompleteConnect(IPin *pReceivePin)
     m_pTsReaderFilter->GetDuration(&refTime);
     m_rtDuration=CRefTime(refTime);
   }
-  LogDebug("subPin:CompleteConnect() ok");
+  LogDebug("subPin:CompleteConnect() end");
   return hr;
 }
 
 
 HRESULT CSubtitlePin::BreakConnect()
 {
-  //LogDebug("subPin:BreakConnect() ok");
+  //  LogDebug("subPin:BreakConnect() start");
+  //  int i=0;
+  //  while ((i < 1000) && m_pTsReaderFilter->IsSeeking())
+  //  {
+  //    Sleep(1);
+  //    i++;
+  //  }
+  //  LogDebug("subPin:BreakConnect() ok");
+  
   m_bConnected = false;
   return CSourceStream::BreakConnect();
 }

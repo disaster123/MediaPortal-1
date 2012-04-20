@@ -136,6 +136,11 @@ public:
   bool IsNewPatReady(void);
   void SetAudioChanging(bool onOff);
   bool IsAudioChanging(void);
+  
+  bool AudPidGood(void);
+  bool VidPidGood(void);
+  bool SubPidGood(void);
+  bool PatParsed(void);
 
   int  ReadAheadFromFile();
   bool CheckPrefetchState(bool isVid, bool isAud);
@@ -283,5 +288,5 @@ private:
   
   bool m_mpegParserReset;
   bool m_bFirstGopParsed;
-
+  bool m_bPatParsed;
 };

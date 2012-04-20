@@ -291,6 +291,7 @@ private:
   DWORD           m_MPmainThreadID;
   bool            m_isUNCfile;
   CCritSec        m_sectionSeeking;
+  CCritSec        m_sectionSeekWaitData;
   bool            m_WaitDataAfterSeek;
 };
 
