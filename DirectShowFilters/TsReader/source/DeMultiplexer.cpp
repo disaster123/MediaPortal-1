@@ -524,7 +524,6 @@ void CDeMultiplexer::Flush(bool clearAVready)
   if (clearAVready)
   {
     m_filter.m_bStreamCompensated=false ;
-    //m_bAudioVideoReady=false ;
   }
   
   m_bFlushRunning = false;
@@ -540,8 +539,12 @@ CBuffer* CDeMultiplexer::GetSubtitle()
 
   if ((m_pids.subtitlePids.size() > 0 && m_pids.subtitlePids[0].Pid==0) || IsMediaChanging())
   {
-    m_bReadAheadFromFile = true;
-    WakeThread();
+    if (CheckPrefetchState(false, true))
+    {
+      //Read some data
+      m_bReadAheadFromFile = true;
+      WakeThread();
+    }
     return NULL;
   }
   //if there is no subtitle pid, then simply return NULL
@@ -575,14 +578,18 @@ CBuffer* CDeMultiplexer::GetVideo(bool earlyStall)
   //if there is no video pid, then simply return NULL
   if ((m_pids.videoPids.size() > 0 && m_pids.videoPids[0].Pid==0) || IsMediaChanging())
   {
-    m_bReadAheadFromFile = true;
-    WakeThread();
+    if (CheckPrefetchState(false, true))
+    {
+      //Read some data
+      m_bReadAheadFromFile = true;
+      WakeThread();
+    }
     return NULL;
   }
 
   if (CheckPrefetchState(!earlyStall, false))
   {
-    //Prefetch some data
+    //Read some data
     m_bReadAheadFromFile = true;
     WakeThread();
   }
@@ -624,14 +631,18 @@ CBuffer* CDeMultiplexer::GetAudio(bool earlyStall, CRefTime rtStartTime)
   // if there is no audio pid, then simply return NULL
   if ((m_audioPid==0) || IsMediaChanging())
   {
-    m_bReadAheadFromFile = true;
-    WakeThread();
+    if (CheckPrefetchState(false, true))
+    {
+      //Read some data
+      m_bReadAheadFromFile = true;
+      WakeThread();
+    }
     return NULL;
   }
 
-  if (CheckPrefetchState(false, !earlyStall))
+  if (CheckPrefetchState(!earlyStall, false))
   {
-    //Prefetch some data
+    //Read some data
     m_bReadAheadFromFile = true;
     WakeThread();
   }
@@ -761,7 +772,6 @@ bool CDeMultiplexer::CheckCompensation(CRefTime rtStartTime)
     m_filter.m_bStreamCompensated = true;
     m_bSubtitleCompensationSet = false;
 
-    //m_bAudioVideoReady=true ;
     m_targetAVready = GET_TIME_NOW() + AV_READY_DELAY;
   }
 
@@ -801,7 +811,6 @@ void CDeMultiplexer::Start()
   m_bSetAudioDiscontinuity=false;
   m_bSetVideoDiscontinuity=false;
   m_bReadAheadFromFile = false;
-  //m_bAudioVideoReady=false;
   m_filter.m_bStreamCompensated=false ;
   int dwBytesProcessed=0;
   DWORD m_Time = GET_TIME_NOW();
@@ -1239,18 +1248,16 @@ void CDeMultiplexer::FillAudio(CTsHeader& header, byte* tsPacket)
           while (m_t_vecAudioBuffers.size())
           {
             ivecBuffers it;
-            // Check if queue is no abnormally long..
+            // Check if queue is not abnormally long..
             if (m_vecAudioBuffers.size()>MAX_AUD_BUF_SIZE)
             {
               ivecBuffers it = m_vecAudioBuffers.begin();
               delete *it;
               m_vecAudioBuffers.erase(it);
               
-              //Something is going wrong - abort play
-              LogDebug("DeMultiplexer: Audio buffer overrun error - aborting");
-              m_filter.SetErrorAbort();
-              //m_bFlushDelegated = true;
-              //WakeThread();            
+              //Something is going wrong...
+              //LogDebug("DeMultiplexer: Audio buffer overrun, A/V buffers = %d/%d", m_vecAudioBuffers.size(), m_vecVideoBuffers.size());
+              //m_filter.SetErrorAbort();
             }
             it = m_t_vecAudioBuffers.begin();
   
@@ -1635,11 +1642,9 @@ void CDeMultiplexer::FillVideoH264(CTsHeader& header, byte* tsPacket)
                 delete pCurrentVideoBuffer;
                 pCurrentVideoBuffer = NULL;
                 m_bSetVideoDiscontinuity = true;            
-                //Something is going wrong - abort play
-                LogDebug("DeMultiplexer: Video buffer overrun error - aborting");
-                m_filter.SetErrorAbort();  
-                //m_bFlushDelegated = true;
-                //WakeThread();            
+                //Something is going wrong...
+                //LogDebug("DeMultiplexer: Video buffer overrun, A/V buffers = %d/%d", m_vecAudioBuffers.size(), m_vecVideoBuffers.size());
+                //m_filter.SetErrorAbort();  
               }
             }
           }
@@ -2035,11 +2040,9 @@ void CDeMultiplexer::FillVideoMPEG2(CTsHeader& header, byte* tsPacket)
                   delete pCurrentVideoBuffer;
                   pCurrentVideoBuffer = NULL;
                   m_bSetVideoDiscontinuity = true;
-                  //Something is going wrong - abort play
-                  LogDebug("DeMultiplexer: Video buffer overrun error - aborting");
-                  m_filter.SetErrorAbort();  
-                  //m_bFlushDelegated = true;
-                  //WakeThread();            
+                  //Something is going wrong...
+                  //LogDebug("DeMultiplexer: Video buffer overrun, A/V buffers = %d/%d", m_vecAudioBuffers.size(), m_vecVideoBuffers.size());
+                  //m_filter.SetErrorAbort();  
                 }
               }
               
@@ -2224,26 +2227,26 @@ int CDeMultiplexer::GetVideoBuffCntFt(double* frameTime)
 }
 
 //Decide if we need to prefetch more data
-bool CDeMultiplexer::CheckPrefetchState(bool isVid, bool isAud)
+bool CDeMultiplexer::CheckPrefetchState(bool isNormal, bool isForced)
 {  
   //Check for near-overflow conditions first
-  if (m_filter.GetAudioPin()->IsConnected() && (m_vecAudioBuffers.size() > (MAX_AUD_BUF_SIZE - 10)))
+  if (m_filter.GetAudioPin()->IsConnected() && (m_vecAudioBuffers.size() > (MAX_AUD_BUF_SIZE - 50)))
   {
     return false;
   }
-  if (m_filter.GetVideoPin()->IsConnected() && (m_vecVideoBuffers.size() > (MAX_VID_BUF_SIZE - 10)))
+  if (m_filter.GetVideoPin()->IsConnected() && (m_vecVideoBuffers.size() > (MAX_VID_BUF_SIZE - 20)))
   {
     return false;
   }
 
   //Start-of-play situation
-  if (!m_filter.m_bStreamCompensated)
+  if (!m_filter.m_bStreamCompensated || isForced)
   {
     return true;
   }
 
   //Normal play
-  if (isAud || isVid)
+  if (isNormal)
   {
     if (m_filter.GetAudioPin()->IsConnected() && (m_vecAudioBuffers.size() < 3))
     {

@@ -215,15 +215,6 @@ HRESULT CSubtitlePin::CompleteConnect(IPin *pReceivePin)
 
 HRESULT CSubtitlePin::BreakConnect()
 {
-  //  LogDebug("subPin:BreakConnect() start");
-  //  int i=0;
-  //  while ((i < 1000) && m_pTsReaderFilter->IsSeeking())
-  //  {
-  //    Sleep(1);
-  //    i++;
-  //  }
-  //  LogDebug("subPin:BreakConnect() ok");
-  
   m_bConnected = false;
   return CSourceStream::BreakConnect();
 }
@@ -491,7 +482,7 @@ HRESULT CSubtitlePin::ChangeRate()
   }
   
   LogDebug("subPin: ChangeRate, m_dRateSeeking %f, Force seek done %d, IsSeeking %d",(float)m_dRateSeeking, m_pTsReaderFilter->m_bSeekAfterRcDone, m_pTsReaderFilter->IsSeeking());
-  if (!m_pTsReaderFilter->m_bSeekAfterRcDone && !m_pTsReaderFilter->IsSeeking() && !m_pTsReaderFilter->IsWaitDataAfterSeek()) //Don't force seek if another pin has already triggered it
+  if (!m_pTsReaderFilter->m_bSeekAfterRcDone && !m_pTsReaderFilter->IsSeeking()) //Don't force seek if another pin has already triggered it
   {
     m_pTsReaderFilter->m_bForceSeekAfterRateChange = true;
     m_pTsReaderFilter->SetSeeking(true);
@@ -507,7 +498,7 @@ void CSubtitlePin::SetStart(CRefTime rtStartTime)
 
 STDMETHODIMP CSubtitlePin::SetPositions(LONGLONG *pCurrent, DWORD CurrentFlags, LONGLONG *pStop, DWORD StopFlags)
 {
-  if (m_pTsReaderFilter->SetSeeking(true) && !m_pTsReaderFilter->IsWaitDataAfterSeek()) //We're not already seeking
+  if (m_pTsReaderFilter->SetSeeking(true)) //We're not already seeking
   {
     return CSourceSeeking::SetPositions(pCurrent, CurrentFlags, pStop,  StopFlags);
   }
@@ -518,110 +509,6 @@ STDMETHODIMP CSubtitlePin::SetPositions(LONGLONG *pCurrent, DWORD CurrentFlags, 
 /// UpdateFromSeek() called when need to seek to a specific timestamp in the file
 /// m_rtStart contains the time we need to seek to...
 ///
-//void CSubtitlePin::UpdateFromSeek()
-//{
-//  CDeMultiplexer& demux=m_pTsReaderFilter->GetDemultiplexer();
-//  CTsDuration tsduration=m_pTsReaderFilter->GetDuration();
-//
-//  //if (m_rtStart>m_rtDuration)
-//  //  m_rtStart=m_rtDuration;
-//
-//  //there is a bug in directshow causing UpdateFromSeek() to be called multiple times
-//  //directly after eachother
-//  //for a single seek operation. To 'fix' this we only perform the seeking operation
-//  //if we didnt do a seek in the last 5 seconds...
-//  if (GET_TIME_NOW()-m_seekTimer<5000)
-//  {
-//    if (m_lastSeek==m_rtStart)
-//    {
-//      LogDebug("subPin:skip seek");
-//      return;
-//    }
-//  }
-//
-//  //Note that the seek timestamp (m_rtStart) is done in the range
-//  //from earliest - latest from GetAvailable()
-//  //We however would like the seek timestamp to be in the range 0-fileduration
-//  m_seekTimer=GET_TIME_NOW();
-//  m_lastSeek=m_rtStart;
-//
-//  CRefTime rtSeek=m_rtStart;
-//  float seekTime=(float)rtSeek.Millisecs();
-//  seekTime/=1000.0f;
-//
-//  //get the earliest timestamp available in the file
-//  float earliesTimeStamp= tsduration.StartPcr().ToClock() - tsduration.FirstStartPcr().ToClock();
-//  if (earliesTimeStamp<0) earliesTimeStamp=0;
-//
-//  //correct the seek time
-//  seekTime-=earliesTimeStamp;
-//  if (seekTime<0) seekTime=0;
-//  LogDebug("sub seek to %f", seekTime);
-//
-//  seekTime*=1000.0f;
-//  rtSeek = CRefTime((LONG)seekTime);
-//
-//  //if another output pin is seeking, then wait until its finished
-//  m_bSeeking=true;
-//  while (m_pTsReaderFilter->IsSeeking()) Sleep(1);
-//
-//  //tell demuxer to stop deliver subtitle data and wait until
-//  //FillBuffer() finished
-//  demux.SetHoldSubtitle(true);
-//  while (m_bInFillBuffer) Sleep(1);
-//  CAutoLock lock(&m_bufferLock);
-//
-//  //if a pin-output thread exists...
-//  if (ThreadExists())
-//  {
-//    //normally the audio pin does the actual seeking
-//    //check if its connected. If not, we'll do the seeking
-//    if (!m_pTsReaderFilter->GetAudioPin()->IsConnected())
-//    {
-//      //tell the filter we are starting a seek operation
-////      m_pTsReaderFilter->SeekStart();
-//    }
-//
-//    //deliver a begin-flush to the codec filter so it stops asking for data
-//    HRESULT hr=DeliverBeginFlush();
-//
-//    //stop the thread
-//    Stop();
-//    if (!m_pTsReaderFilter->GetAudioPin()->IsConnected())
-//    {
-//      //do the seek..
-////      m_pTsReaderFilter->Seek(rtSeek, true);
-//    }
-//
-//    //deliver a end-flush to the codec filter so it will start asking for data again
-//    hr=DeliverEndFlush();
-//
-//    if (!m_pTsReaderFilter->GetAudioPin()->IsConnected())
-//    {
-//      //tell filter we're done with seeking
-////      m_pTsReaderFilter->SeekDone(rtSeek);
-//    }
-//
-//    //set our start time
-//    //m_rtStart=rtSeek;
-//
-//    // and restart the thread
-//    Run();
-//  }
-//  else
-//  {
-//    //no thread running? then simply seek to the position
-//    m_pTsReaderFilter->Seek(rtSeek, false);
-//  }
-//
-//  //tell demuxer to start deliver subtitle packets again
-//  demux.SetHoldSubtitle(false);
-//
-//  //clear flags indiciating that the pin is seeking
-//  m_bSeeking = false;
-//  LogDebug("sub seek done---");
-//}
-
 HRESULT CSubtitlePin::UpdateFromSeek()
 {
   LogDebug("subPin: UpdateFromSeek, m_rtStart %f, m_dRateSeeking %f",(float)m_rtStart.Millisecs()/1000.0f,(float)m_dRateSeeking);

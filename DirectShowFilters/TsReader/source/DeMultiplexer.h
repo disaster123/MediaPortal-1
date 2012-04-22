@@ -143,11 +143,10 @@ public:
   bool PatParsed(void);
 
   int  ReadAheadFromFile();
-  bool CheckPrefetchState(bool isVid, bool isAud);
+  bool CheckPrefetchState(bool isNormal, bool isForced);
 
   bool m_DisableDiscontinuitiesFiltering;
   DWORD m_LastDataFromRtsp;
-  //bool m_bAudioVideoReady;
   bool m_bFlushDelegated;
   bool m_bFlushDelgNow;
   bool m_bFlushRunning;

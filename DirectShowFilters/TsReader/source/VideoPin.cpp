@@ -263,16 +263,7 @@ HRESULT CVideoPin::CompleteConnect(IPin *pReceivePin)
 }
 
 HRESULT CVideoPin::BreakConnect()
-{
-  //  LogDebug("vidPin:BreakConnect() start");
-  //  int i=0;
-  //  while ((i < 1000) && m_pTsReaderFilter->IsSeeking())
-  //  {
-  //    Sleep(1);
-  //    i++;
-  //  }
-  //  LogDebug("vidPin:BreakConnect() ok");
-  
+{  
   m_bConnected=false;
   return CSourceStream::BreakConnect();
 }
@@ -789,7 +780,7 @@ HRESULT CVideoPin::ChangeRate()
   }
 
   LogDebug("vidPin: ChangeRate, m_dRateSeeking %f, Force seek done %d, IsSeeking %d",(float)m_dRateSeeking, m_pTsReaderFilter->m_bSeekAfterRcDone, m_pTsReaderFilter->IsSeeking());
-  if (!m_pTsReaderFilter->m_bSeekAfterRcDone && !m_pTsReaderFilter->IsSeeking() && !m_pTsReaderFilter->IsWaitDataAfterSeek()) //Don't force seek if another pin has already triggered it
+  if (!m_pTsReaderFilter->m_bSeekAfterRcDone && !m_pTsReaderFilter->IsSeeking()) //Don't force seek if another pin has already triggered it
   {
     m_pTsReaderFilter->m_bForceSeekAfterRateChange = true;
     m_pTsReaderFilter->SetSeeking(true);
@@ -807,7 +798,7 @@ void CVideoPin::SetStart(CRefTime rtStartTime)
 
 STDMETHODIMP CVideoPin::SetPositions(LONGLONG *pCurrent, DWORD CurrentFlags, LONGLONG *pStop, DWORD StopFlags)
 {
-  if (m_pTsReaderFilter->SetSeeking(true) && !m_pTsReaderFilter->IsWaitDataAfterSeek()) //We're not already seeking
+  if (m_pTsReaderFilter->SetSeeking(true)) //We're not already seeking
   {
     return CSourceSeeking::SetPositions(pCurrent, CurrentFlags, pStop,  StopFlags);
   }

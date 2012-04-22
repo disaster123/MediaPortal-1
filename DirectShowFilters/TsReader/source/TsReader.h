@@ -218,7 +218,7 @@ public:
   
   bool            m_bLiveTv;
   bool            m_bStopping;
-  bool            m_WaitForSeekToEof;
+  bool            m_bWaitForSeek;
 	
   void GetTime(REFERENCE_TIME *Time);
   void GetMediaPosition(REFERENCE_TIME *pMediaTime);
@@ -244,6 +244,8 @@ public:
   void            SetErrorAbort();
   bool            CheckAudioCallback();
   bool            CheckCallback();
+  void            CheckForMPAR();
+  bool            m_bMPARinGraph;
 protected:
   void ThreadProc();
 
@@ -256,7 +258,6 @@ private:
   void    BufferingPause(bool longPause);
   void    ReadRegistryKeyDword(HKEY hKey, LPCTSTR& lpSubKey, DWORD& data);
   void    WriteRegistryKeyDword(HKEY hKey, LPCTSTR& lpSubKey, DWORD& data);
-//  bool    CheckForMPAR();
     
   CAudioPin*	    m_pAudioPin;
   CVideoPin*	    m_pVideoPin;
@@ -271,7 +272,6 @@ private:
   CTsDuration     m_duration;
   CBaseReferenceClock* m_referenceClock;
   CDeMultiplexer  m_demultiplexer;
-  //bool            m_bSeeking;
   DWORD           m_dwGraphRegister;
 
   CRTSPClient     m_rtspClient;
@@ -291,7 +291,6 @@ private:
   DWORD           m_MPmainThreadID;
   bool            m_isUNCfile;
   CCritSec        m_sectionSeeking;
-  CCritSec        m_sectionSeekWaitData;
-  bool            m_WaitDataAfterSeek;
+
 };
 
