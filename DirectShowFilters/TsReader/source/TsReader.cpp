@@ -181,7 +181,7 @@ CTsReaderFilter::CTsReaderFilter(IUnknown *pUnk, HRESULT *phr):
   GetLogFile(filename);
   ::DeleteFile(filename);
   LogDebug("----- Experimental noStopMod version -----");
-  LogDebug("---------- v0.0.55 XXX -------------------");
+  LogDebug("---------- v0.0.56a XXX -------------------");
   
   m_fileReader=NULL;
   m_fileDuration=NULL;
@@ -601,13 +601,13 @@ STDMETHODIMP CTsReaderFilter::Stop()
   m_bStopping = true;
 
   int i=0;
-  //Wait for output pin data sample delivery and seeking to finish - timeout after 400 loop iterations in case pin delivery threads are stalled
-  while ((i < 400) && (GetAudioPin()->IsInFillBuffer() || GetVideoPin()->IsInFillBuffer() || GetSubtitlePin()->IsInFillBuffer() || IsSeeking()) )
+  //Wait for output pin data sample delivery and seeking to finish - timeout after 100 loop iterations in case pin delivery threads are stalled
+  while ((i < 100) && (GetAudioPin()->IsInFillBuffer() || GetVideoPin()->IsInFillBuffer() || GetSubtitlePin()->IsInFillBuffer() || IsSeeking()) )
   {
-    Sleep(1);
+    Sleep(5);
     i++;
   }
-  if (i >= 400)
+  if (i >= 100)
   {
     LogDebug("CTsReaderFilter: Stop: InFillBuffer() wait timeout");
   }

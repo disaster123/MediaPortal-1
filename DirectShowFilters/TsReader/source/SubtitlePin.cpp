@@ -318,8 +318,6 @@ HRESULT CSubtitlePin::FillBuffer(IMediaSample *pSample)
       //get file-duration and set m_rtDuration
       GetDuration(NULL);
 
-      m_bInFillBuffer = true;
-
       //if the filter is currently seeking to a new position
       //or this pin is currently seeking to a new position then
       //we dont try to read any packets, but simply return...
@@ -331,14 +329,14 @@ HRESULT CSubtitlePin::FillBuffer(IMediaSample *pSample)
         Sleep(5);
         return NOERROR;
       }
-      
-      //CAutoLock slock (&demux.m_sectionSeekSubtitle); //Lock for seeking
-
+      else
+      {
+        m_bInFillBuffer = true;
+      }     
+            
       if (m_pTsReaderFilter->m_bStreamCompensated && !demux.m_bFlushRunning)
       {
         //get next buffer from demultiplexer
-        //CAutoLock flock (&demux.m_sectionFlushSubtitle);
-        //CAutoLock lock(&m_bufferLock);
         buffer=demux.GetSubtitle();
       }
       else

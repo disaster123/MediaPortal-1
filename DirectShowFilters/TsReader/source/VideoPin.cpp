@@ -395,9 +395,6 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
         timeNow = GET_TIME_NOW();
       }
       m_LastFillBuffTime = timeNow;
-      m_FillBuffSleepTime = 1;
-
-      m_bInFillBuffer = true;
 
       //if the filter is currently seeking to a new position
       //or this pin is currently seeking to a new position then
@@ -409,10 +406,14 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
         m_bInFillBuffer = false;
         return NOERROR;
       }
+      else
+      {
+        m_FillBuffSleepTime = 1;
+        m_bInFillBuffer = true;
+      }     
             
       if (m_pTsReaderFilter->m_bStreamCompensated && !demux.m_bFlushRunning)
       {                               
-        //CAutoLock flock (&demux.m_sectionFlushVideo);
         // Get next video buffer from demultiplexer
         buffer=demux.GetVideo(earlyStall);
       }

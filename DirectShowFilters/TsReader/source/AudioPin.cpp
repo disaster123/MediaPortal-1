@@ -357,7 +357,6 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
     
     do
     {
-
       //Check if we need to wait for a while
       DWORD timeNow = GET_TIME_NOW();
       while (timeNow < (m_LastFillBuffTime + m_FillBuffSleepTime))
@@ -366,11 +365,8 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
         timeNow = GET_TIME_NOW();
       }
       m_LastFillBuffTime = timeNow;
-      m_FillBuffSleepTime = 1;
 
-      m_bInFillBuffer = true;
-
-     //if the filter is currently seeking to a new position
+      //if the filter is currently seeking to a new position
       //or this pin is currently seeking to a new position then
       //we dont try to read any packets, but simply return...
       if (m_pTsReaderFilter->IsSeeking() || m_pTsReaderFilter->IsStopping())
@@ -380,12 +376,14 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
         m_bInFillBuffer = false;
         return NOERROR;
       }
-      
-      //CAutoLock slock (&demux.m_sectionSeekAudio); //Lock for seeking
-
+      else
+      {
+        m_FillBuffSleepTime = 1;
+        m_bInFillBuffer = true;
+      }     
+            
       if (!demux.m_bFlushRunning)
       {
-        //CAutoLock flock (&demux.m_sectionFlushAudio);
         buffer=demux.GetAudio(earlyStall, m_rtStart);
       }
       else
