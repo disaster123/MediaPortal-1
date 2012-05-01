@@ -502,7 +502,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
             //Discard late samples at start of play,
             //and samples outside a sensible timing window during play 
             //(helps with signal corruption recovery)
-            if ((fTime > (ForcePresent ? -0.5 : -0.3)) && (fTime < 3.5))
+            if ((fTime > (ForcePresent ? -0.5 : -0.3)) && (fTime < (stallPoint + 1.0)))
             {
               //if ((fTime > stallPoint) && (m_pTsReaderFilter->State() == State_Running))
               if ((fTime > stallPoint) && (m_sampleCount > 10))
@@ -720,7 +720,7 @@ HRESULT CVideoPin::OnThreadStartPlay()
   m_sampleCount = 0;
   m_bInFillBuffer=false;
 
-  m_pTsReaderFilter->m_ShowBufferVideo = 4;
+  m_pTsReaderFilter->m_ShowBufferVideo = INIT_SHOWBUFFERVIDEO;
 
   m_llLastComp = 0;
   m_llLastMTDts = 0;

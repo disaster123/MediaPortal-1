@@ -181,7 +181,7 @@ CTsReaderFilter::CTsReaderFilter(IUnknown *pUnk, HRESULT *phr):
   GetLogFile(filename);
   ::DeleteFile(filename);
   LogDebug("----- Experimental noStopMod version -----");
-  LogDebug("---------- v0.0.56a XXX -------------------");
+  LogDebug("---------- v0.0.56c XXX -------------------");
   
   m_fileReader=NULL;
   m_fileDuration=NULL;
@@ -584,8 +584,8 @@ STDMETHODIMP CTsReaderFilter::Run(REFERENCE_TIME tStart)
   
   m_bPauseOnClockTooFast=false ;
 
-  m_ShowBufferVideo = 3;
-  m_ShowBufferAudio = 3;
+  m_ShowBufferVideo = INIT_SHOWBUFFERVIDEO;
+  m_ShowBufferAudio = INIT_SHOWBUFFERAUDIO;
   
   LogDebug("CTsReaderFilter::Run(%05.2f) state %d -->done",msec,m_State);
   return hr;
@@ -674,14 +674,8 @@ bool CTsReaderFilter::IsLiveTV()
 
 STDMETHODIMP CTsReaderFilter::Pause()
 {
-//  if (m_bPauseOnClockTooFast)
-//  {
-//    m_ShowBufferVideo = 2;
-//    m_ShowBufferAudio = 2;
-//  }
-
-  m_ShowBufferVideo = 3;
-  m_ShowBufferAudio = 3;
+  m_ShowBufferVideo = INIT_SHOWBUFFERVIDEO;
+  m_ShowBufferAudio = INIT_SHOWBUFFERAUDIO;
 
   LogDebug("CTsReaderFilter::Pause() - IsTimeShifting = %d - state = %d", IsTimeShifting(), m_State);
   HRESULT hr = S_FALSE;
@@ -1277,9 +1271,6 @@ HRESULT CTsReaderFilter::SeekPreStart(CRefTime& rtAbsSeek)
       rtSeek=m_duration.Duration();
     }
   }
-
-  //m_ShowBufferVideo = INIT_SHOWBUFFERVIDEO;
-  //m_ShowBufferAudio = INIT_SHOWBUFFERVIDEO;
 
   if (GetVideoPin()->IsConnected())
   {      

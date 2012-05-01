@@ -1532,19 +1532,35 @@ bool CFrameHeaderParser::Read(avchdr& h, int len, CMediaType* pmt, bool reset)
 		
 		BYTE* p = (BYTE*)&vi->dwSequenceHeader[0];
 		
+//		h.spslen++; //Adjust for nal_unit_type insertion
+//		*p++ = (h.spslen-4) >> 8;
+//		*p++ = (h.spslen-4) & 0xff;
+//		*p++ = 0x67; //Insert the SPS nal_unit_type 
+//		memcpy(p, h.sps, h.spslen-5);
+//		p += h.spslen-5;
+//		
+//		h.ppslen++; //Adjust for nal_unit_type insertion
+//		*p++ = (h.ppslen-4) >> 8;
+//		*p++ = (h.ppslen-4) & 0xff;
+//		*p++ = 0x68; //Insert the PPS nal_unit_type 
+//		memcpy(p, h.pps, h.ppslen-5);
+//		p += h.ppslen-5;
+
 		h.spslen++; //Adjust for nal_unit_type insertion
 		*p++ = (h.spslen-4) >> 8;
 		*p++ = (h.spslen-4) & 0xff;
 		*p++ = 0x67; //Insert the SPS nal_unit_type 
-		memcpy(p, h.sps, h.spslen-5);
-		p += h.spslen-5;
+		memcpy(p, h.sps, h.spslen-6);
+		p += h.spslen-6;
+		*p++ = 0x00;
 		
 		h.ppslen++; //Adjust for nal_unit_type insertion
 		*p++ = (h.ppslen-4) >> 8;
 		*p++ = (h.ppslen-4) & 0xff;
 		*p++ = 0x68; //Insert the PPS nal_unit_type 
-		memcpy(p, h.pps, h.ppslen-5);
-		p += h.ppslen-5;
+		memcpy(p, h.pps, h.ppslen-6);
+		p += h.ppslen-6;
+		*p++ = 0x00;
 		
 		pmt->SetFormat((BYTE*)vi, len);
 	}

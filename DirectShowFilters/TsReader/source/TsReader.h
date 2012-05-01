@@ -36,8 +36,8 @@
 #define AUDIO_CHANGE 0x1
 #define VIDEO_CHANGE 0x2
 
-#define INIT_SHOWBUFFERVIDEO 5
-#define INIT_SHOWBUFFERAUDIO 5
+#define INIT_SHOWBUFFERVIDEO 3
+#define INIT_SHOWBUFFERAUDIO 3
 
 //Buffer control and start-of-play timing control constants
 #define FS_TIM_LIM (2000*10000) //2 seconds in hns units

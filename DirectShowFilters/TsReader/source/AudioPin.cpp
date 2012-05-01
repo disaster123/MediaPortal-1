@@ -684,7 +684,7 @@ HRESULT CAudioPin::OnThreadStartPlay()
   m_pTsReaderFilter->m_bForcePosnUpdate = true;
   m_pTsReaderFilter->WakeThread();
 
-  m_pTsReaderFilter->m_ShowBufferAudio = 4;
+  m_pTsReaderFilter->m_ShowBufferAudio = INIT_SHOWBUFFERAUDIO;
 
   //set discontinuity flag indicating to codec that the new data
   //is not belonging to any previous data
