@@ -489,7 +489,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
                                                                       
           if (m_dRateSeeking == 1.0)
           {
-            if ((fTime < 0.3) && (m_pTsReaderFilter->State() == State_Running))
+            if ((fTime < 0.3) && (m_pTsReaderFilter->State() == State_Running) && (m_sampleCount > 10))
             {              
               if (!demux.m_bVideoSampleLate) 
               {
@@ -497,6 +497,13 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
               }
               //Samples times are getting close to presentation time
               demux.m_bVideoSampleLate = true;   
+              
+              if (fTime < 0.02)
+              {              
+                //Samples are running very late - check if this is a persistant problem by counting over a period of time 
+                //(m_AVDataLowCount is checked in CTsReaderFilter::ThreadProc())
+                _InterlockedExchangeAdd(&demux.m_AVDataLowCount, 1);   
+              }
             }
 
             //Discard late samples at start of play,
@@ -605,13 +612,6 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
               cntV = demux.GetVideoBufferPts(firstVideo, lastVideo);
 
               LogDebug("Vid/Ref : %03.3f, %c-frame(%02d), Compensated = %03.3f ( %0.3f A/V buffers=%02d/%02d), Clk : %f, SampCnt %d, stallPt %03.3f", (float)RefTime.Millisecs()/1000.0f,buffer->GetFrameType(),buffer->GetFrameCount(), (float)cRefTime.Millisecs()/1000.0f, fTime, cntA,cntV,clock, m_sampleCount, (float)stallPoint);              
-            }
-
-            if ((fTime < 0.02) && (m_dRateSeeking == 1.0) && (m_sampleCount > 50))
-            {              
-              //Samples are running very late - check if this is a persistant problem by counting over a period of time 
-              //(m_AVDataLowCount is checked in CTsReaderFilter::ThreadProc())
-              _InterlockedExchangeAdd(&demux.m_AVDataLowCount, 1);   
             }
             
             if (m_pTsReaderFilter->m_ShowBufferVideo) m_pTsReaderFilter->m_ShowBufferVideo--;

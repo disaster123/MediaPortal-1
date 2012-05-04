@@ -216,6 +216,8 @@ private:
   CPcr     m_streamPcr;
   CPcr     m_lastVideoPTS;
   CPcr     m_lastAudioPTS;
+  double   m_minVideoPTSdiff;
+  int      m_videoPTSroff;
   CTsDuration& m_duration;
   CTsReaderFilter& m_filter;
   unsigned int m_iAudioStream;
@@ -288,4 +290,6 @@ private:
   bool m_mpegParserReset;
   bool m_bFirstGopParsed;
   bool m_bPatParsed;
+  
+  bool m_isNewNALUTimestamp;
 };

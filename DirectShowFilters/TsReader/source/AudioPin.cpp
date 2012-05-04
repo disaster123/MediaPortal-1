@@ -439,20 +439,28 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
           //and samples outside a sensible timing window during play 
           //(helps with signal corruption recovery)
           cRefTime -= m_pTsReaderFilter->m_ClockOnStart.m_time;
+
+          if ((fTime < 0.2) && (m_dRateSeeking == 1.0) && (m_pTsReaderFilter->State() == State_Running) && (m_sampleCount > 10))
+          {              
+            if (!demux.m_bAudioSampleLate) 
+            {
+              LogDebug("audPin : Audio to render late= %03.3f", (float)fTime) ;
+            }
+            //Samples times are getting close to presentation time
+            demux.m_bAudioSampleLate = true;  
+             
+            if (fTime < 0.02)
+            {              
+              //Samples are running very late - check if this is a persistant problem by counting over a period of time 
+              //(m_AVDataLowCount is checked in CTsReaderFilter::ThreadProc())
+              _InterlockedExchangeAdd(&demux.m_AVDataLowCount, 1);   
+            }
+          }
+
           
           if ((cRefTime.m_time >= PRESENT_DELAY) && 
               (fTime > ((cRefTime.m_time >= FS_TIM_LIM) ? -0.3 : -0.5)) && (fTime < 2.5))
           {
-            if ((fTime < 0.2) && (m_dRateSeeking == 1.0) && (m_pTsReaderFilter->State() == State_Running))
-            {              
-              if (!demux.m_bAudioSampleLate) 
-              {
-                LogDebug("audPin : Audio to render late= %03.3f", (float)fTime) ;
-              }
-             //Samples times are getting close to presentation time
-              demux.m_bAudioSampleLate = true;   
-            }
-
             if ((fTime > stallPoint) && (m_sampleCount > 2))
             {
               //Too early - stall to avoid over-filling of audio decode/renderer buffers,
