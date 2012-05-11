@@ -76,6 +76,7 @@ CAudioPin::CAudioPin(LPUNKNOWN pUnk, CTsReaderFilter *pFilter, HRESULT *phr,CCri
   m_bInFillBuffer=false;
   m_bPinNoAddPMT = false;
   m_bAddPMT = false;
+  m_bDownstreamFlush=false;
 }
 
 CAudioPin::~CAudioPin()
@@ -292,7 +293,7 @@ HRESULT CAudioPin::DoBufferProcessingLoop(void)
         // Some decoders seem to crash when we provide empty samples 
         if ((pSample->GetActualDataLength() > 0) && !m_pTsReaderFilter->IsStopping())
         {
-          hr = Deliver(pSample);     
+          hr = Deliver(pSample); 
           m_sampleCount++ ;
         }
         else
@@ -366,14 +367,31 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
       }
       m_LastFillBuffTime = timeNow;
 
+      //did we reach the end of the file
+      if (demux.EndOfFile())
+      {
+        LogDebug("audPin:set eof");
+        m_FillBuffSleepTime = 5;
+        CreateEmptySample(pSample);
+        m_bInFillBuffer = false;
+        return S_FALSE; //S_FALSE will notify the graph that end of file has been reached
+      }
+
       //if the filter is currently seeking to a new position
       //or this pin is currently seeking to a new position then
       //we dont try to read any packets, but simply return...
-      if (m_pTsReaderFilter->IsSeeking() || m_pTsReaderFilter->IsStopping())
+      if (m_pTsReaderFilter->IsSeeking() || m_pTsReaderFilter->IsStopping() || demux.m_bFlushRunning)
       {
         m_FillBuffSleepTime = 5;
         CreateEmptySample(pSample);
         m_bInFillBuffer = false;
+        if (demux.m_bFlushRunning)
+        {
+          //m_bDownstreamFlush=true;
+          //Force discon on next good sample
+          m_sampleCount = 0;
+          m_bDiscontinuity=true;
+        }
         return NOERROR;
       }
       else
@@ -381,27 +399,19 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
         m_FillBuffSleepTime = 1;
         m_bInFillBuffer = true;
       }     
-            
-      if (!demux.m_bFlushRunning)
+                  
+      if(m_bDownstreamFlush)
       {
-        buffer=demux.GetAudio(earlyStall, m_rtStart);
-      }
-      else
-      {
-        buffer=NULL;
-        //Force discon and add PMT to next sample
-        m_sampleCount = 0;
-        m_bDiscontinuity=true;
+        //Downstream flush
+        LogDebug("audPin : Downstream flush") ;
+        DeliverBeginFlush();
+        DeliverEndFlush();
+        m_bDownstreamFlush=false;
       }
 
-      //did we reach the end of the file
-      if (demux.EndOfFile()) // || ((GET_TIME_NOW()-m_LastTickCount > 3000) && !m_pTsReaderFilter->IsTimeShifting()))
-      {
-        LogDebug("audPin:set eof");
-        CreateEmptySample(pSample);
-        m_bInFillBuffer = false;
-        return S_FALSE; //S_FALSE will notify the graph that end of file has been reached
-      }
+      // Get next audio buffer from demultiplexer
+      buffer=demux.GetAudio(earlyStall, m_rtStart);
+
 
       //Wait until we have audio (and video, if pin connected) 
       if (!m_pTsReaderFilter->m_bStreamCompensated || (buffer==NULL))
@@ -411,6 +421,14 @@ HRESULT CAudioPin::FillBuffer(IMediaSample *pSample)
         if (!m_pTsReaderFilter->m_bStreamCompensated && (m_nNextASD != 0))
         {
           ClearAverageSampleDur();
+        }
+        
+        if (!m_pTsReaderFilter->m_bStreamCompensated)
+        {
+          m_sampleCount = 0;
+          CreateEmptySample(pSample);
+          m_bInFillBuffer = false;
+          return NOERROR;
         }
       }
       else
@@ -700,6 +718,7 @@ HRESULT CAudioPin::OnThreadStartPlay()
   m_bPresentSample = false;
   m_sampleCount = 0;
   m_bInFillBuffer=false;
+  m_bDownstreamFlush=false;
 
   m_FillBuffSleepTime = 1;
   m_LastFillBuffTime = GET_TIME_NOW();

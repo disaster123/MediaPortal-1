@@ -516,6 +516,18 @@ void CDeMultiplexer::Flush(bool clearAVready)
 
   m_bFlushRunning = true; //Stall GetVideo()/GetAudio()/GetSubtitle() calls from pins 
 
+  //Wait for output pin data sample delivery to stop - timeout after 100 loop iterations in case pin delivery threads are stalled
+  int i = 0;
+  while ((i < 100) && (m_filter.GetAudioPin()->IsInFillBuffer() || m_filter.GetVideoPin()->IsInFillBuffer() || m_filter.GetSubtitlePin()->IsInFillBuffer()) )
+  {
+    Sleep(5);
+    i++;
+  }
+  if (i >= 100)
+  {
+    LogDebug("demux: Flush: InFillBuffer() wait timeout, %d %d %d", m_filter.GetAudioPin()->IsInFillBuffer(), m_filter.GetVideoPin()->IsInFillBuffer(), m_filter.GetSubtitlePin()->IsInFillBuffer());
+  }
+
   m_iAudioReadCount = 0;
   m_LastDataFromRtsp = GET_TIME_NOW();
   FlushAudio();
@@ -1367,7 +1379,7 @@ void CDeMultiplexer::FillVideoH264(CTsHeader& header, byte* tsPacket)
     m_lastStart = 0;
     m_isNewNALUTimestamp = false;
     m_minVideoPTSdiff = DBL_MAX;
-    m_videoPTSroff = 0;
+    m_bVideoPTSroff = false;
     //LogDebug("DeMultiplexer::FillVideoH264 New m_p");
   }
 
@@ -1462,19 +1474,20 @@ void CDeMultiplexer::FillVideoH264(CTsHeader& header, byte* tsPacket)
             {
               m_minVideoPTSdiff = diff;
             }
-            if ((diff < 0.001) && (pts.IsValid))
+            if ((diff < 0.002) && (pts.IsValid) && !m_fHasAccessUnitDelimiters)
             {
               LOG_SAMPLES("DeMultiplexer::FillVideoH264 - PTS is same, diff %f, pts %f ", (float)diff, (float)pts.ToClock());
               double d = pts.ToClock();
-              if (m_minVideoPTSdiff < 0.1)
+              if (m_minVideoPTSdiff < 0.05) //We've seen a few PES timestamps/video frames
               {
-                d += m_minVideoPTSdiff ;
+                d += m_minVideoPTSdiff;
               }
-              else
+              else //Guess - add 36.6 ms
               {
-                m_videoPTSroff = (m_videoPTSroff+1) % 2;
-                d += (0.0015 * (m_videoPTSroff+1)) ;
+                d += 0.0366 ;
               }
+              d += (m_bVideoPTSroff ? 0.0015 : -0.0015); //Ensure PTS always changes
+              m_bVideoPTSroff = !m_bVideoPTSroff;
               pts.FromClock(d);
               pts.IsValid=true;
               isSamePTS = true;
@@ -1493,7 +1506,6 @@ void CDeMultiplexer::FillVideoH264(CTsHeader& header, byte* tsPacket)
           }
           m_p->rtStart = (pts.PcrReferenceBase);
         }
-        //m_p->rtStart = pts.IsValid ? (pts.PcrReferenceBase) : Packet::INVALID_TIME;
         m_WaitHeaderPES = -1;
         //LogDebug("m_p->rtStart: %d, m_p->rtPrevStart: %d",(int)m_p->rtStart, (int)m_p->rtPrevStart);
       }
@@ -1578,18 +1590,26 @@ void CDeMultiplexer::FillVideoH264(CTsHeader& header, byte* tsPacket)
           
           //Copy available NALUs into new packet 'p' (for the next video buffer)
           CAutoPtr<Packet> p(new Packet());
-          p = m_pl.RemoveHead();
-          LOG_SAMPLES("Output p1 NALU Type: %d (%d), rtStart: %d", p->GetAt(4)&0x1f,p->GetCount(), (int)p->rtStart);
-          //CH246IFrameScanner iFrameScanner;
-          //iFrameScanner.ProcessNALU(p); 
-          
-          nalID = p->GetAt(4);
-          if ((((nalID & 0x9f) == 0x07) || ((nalID & 0x9f) == 0x08)) && ((nalID & 0x60) != 0)) //Process SPS & PPS data
-          {
-            Gop = m_mpegPesParser->OnTsPacket(p->GetData(), p->GetCount(), false, m_mpegParserReset);
-            m_mpegParserReset = false;
-          }
+          p->rtStart = Packet::INVALID_TIME;
 
+          if (!m_fHasAccessUnitDelimiters)
+          {
+            //Add fake AUD....
+            DWORD size = 2;
+            WORD data9 = 0xF009;
+            DWORD dwNalLength = 
+              ((size >> 24) & 0x000000ff) |
+              ((size >>  8) & 0x0000ff00) |
+              ((size <<  8) & 0x00ff0000) |
+              ((size << 24) & 0xff000000);
+              
+            p->SetCount (size+sizeof(dwNalLength));
+            
+            memcpy (p->GetData(), &dwNalLength, sizeof(dwNalLength));
+            memcpy (p->GetData()+sizeof(dwNalLength), &data9, size);
+            //LogDebug("Fake AUD: %x %x %x %x %x %x",  p->GetAt(0), p->GetAt(1), p->GetAt(2), p->GetAt(3), p->GetAt(4), p->GetAt(5));
+          }
+          
           while(m_pl.GetCount())
           {
             CAutoPtr<Packet> p4(new Packet());
@@ -1597,7 +1617,7 @@ void CDeMultiplexer::FillVideoH264(CTsHeader& header, byte* tsPacket)
             
             //if (!iFrameScanner.SeenEnough())
             //  iFrameScanner.ProcessNALU(p2);
-            LOG_SAMPLES("Output p4 NALU Type: %d (%d), rtStart: %d", p4->GetAt(4)&0x1f, p4->GetCount(), (int)p->rtStart);
+            LOG_OUTSAMPLES("Output p4 NALU Type: %d (%d), rtStart: %d", p4->GetAt(4)&0x1f, p4->GetCount(), (int)p->rtStart);
             
             nalID = p4->GetAt(4);
             if ((((nalID & 0x9f) == 0x07) || ((nalID & 0x9f) == 0x08)) && ((nalID & 0x60) != 0)) //Process SPS & PPS data
@@ -1605,7 +1625,20 @@ void CDeMultiplexer::FillVideoH264(CTsHeader& header, byte* tsPacket)
               Gop = m_mpegPesParser->OnTsPacket(p4->GetData(), p4->GetCount(), false, m_mpegParserReset);
               m_mpegParserReset = false;
             }
-            p->Append(*p4);
+                                        
+            if (p->rtStart == Packet::INVALID_TIME)
+            {
+              p->rtStart = p4->rtStart;
+              //LogDebug("Fake AUD2: %x %x %x %x %x %x",  p4->GetAt(0), p4->GetAt(1), p4->GetAt(2), p4->GetAt(3), p4->GetAt(4), p4->GetAt(5));
+            }
+            if (p->GetCount())
+            {
+              p->Append(*p4);
+            }
+            else
+            {
+              p = p4;
+            }
           }
 
           if (Gop)

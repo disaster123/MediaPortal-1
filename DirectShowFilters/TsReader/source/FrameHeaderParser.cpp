@@ -1234,67 +1234,50 @@ bool CFrameHeaderParser::Read(avchdr& h, int len, CMediaType* pmt, bool reset)
     h.AvgTimePerFrame=0;
   }
   
-	while(GetRemaining()>4 && (h.spslen==0 || h.ppslen==0 || h.height<100 || h.width<100 || h.AvgTimePerFrame<=0))
+	if (len > 4)
 	{
-		//// check for NALU startcode
-		//DWORD dwStartCode=BitRead(24,true);
-		//if (dwStartCode!=0x00000001)
-		//{
-		//	BitRead(8);
-		//	continue;
-		//}
-		//
-		//// skip the startcode
-		//BitRead(24);
 		int nal_len = BitRead(32);
 		INT64 next_nal = GetPos()+nal_len;
-		int id=BitRead(8);
-		int nal_type=id & 0x9f;
+		BYTE id=BitRead(8);
+		BYTE nal_type=id & 0x9f;
 
-		//if(h.spspos != 0 && h.spslen == 0)
-		//{
-		//	INT64 curpos=GetPos();
-		//	h.spslen = curpos - h.spspos;
-		//}
-		//if(h.ppspos != 0 && h.ppslen == 0) 
-		//{
-		//	INT64 curpos=GetPos();
-		//	h.ppslen = curpos - h.ppspos;
-		//}
+	  //LogDebug("nal_len = %d, next_nal = %d", nal_len, next_nal);
 
 		// we only want pic param and sequence param sets
-		if (nal_type!=0x7 && nal_type!=0x8 || id & 0x60 == 0)
+		if ((nal_type!=0x7 && nal_type!=0x8) || ((id & 0x60) == 0))
 		{
-			Seek(next_nal);
-			continue;
+		  return(false);
 		}
 
 		if(nal_type==0x7)
 		{
 			//LogDebug("SPS found");
-
+			
+		  h.spsid = id;
+			__int64			pos = GetPos(); //Start of NAL data (excluding ID byte)
+			
 			double			num_units_in_tick;
 			double			time_scale;
-			__int64			pos;
-			bool			fixed_frame_rate_flag;
+			bool			fixed_frame_rate_flag;			
 
 			// Copy the full SPS packet in case the PPS is not found in the same packet,
 			// but make sure we don't change the current position in the buffer.
-			pos = GetPos() - 5;
+			
 			if (h.spslen != 0)
 			{
 				free(h.sps);
 			}
-			h.spslen = next_nal - pos;
-			h.sps = (BYTE*) malloc(h.spslen - 4);
-			ByteRead(h.sps, h.spslen - 4);
-			Seek(pos + 5);
+			h.spslen = next_nal - pos; //length excluding length and ID bytes
+			h.sps = (BYTE*) malloc(h.spslen);
+			ByteRead(h.sps, h.spslen);
+			Seek(pos);
+	    //LogDebug("h.spslen = %d, bytes = %x %x %x %x, last byte = %x", h.spslen, *h.sps, *(h.sps+1), *(h.sps+2), *(h.sps+3), *(h.sps+(h.spslen-1)));
 
 			// Manage H264 escape codes (see "remove escapes (very rare 1:2^22)" in ffmpeg h264.c file)
 			//ByteRead((BYTE*)SPSTemp, min(MAX_SPS, GetRemaining()));
-			BYTE* buff = (BYTE*) malloc(h.spslen - 4);
-			CGolombBuffer	gb (buff, h.spslen - 4);
-			RemoveMpegEscapeCode (buff, h.sps, h.spslen - 4);
+			BYTE* buff = (BYTE*) malloc(h.spslen);
+			CGolombBuffer	gb (buff, h.spslen);
+			RemoveMpegEscapeCode (buff, h.sps, h.spslen);
 
 			h.profile = (BYTE)gb.BitRead(8);
 			gb.BitRead(8);
@@ -1425,28 +1408,43 @@ bool CFrameHeaderParser::Read(avchdr& h, int len, CMediaType* pmt, bool reset)
 		}
 		else if(nal_type==0x8)
 		{
-			__int64 pos = GetPos() - 5;
+			//LogDebug("PPS found");
+			
+		  h.ppsid = id;
+			__int64 pos = GetPos();
 			if (h.ppslen != 0)
 			{
 				free(h.pps);
 			}
-			h.ppslen = next_nal - pos;
-			h.pps = (BYTE*) malloc(h.ppslen - 4);
-			ByteRead(h.pps, h.ppslen - 4);
+			h.ppslen = next_nal - pos; //length excluding length and ID bytes
+			h.pps = (BYTE*) malloc(h.ppslen);
+			ByteRead(h.pps, h.ppslen);
+	    //LogDebug("h.ppslen = %d, bytes = %x %x %x %x, last byte = %x", h.ppslen, *h.pps, *(h.pps+1), *(h.pps+2), *(h.pps+3), *(h.pps+h.ppslen-1));
 		}
 
 		BitByteAlign();
 
-		Seek(next_nal);
+		//Seek(next_nal);
 	} // end while main
 
 	if(!h.spslen || !h.ppslen || h.height<100 || h.width<100 || h.AvgTimePerFrame<=0) 
 		return(false);
 
-	if(!pmt) return(true);
-
+	if(!pmt) 
 	{
-		int extra = 2+1+h.spslen-4 + 2+1+h.ppslen-4;
+		if (h.spslen != 0)
+		{
+			free(h.sps);
+		}
+		if (h.ppslen != 0)
+		{
+			free(h.pps);
+		}
+	  return(true);
+	}
+  else
+	{
+		int extra = 2+1+h.spslen + 2+1+h.ppslen;
 		pmt->SetType(&MEDIATYPE_Video);
 		//pmt->SetSubtype(&MEDIASUBTYPE_H264);
 		pmt->SetSubtype(&MPG4_SubType);
@@ -1531,36 +1529,27 @@ bool CFrameHeaderParser::Read(avchdr& h, int len, CMediaType* pmt, bool reset)
 		vi->dwStartTimeCode=0;
 		
 		BYTE* p = (BYTE*)&vi->dwSequenceHeader[0];
-		
-//		h.spslen++; //Adjust for nal_unit_type insertion
-//		*p++ = (h.spslen-4) >> 8;
-//		*p++ = (h.spslen-4) & 0xff;
-//		*p++ = 0x67; //Insert the SPS nal_unit_type 
-//		memcpy(p, h.sps, h.spslen-5);
-//		p += h.spslen-5;
-//		
-//		h.ppslen++; //Adjust for nal_unit_type insertion
-//		*p++ = (h.ppslen-4) >> 8;
-//		*p++ = (h.ppslen-4) & 0xff;
-//		*p++ = 0x68; //Insert the PPS nal_unit_type 
-//		memcpy(p, h.pps, h.ppslen-5);
-//		p += h.ppslen-5;
 
-		h.spslen++; //Adjust for nal_unit_type insertion
-		*p++ = (h.spslen-4) >> 8;
-		*p++ = (h.spslen-4) & 0xff;
-		*p++ = 0x67; //Insert the SPS nal_unit_type 
-		memcpy(p, h.sps, h.spslen-6);
-		p += h.spslen-6;
-		*p++ = 0x00;
+		*p++ = (h.spslen+1) >> 8;
+		*p++ = (h.spslen+1) & 0xff;
+		*p++ = h.spsid;
+		memcpy(p, h.sps, h.spslen);
+		p += h.spslen;
 		
-		h.ppslen++; //Adjust for nal_unit_type insertion
-		*p++ = (h.ppslen-4) >> 8;
-		*p++ = (h.ppslen-4) & 0xff;
-		*p++ = 0x68; //Insert the PPS nal_unit_type 
-		memcpy(p, h.pps, h.ppslen-6);
-		p += h.ppslen-6;
-		*p++ = 0x00;
+		*p++ = (h.ppslen+1) >> 8;
+		*p++ = (h.ppslen+1) & 0xff;
+		*p++ = h.ppsid;
+		memcpy(p, h.pps, h.ppslen);
+		p += h.ppslen;		
+
+		if (h.spslen != 0)
+		{
+			free(h.sps);
+		}
+		if (h.ppslen != 0)
+		{
+			free(h.pps);
+		}
 		
 		pmt->SetFormat((BYTE*)vi, len);
 	}

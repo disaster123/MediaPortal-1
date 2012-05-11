@@ -75,6 +75,7 @@ protected:
   CCritSec* m_section;
   bool      m_bPresentSample;
   bool      m_bInFillBuffer;
+  bool      m_bDownstreamFlush;
   
   void     ClearAverageSampleDur();
   LONGLONG GetAverageSampleDur (LONGLONG timeStamp);

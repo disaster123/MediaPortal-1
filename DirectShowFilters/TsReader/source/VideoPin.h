@@ -74,6 +74,7 @@ protected:
   CCritSec* m_section;
   bool      m_bPresentSample;
   bool      m_bInFillBuffer;
+  bool      m_bDownstreamFlush;
 
   FILTER_INFO m_filterInfo;
   

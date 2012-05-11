@@ -318,32 +318,6 @@ HRESULT CSubtitlePin::FillBuffer(IMediaSample *pSample)
       //get file-duration and set m_rtDuration
       GetDuration(NULL);
 
-      //if the filter is currently seeking to a new position
-      //or this pin is currently seeking to a new position then
-      //we dont try to read any packets, but simply return...
-      if (m_pTsReaderFilter->IsSeeking() || m_pTsReaderFilter->IsStopping() || !m_bRunning)
-      {
-        CreateEmptySample(pSample);
-        m_bInFillBuffer = false;
-        //m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
-        Sleep(5);
-        return NOERROR;
-      }
-      else
-      {
-        m_bInFillBuffer = true;
-      }     
-            
-      if (m_pTsReaderFilter->m_bStreamCompensated && !demux.m_bFlushRunning)
-      {
-        //get next buffer from demultiplexer
-        buffer=demux.GetSubtitle();
-      }
-      else
-      {
-        buffer=NULL;
-      }
-
       //did we reach the end of the file
       if (demux.EndOfFile())
       {
@@ -352,6 +326,25 @@ HRESULT CSubtitlePin::FillBuffer(IMediaSample *pSample)
         m_bInFillBuffer=false;
         return S_FALSE; //S_FALSE will notify the graph that end of file has been reached
       }
+
+      //if the filter is currently seeking to a new position
+      //or this pin is currently seeking to a new position then
+      //we dont try to read any packets, but simply return...
+      if (m_pTsReaderFilter->IsSeeking() || m_pTsReaderFilter->IsStopping() || !m_bRunning || demux.m_bFlushRunning || !m_pTsReaderFilter->m_bStreamCompensated)
+      {
+        CreateEmptySample(pSample);
+        m_bInFillBuffer = false;
+        m_bDiscontinuity = TRUE; //Next good sample will be discontinuous
+        Sleep(5);
+        return NOERROR;
+      }
+      else
+      {
+        m_bInFillBuffer = true;
+      }     
+                    
+      //get next buffer from demultiplexer
+      buffer=demux.GetSubtitle();
 
       if (buffer == NULL)
       {

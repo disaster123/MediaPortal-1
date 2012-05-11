@@ -315,6 +315,8 @@ struct pshdr
 		__int64 AvgTimePerFrame;
 		int arx, ary;
 		BYTE ar;
+		BYTE spsid;
+		BYTE ppsid;
 		avchdr()
 		{
 			progressive = true;

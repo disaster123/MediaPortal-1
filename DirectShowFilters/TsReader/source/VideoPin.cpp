@@ -62,6 +62,7 @@ CVideoPin::CVideoPin(LPUNKNOWN pUnk, CTsReaderFilter *pFilter, HRESULT *phr,CCri
   m_bInFillBuffer = false;
   m_bPinNoAddPMT = false;
   m_bAddPMT = false;
+  m_bDownstreamFlush=false;
 }
 
 CVideoPin::~CVideoPin()
@@ -396,14 +397,31 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
       }
       m_LastFillBuffTime = timeNow;
 
+      //did we reach the end of the file
+      if (demux.EndOfFile())
+      {
+        LogDebug("vidPin:set eof");
+        m_FillBuffSleepTime = 5;
+        CreateEmptySample(pSample);
+        m_bInFillBuffer = false;
+        return S_FALSE; //S_FALSE will notify the graph that end of file has been reached
+      }
+
       //if the filter is currently seeking to a new position
       //or this pin is currently seeking to a new position then
       //we dont try to read any packets, but simply return...
-      if (m_pTsReaderFilter->IsSeeking() || m_pTsReaderFilter->IsStopping())
+      if (m_pTsReaderFilter->IsSeeking() || m_pTsReaderFilter->IsStopping() || demux.m_bFlushRunning || !m_pTsReaderFilter->m_bStreamCompensated)
       {
         m_FillBuffSleepTime = 5;
         CreateEmptySample(pSample);
         m_bInFillBuffer = false;
+        if (demux.m_bFlushRunning || !m_pTsReaderFilter->m_bStreamCompensated)
+        {
+          //m_bDownstreamFlush=true;
+          //Force discon on next good sample
+          m_sampleCount = 0;
+          m_bDiscontinuity=true;
+        }
         return NOERROR;
       }
       else
@@ -412,28 +430,17 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
         m_bInFillBuffer = true;
       }     
             
-      if (m_pTsReaderFilter->m_bStreamCompensated && !demux.m_bFlushRunning)
-      {                               
-        // Get next video buffer from demultiplexer
-        buffer=demux.GetVideo(earlyStall);
-      }
-      else
+      if(m_bDownstreamFlush)
       {
-        buffer=NULL;
-        //Force discon on next good sample
-        m_sampleCount = 0;
-        m_bDiscontinuity=true;
+        //Downstream flush
+        LogDebug("vidPin : Downstream flush") ;
+        DeliverBeginFlush();
+        DeliverEndFlush();
+        m_bDownstreamFlush=false;
       }
-
-
-      //did we reach the end of the file
-      if (demux.EndOfFile())
-      {
-        LogDebug("vidPin:set eof");
-        CreateEmptySample(pSample);
-        m_bInFillBuffer = false;
-        return S_FALSE; //S_FALSE will notify the graph that end of file has been reached
-      }
+      
+      // Get next video buffer from demultiplexer
+      buffer=demux.GetVideo(earlyStall);
 
       if (buffer == NULL)
       {
@@ -719,6 +726,7 @@ HRESULT CVideoPin::OnThreadStartPlay()
   m_LastFillBuffTime = GET_TIME_NOW();
   m_sampleCount = 0;
   m_bInFillBuffer=false;
+  m_bDownstreamFlush=false;
 
   m_pTsReaderFilter->m_ShowBufferVideo = INIT_SHOWBUFFERVIDEO;
 
