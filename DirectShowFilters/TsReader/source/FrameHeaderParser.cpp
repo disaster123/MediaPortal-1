@@ -1263,12 +1263,14 @@ bool CFrameHeaderParser::Read(avchdr& h, int len, CMediaType* pmt, bool reset)
 			// Copy the full SPS packet in case the PPS is not found in the same packet,
 			// but make sure we don't change the current position in the buffer.
 			
-			if (h.spslen != 0)
+			if (h.sps != NULL)
 			{
 				free(h.sps);
 			}
 			h.spslen = next_nal - pos; //length excluding length and ID bytes
+			if ((h.spslen <= 0) || (h.spslen > 65534)) return(false); //Sanity check
 			h.sps = (BYTE*) malloc(h.spslen);
+			if (h.sps == NULL) return(false); //malloc error...
 			ByteRead(h.sps, h.spslen);
 			Seek(pos);
 	    //LogDebug("h.spslen = %d, bytes = %x %x %x %x, last byte = %x", h.spslen, *h.sps, *(h.sps+1), *(h.sps+2), *(h.sps+3), *(h.sps+(h.spslen-1)));
@@ -1276,6 +1278,7 @@ bool CFrameHeaderParser::Read(avchdr& h, int len, CMediaType* pmt, bool reset)
 			// Manage H264 escape codes (see "remove escapes (very rare 1:2^22)" in ffmpeg h264.c file)
 			//ByteRead((BYTE*)SPSTemp, min(MAX_SPS, GetRemaining()));
 			BYTE* buff = (BYTE*) malloc(h.spslen);
+			if (buff == NULL) return(false); //malloc error...
 			CGolombBuffer	gb (buff, h.spslen);
 			RemoveMpegEscapeCode (buff, h.sps, h.spslen);
 
@@ -1412,34 +1415,28 @@ bool CFrameHeaderParser::Read(avchdr& h, int len, CMediaType* pmt, bool reset)
 			
 		  h.ppsid = id;
 			__int64 pos = GetPos();
-			if (h.ppslen != 0)
+			if (h.pps != NULL)
 			{
 				free(h.pps);
 			}
 			h.ppslen = next_nal - pos; //length excluding length and ID bytes
+			if ((h.ppslen <= 0) || (h.ppslen > 65534)) return(false); //Sanity check
 			h.pps = (BYTE*) malloc(h.ppslen);
+			if (h.pps == NULL) return(false); //malloc error...
 			ByteRead(h.pps, h.ppslen);
 	    //LogDebug("h.ppslen = %d, bytes = %x %x %x %x, last byte = %x", h.ppslen, *h.pps, *(h.pps+1), *(h.pps+2), *(h.pps+3), *(h.pps+h.ppslen-1));
 		}
 
-		BitByteAlign();
+		//BitByteAlign();
 
 		//Seek(next_nal);
-	} // end while main
+	}
 
-	if(!h.spslen || !h.ppslen || h.height<100 || h.width<100 || h.AvgTimePerFrame<=0) 
+	if(h.spslen<=0 || h.ppslen<=0 || h.height<100 || h.width<100 || h.AvgTimePerFrame<=0) 
 		return(false);
 
 	if(!pmt) 
 	{
-		if (h.spslen != 0)
-		{
-			free(h.sps);
-		}
-		if (h.ppslen != 0)
-		{
-			free(h.pps);
-		}
 	  return(true);
 	}
   else
@@ -1540,16 +1537,7 @@ bool CFrameHeaderParser::Read(avchdr& h, int len, CMediaType* pmt, bool reset)
 		*p++ = (h.ppslen+1) & 0xff;
 		*p++ = h.ppsid;
 		memcpy(p, h.pps, h.ppslen);
-		p += h.ppslen;		
-
-		if (h.spslen != 0)
-		{
-			free(h.sps);
-		}
-		if (h.ppslen != 0)
-		{
-			free(h.pps);
-		}
+		//p += h.ppslen;		
 		
 		pmt->SetFormat((BYTE*)vi, len);
 	}

@@ -117,7 +117,7 @@ HRESULT CAudioPin::CheckMediaType(const CMediaType* pmt)
 
   if(*pmt == *ppmti)
   {
-    LogDebug("audPin:CheckMediaType() ok");  
+    //LogDebug("audPin:CheckMediaType() ok");  
     return S_OK;
   }
 
@@ -219,14 +219,29 @@ HRESULT CAudioPin::CompleteConnect(IPin *pReceivePin)
   m_bAddPMT = true;
   //LogDebug("audPin:CompleteConnect()");
   HRESULT hr = CBaseOutputPin::CompleteConnect(pReceivePin);
-  if (SUCCEEDED(hr))
+
+  PIN_INFO pinInfo;
+  FILTER_INFO filterInfo;
+  hr=pReceivePin->QueryPinInfo(&pinInfo);
+  if (!SUCCEEDED(hr)) return E_FAIL;
+  else if (pinInfo.pFilter==NULL) return E_FAIL;
+  else pinInfo.pFilter->Release(); // we dont need the filter just the info
+    
+  hr=pinInfo.pFilter->QueryFilterInfo(&filterInfo);
+  filterInfo.pGraph->Release();
+
+  if (SUCCEEDED(hr)) 
   {
-    LogDebug("audPin:CompleteConnect() ok");
+    char szName[MAX_FILTER_NAME];
+    int cch = WideCharToMultiByte(CP_ACP, 0, filterInfo.achName, MAX_FILTER_NAME, szName, MAX_FILTER_NAME, 0, 0);
+    LogDebug("audPin:CompleteConnect() ok, filter: %s", szName);
+    
     m_bConnected=true;
   }
   else
   {
     LogDebug("audPin:CompleteConnect() failed:%x",hr);
+    return E_FAIL;
   }
 
   if (m_pTsReaderFilter->IsTimeShifting())
@@ -242,7 +257,7 @@ HRESULT CAudioPin::CompleteConnect(IPin *pReceivePin)
     m_pTsReaderFilter->GetDuration(&refTime);
     m_rtDuration=CRefTime(refTime);
   }
-  LogDebug("audPin:CompleteConnect() end");
+  //LogDebug("audPin:CompleteConnect() end");
   return hr;
 }
 

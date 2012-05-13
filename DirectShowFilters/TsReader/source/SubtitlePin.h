@@ -33,6 +33,7 @@ public:
 
   //CSourceStream
   HRESULT GetMediaType(CMediaType *pMediaType);
+  HRESULT CheckMediaType(const CMediaType* pmt);
   HRESULT DecideBufferSize(IMemAllocator *pAlloc, ALLOCATOR_PROPERTIES *pRequest);
   HRESULT CompleteConnect(IPin *pReceivePin);
   HRESULT CheckConnect(IPin *pReceivePin);

@@ -320,6 +320,8 @@ struct pshdr
 		avchdr()
 		{
 			progressive = true;
+		  sps = NULL;
+		  pps = NULL;
 			spslen = 0;
 			ppslen = 0;
 			AvgTimePerFrame = 0;

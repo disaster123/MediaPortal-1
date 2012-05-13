@@ -117,7 +117,7 @@ HRESULT CVideoPin::CheckMediaType(const CMediaType* pmt)
 
   if(*pmt == *ppmti)
   {
-    LogDebug("vidPin:CheckMediaType() ok");  
+    //LogDebug("vidPin:CheckMediaType() ok");  
     return S_OK;
   }
 
@@ -167,14 +167,6 @@ HRESULT CVideoPin::GetMediaType(int iPosition, CMediaType *pmt)
   return S_OK;
 }
 
-//HRESULT CVideoPin::GetMediaType(CMediaType *pmt)
-//{
-//  CDeMultiplexer& demux=m_pTsReaderFilter->GetDemultiplexer();
-//  demux.GetVideoStreamType(*pmt);
-//  LogDebug("vidPin:GetMediaType()");
-//  return S_OK;
-//}
-
 HRESULT CVideoPin::DecideBufferSize(IMemAllocator *pAlloc, ALLOCATOR_PROPERTIES *pRequest)
 {
   HRESULT hr;
@@ -213,8 +205,25 @@ HRESULT CVideoPin::CompleteConnect(IPin *pReceivePin)
   m_bPinNoAddPMT = false;
   m_bAddPMT = true;
   HRESULT hr = CBaseOutputPin::CompleteConnect(pReceivePin);
-  if (SUCCEEDED(hr))
+
+  PIN_INFO pinInfo;
+  FILTER_INFO filterInfo;
+  hr=pReceivePin->QueryPinInfo(&pinInfo);
+  if (!SUCCEEDED(hr)) return E_FAIL;
+  else if (pinInfo.pFilter==NULL) return E_FAIL;
+  else pinInfo.pFilter->Release(); // we dont need the filter just the info
+    
+  hr=pinInfo.pFilter->QueryFilterInfo(&filterInfo);
+  filterInfo.pGraph->Release();
+
+  if (SUCCEEDED(hr)) 
   {
+    char szName[MAX_FILTER_NAME];
+    int cch = WideCharToMultiByte(CP_ACP, 0, filterInfo.achName, MAX_FILTER_NAME, szName, MAX_FILTER_NAME, 0, 0);
+    LogDebug("vidPin:CompleteConnect() ok, filter: %s", szName);
+    
+    m_bConnected=true;
+    
     m_pTsReaderFilter->m_bFastSyncFFDShow = false;
     
     CLSID &ref=m_pTsReaderFilter->GetCLSIDFromPin(pReceivePin);
@@ -222,29 +231,20 @@ HRESULT CVideoPin::CompleteConnect(IPin *pReceivePin)
     if (m_pTsReaderFilter->m_videoDecoderCLSID == CLSID_FFDSHOWVIDEO)
     {
       m_pTsReaderFilter->m_bFastSyncFFDShow=true;
-      LogDebug("vidPin:CompleteConnect() FFDShow Video Decoder connected");
-    }
-    else if (m_pTsReaderFilter->m_videoDecoderCLSID == CLSID_LAVCUVID)
-    {
-      LogDebug("vidPin:CompleteConnect() LAV CUVID Video Decoder connected");
-    }
-    else if (m_pTsReaderFilter->m_videoDecoderCLSID == CLSID_LAVVIDEO)
-    {
-      LogDebug("vidPin:CompleteConnect() LAV Video Decoder connected");
+      //LogDebug("vidPin:CompleteConnect() FFDShow Video Decoder connected");
     }
     else if (m_pTsReaderFilter->m_videoDecoderCLSID == CLSID_FFDSHOWDXVA)
     {
       m_bPinNoAddPMT = true;
-      LogDebug("vidPin:CompleteConnect() FFDShow DXVA Video Decoder connected, disable AddPMT");
+      //LogDebug("vidPin:CompleteConnect() FFDShow DXVA Video Decoder connected, disable AddPMT");
     }
-    
-    m_bConnected=true;    
-    LogDebug("vidPin:CompleteConnect() ok");
   }
   else
   {
     LogDebug("vidPin:CompleteConnect() failed:%x",hr);
+    return E_FAIL;
   }
+
 
   if (m_pTsReaderFilter->IsTimeShifting())
   {
@@ -259,7 +259,7 @@ HRESULT CVideoPin::CompleteConnect(IPin *pReceivePin)
     m_pTsReaderFilter->GetDuration(&refTime);
     m_rtDuration=CRefTime(refTime);
   }
-  LogDebug("vidPin:CompleteConnect() end");
+  //LogDebug("vidPin:CompleteConnect() end");
   return hr;
 }
 

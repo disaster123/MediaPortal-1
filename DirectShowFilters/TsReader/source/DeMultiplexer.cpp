@@ -1486,12 +1486,12 @@ void CDeMultiplexer::FillVideoH264(CTsHeader& header, byte* tsPacket)
               {
                 d += 0.0366 ;
               }
-              d += (m_bVideoPTSroff ? 0.0015 : -0.0015); //Ensure PTS always changes
+              d += (m_bVideoPTSroff ? 0.0015 : 0.0025); //Ensure PTS always changes
               m_bVideoPTSroff = !m_bVideoPTSroff;
               pts.FromClock(d);
               pts.IsValid=true;
               isSamePTS = true;
-            }
+            }            
             LOG_SAMPLES("DeMultiplexer::FillVideoH264 pts: %f, dts: %f, diff %f, minDiff %f, rtStart : %d ", (float)pts.ToClock(), (float)dts.ToClock(), (float) diff, (float)m_minVideoPTSdiff, pts.PcrReferenceBase);
           }
         }
@@ -1544,6 +1544,16 @@ void CDeMultiplexer::FillVideoH264(CTsHeader& header, byte* tsPacket)
       //Copy complete NALU into p2 buffer
           
       size -= 3; //Adjust to allow for start code
+      
+      if ((size < 0) || (size > 4194303)) //Sanity check
+      {
+        //Let's start again...
+        m_p.Free();
+        m_pl.RemoveAll();
+        m_bSetVideoDiscontinuity = true;
+        m_mpegParserReset = true;
+        return;
+      }
       
       DWORD dwNalLength = 
         ((size >> 24) & 0x000000ff) |
@@ -1610,7 +1620,7 @@ void CDeMultiplexer::FillVideoH264(CTsHeader& header, byte* tsPacket)
             //LogDebug("Fake AUD: %x %x %x %x %x %x",  p->GetAt(0), p->GetAt(1), p->GetAt(2), p->GetAt(3), p->GetAt(4), p->GetAt(5));
           }
           
-          while(m_pl.GetCount())
+          while(m_pl.GetCount()>0)
           {
             CAutoPtr<Packet> p4(new Packet());
             p4 = m_pl.RemoveHead();
@@ -1631,7 +1641,7 @@ void CDeMultiplexer::FillVideoH264(CTsHeader& header, byte* tsPacket)
               p->rtStart = p4->rtStart;
               //LogDebug("Fake AUD2: %x %x %x %x %x %x",  p4->GetAt(0), p4->GetAt(1), p4->GetAt(2), p4->GetAt(3), p4->GetAt(4), p4->GetAt(5));
             }
-            if (p->GetCount())
+            if (p->GetCount()>0)
             {
               p->Append(*p4);
             }

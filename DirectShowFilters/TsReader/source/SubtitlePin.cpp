@@ -88,11 +88,57 @@ STDMETHODIMP CSubtitlePin::NonDelegatingQueryInterface( REFIID riid, void ** ppv
   return CSourceStream::NonDelegatingQueryInterface(riid, ppv);
 }
 
+HRESULT CSubtitlePin::CheckMediaType(const CMediaType* pmt)
+{
+  CheckPointer(pmt, E_POINTER);
+
+  CDeMultiplexer& demux=m_pTsReaderFilter->GetDemultiplexer();
+  
+  if (!m_pTsReaderFilter->CheckCallback())
+  {
+    //LogDebug("subPin: Not running in MP - CheckMediaType() fail");
+    return E_FAIL;
+  }
+
+  if (!demux.PatParsed())
+  {
+    return E_FAIL;
+  }
+
+  CMediaType pmti;
+  CMediaType* ppmti = &pmti;
+  
+  ppmti->InitMediaType();
+  ppmti->SetType      (& MEDIATYPE_Stream);
+  ppmti->SetSubtype   (& MEDIASUBTYPE_MPEG2_TRANSPORT);
+  ppmti->SetSampleSize(1);
+  ppmti->SetTemporalCompression(FALSE);
+  ppmti->SetVariableSize();    
+
+  if(*pmt == *ppmti)
+  {
+    //LogDebug("subPin:CheckMediaType() ok");  
+    return S_OK;
+  }
+
+  //LogDebug("subPin:CheckMediaType() fail");  
+  return E_FAIL;
+}
+
+
 HRESULT CSubtitlePin::GetMediaType(CMediaType *pmt)
 {
   CheckPointer(pmt, E_POINTER);
 
   //LogDebug("subPin:GetMediaType()");
+
+  if (!m_pTsReaderFilter->CheckCallback())
+  {
+    //LogDebug("sub pin: Not running in MP - GetMediaType() fail");
+    //Return a null media type
+    pmt->InitMediaType();
+    return E_UNEXPECTED;
+  }
   
   CDeMultiplexer& demux=m_pTsReaderFilter->GetDemultiplexer();
 
@@ -153,6 +199,12 @@ HRESULT CSubtitlePin::CheckConnect(IPin *pReceivePin)
   HRESULT hr;
   PIN_INFO pinInfo;
   FILTER_INFO filterInfo;
+  
+  if (!m_pTsReaderFilter->CheckCallback())
+  {
+    //LogDebug("sub pin: Not running in MP - CheckConnect() fail");
+    return E_FAIL;
+  }
 
   hr=pReceivePin->QueryPinInfo(&pinInfo);
   if (!SUCCEEDED(hr)) return E_FAIL;
@@ -171,7 +223,7 @@ HRESULT CSubtitlePin::CheckConnect(IPin *pReceivePin)
   filterInfo.pGraph->Release();
 
   if (!SUCCEEDED(hr)) return E_FAIL;
-  if (wcscmp(filterInfo.achName,L"MediaPortal DVBSub2") !=0 )
+  if ((wcscmp(filterInfo.achName,L"MediaPortal DVBSub2") !=0 ) && (wcscmp(filterInfo.achName,L"MediaPortal DVBSub3") !=0 ))
   {
     //LogDebug("sub pin: Cant connect to filter name %s", filterInfo.achName);
     return E_FAIL;
@@ -185,14 +237,28 @@ HRESULT CSubtitlePin::CompleteConnect(IPin *pReceivePin)
   //LogDebug("subPin:CompleteConnect()");
   HRESULT hr = CBaseOutputPin::CompleteConnect(pReceivePin);
 
-  if (SUCCEEDED(hr))
+  PIN_INFO pinInfo;
+  FILTER_INFO filterInfo;
+  hr=pReceivePin->QueryPinInfo(&pinInfo);
+  if (!SUCCEEDED(hr)) return E_FAIL;
+  else if (pinInfo.pFilter==NULL) return E_FAIL;
+  else pinInfo.pFilter->Release(); // we dont need the filter just the info
+    
+  hr=pinInfo.pFilter->QueryFilterInfo(&filterInfo);
+  filterInfo.pGraph->Release();
+
+  if (SUCCEEDED(hr)) 
   {
-    LogDebug("subPin:CompleteConnect() ok");
+    char szName[MAX_FILTER_NAME];
+    int cch = WideCharToMultiByte(CP_ACP, 0, filterInfo.achName, MAX_FILTER_NAME, szName, MAX_FILTER_NAME, 0, 0);
+    LogDebug("subPin:CompleteConnect() ok, filter: %s", szName);
+    
     m_bConnected=true;
   }
   else
   {
     LogDebug("subPin:CompleteConnect() failed:%x",hr);
+    return E_FAIL;
   }
 
   if (m_pTsReaderFilter->IsTimeShifting())
@@ -208,7 +274,8 @@ HRESULT CSubtitlePin::CompleteConnect(IPin *pReceivePin)
     m_pTsReaderFilter->GetDuration(&refTime);
     m_rtDuration=CRefTime(refTime);
   }
-  LogDebug("subPin:CompleteConnect() end");
+
+  //LogDebug("subPin:CompleteConnect() end");
   return hr;
 }
 
