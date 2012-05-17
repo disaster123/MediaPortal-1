@@ -236,6 +236,7 @@ HRESULT CSubtitlePin::CompleteConnect(IPin *pReceivePin)
   m_bInFillBuffer=false;
   //LogDebug("subPin:CompleteConnect()");
   HRESULT hr = CBaseOutputPin::CompleteConnect(pReceivePin);
+  if (!SUCCEEDED(hr)) return E_FAIL;
 
   PIN_INFO pinInfo;
   FILTER_INFO filterInfo;

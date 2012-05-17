@@ -205,6 +205,7 @@ HRESULT CVideoPin::CompleteConnect(IPin *pReceivePin)
   m_bPinNoAddPMT = false;
   m_bAddPMT = true;
   HRESULT hr = CBaseOutputPin::CompleteConnect(pReceivePin);
+  if (!SUCCEEDED(hr)) return E_FAIL;
 
   PIN_INFO pinInfo;
   FILTER_INFO filterInfo;

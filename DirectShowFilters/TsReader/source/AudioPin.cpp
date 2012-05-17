@@ -219,6 +219,7 @@ HRESULT CAudioPin::CompleteConnect(IPin *pReceivePin)
   m_bAddPMT = true;
   //LogDebug("audPin:CompleteConnect()");
   HRESULT hr = CBaseOutputPin::CompleteConnect(pReceivePin);
+  if (!SUCCEEDED(hr)) return E_FAIL;
 
   PIN_INFO pinInfo;
   FILTER_INFO filterInfo;
@@ -717,7 +718,7 @@ HRESULT CAudioPin::OnThreadStartPlay()
   DWORD thrdID = GetCurrentThreadId();
   LogDebug("audPin:OnThreadStartPlay(%f), rate:%02.2f, threadID:0x%x, GET_TIME_NOW:0x%x", (float)m_rtStart.Millisecs()/1000.0f, m_dRateSeeking, thrdID, GET_TIME_NOW());
 
-  m_pTsReaderFilter->CheckForMPAR();
+  //m_pTsReaderFilter->CheckForMPAR();
   
   //set flag to compensate any differences in the stream time & file time
   m_pTsReaderFilter->m_bStreamCompensated = false;
