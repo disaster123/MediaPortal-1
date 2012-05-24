@@ -36,9 +36,6 @@
 // For more details for memory leak detection see the alloctracing.h header
 #include "..\..\alloctracing.h"
 
-#define MAX_TIME  86400000L
-#define DRIFT_RATE 0.5f
-
 extern void LogDebug(const char *fmt, ...) ;
 extern DWORD m_tGTStartTime;
 
@@ -249,7 +246,6 @@ HRESULT CVideoPin::CompleteConnect(IPin *pReceivePin)
 
   if (m_pTsReaderFilter->IsTimeShifting())
   {
-    //m_rtDuration=CRefTime(MAX_TIME);
     REFERENCE_TIME refTime;
     m_pTsReaderFilter->GetDuration(&refTime);
     m_rtDuration=CRefTime(refTime);
@@ -497,7 +493,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
                                                                       
           if (m_dRateSeeking == 1.0)
           {
-            if ((fTime < 0.3) && (m_pTsReaderFilter->State() == State_Running) && (m_sampleCount > 10))
+            if ((fTime < 0.3) && (m_pTsReaderFilter->State() == State_Running) && (m_sampleCount > 10) && !ForcePresent)
             {              
               if (!demux.m_bVideoSampleLate) 
               {
@@ -517,7 +513,7 @@ HRESULT CVideoPin::FillBuffer(IMediaSample *pSample)
             //Discard late samples at start of play,
             //and samples outside a sensible timing window during play 
             //(helps with signal corruption recovery)
-            if ((fTime > (ForcePresent ? -0.5 : -0.3)) && (fTime < (stallPoint + 1.0)))
+            if ((fTime > (ForcePresent ? -1.0 : -0.3)) && (fTime < (stallPoint + 1.0)))
             {
               //if ((fTime > stallPoint) && (m_pTsReaderFilter->State() == State_Running))
               if ((fTime > stallPoint) && (m_sampleCount > 10))

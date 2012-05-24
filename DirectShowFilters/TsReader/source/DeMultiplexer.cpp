@@ -34,7 +34,7 @@
 #include "audioPin.h"
 #include "videoPin.h"
 #include "subtitlePin.h"
-#include "..\..\DVBSubtitle2\Source\IDVBSub.h"
+//#include "..\..\DVBSubtitle2\Source\IDVBSub.h"
 #include "mediaFormats.h"
 #include "h264nalu.h"
 #include <cassert>
@@ -2320,13 +2320,22 @@ void CDeMultiplexer::FillSubtitle(CTsHeader& header, byte* tsPacket)
     IDVBSubtitle* pDVBSubtitleFilter(m_filter.GetSubtitleFilter());
     if( pDVBSubtitleFilter )
     {
-      LogDebug("Calling SetSubtitlePid");
+      //LogDebug("Calling SetSubtitlePid");
       pDVBSubtitleFilter->SetSubtitlePid(m_subtitleStreams[m_iSubtitleStream].pid);
-      LogDebug(" done - SetSubtitlePid");
-      LogDebug("Calling SetFirstPcr");
+      LogDebug(" done - DVBSub - SetSubtitlePid");
+      //LogDebug("Calling SetFirstPcr");
       pDVBSubtitleFilter->SetFirstPcr(m_duration.FirstStartPcr().PcrReferenceBase);
-      LogDebug(" done - SetFirstPcr");
+      LogDebug(" done - DVBSub - SetFirstPcr");
       m_currentSubtitlePid = m_subtitleStreams[m_iSubtitleStream].pid;
+      if (m_filter.m_subtitleCLSID == CLSID_DVBSub3)
+      {
+        pDVBSubtitleFilter->SetHDMV(false);
+        LogDebug(" done - DVBSub3 - SetHDMV");
+      }
+      else if (m_filter.m_subtitleCLSID == CLSID_DVBSub2)
+      {
+        LogDebug(" done - DVBSub2");
+      }
     }
   }
 

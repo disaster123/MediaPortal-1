@@ -181,7 +181,7 @@ CTsReaderFilter::CTsReaderFilter(IUnknown *pUnk, HRESULT *phr):
   GetLogFile(filename);
   ::DeleteFile(filename);
   LogDebug("----- Experimental noStopMod version -----");
-  LogDebug("---------- v0.0.59c XXX -------------------");
+  LogDebug("---------- v0.0.59e XXX -------------------");
   
   m_fileReader=NULL;
   m_fileDuration=NULL;
@@ -270,6 +270,7 @@ CTsReaderFilter::CTsReaderFilter(IUnknown *pUnk, HRESULT *phr):
   m_bForceSeekAfterRateChange=false ;
   m_bSeekAfterRcDone=false ;
   m_videoDecoderCLSID=GUID_NULL;
+  m_subtitleCLSID=GUID_NULL;
   m_bFastSyncFFDShow=false;
   m_ShowBufferAudio = INIT_SHOWBUFFERAUDIO;
   m_ShowBufferVideo = INIT_SHOWBUFFERVIDEO;
@@ -296,12 +297,7 @@ CTsReaderFilter::~CTsReaderFilter()
 
   hr=m_pSubtitlePin->Disconnect();
   delete m_pSubtitlePin;
-
-  if (m_pDVBSubtitle)
-  {
-    m_pDVBSubtitle->Release();
-    m_pDVBSubtitle = NULL;
-  }
+  ReleaseSubtitleFilter();
 
   if (m_fileReader != NULL)
     delete m_fileReader;
@@ -574,8 +570,6 @@ STDMETHODIMP CTsReaderFilter::Run(REFERENCE_TIME tStart)
   SetMediaPosnUpdate(m_MediaPos) ;   // reset offset.
 
   HRESULT hr= CSource::Run(tStart);
-
-  FindSubtitleFilter();
   
   m_bPauseOnClockTooFast=false ;
 
@@ -1327,11 +1321,16 @@ CSubtitlePin* CTsReaderFilter::GetSubtitlePin()
 
 IDVBSubtitle* CTsReaderFilter::GetSubtitleFilter()
 {
-  /*if( !m_pDVBSubtitle )
-  {
-    FindSubtitleFilter(); // THIS CAUSED A DEADLOCK WITH STOP() ! NOW ONLY EXECUTED IN RUN()
-  }*/
   return m_pDVBSubtitle;
+}
+
+void CTsReaderFilter::ReleaseSubtitleFilter()
+{
+  if (m_pDVBSubtitle)
+  {
+    m_pDVBSubtitle->Release();
+    m_pDVBSubtitle = NULL;
+  }
 }
 
 //**************************************************************************************************************
@@ -1800,51 +1799,58 @@ STDMETHODIMP CTsReaderFilter::SetSubtitleResetCallback( int (CALLBACK *pSubUpdat
   return m_demultiplexer.SetSubtitleResetCallback( pSubUpdateCallback );
 }
 
-//
-// FindSubtitleFilter
-//
-// be careful with this method, can cause deadlock with CSync::Stop, so should only be called in Run()
-HRESULT CTsReaderFilter::FindSubtitleFilter()
-{
-  if( m_pDVBSubtitle )
-  {
-    return S_OK;
-  }
-  //LogDebug( "FindSubtitleFilter - start");
 
-  IEnumFilters * piEnumFilters = NULL;
-  if (GetFilterGraph() && SUCCEEDED(GetFilterGraph()->EnumFilters(&piEnumFilters)))
+HRESULT CTsReaderFilter::GetSubInfoFromPin(IPin* pPin)
+{
+  if (!pPin) 
   {
-    IBaseFilter * pFilter;
-    while (piEnumFilters->Next(1, &pFilter, 0) == NOERROR )
+    m_subtitleCLSID = GUID_NULL;
+    m_pDVBSubtitle = NULL;
+    return S_FALSE;
+  }
+  CLSID clsid=GUID_NULL;
+  PIN_INFO pi;
+  HRESULT fhr = S_FALSE;
+  
+  if (SUCCEEDED(pPin->QueryPinInfo(&pi))) 
+  {
+    if (pi.pFilter) // IBaseFilter pointer
     {
+      pi.pFilter->GetClassID(&clsid);
+      m_subtitleCLSID = clsid;
+ 
       FILTER_INFO filterInfo;
-      if (pFilter->QueryFilterInfo(&filterInfo) == S_OK)
+      if (pi.pFilter->QueryFilterInfo(&filterInfo) == S_OK)
       {
-       if (!wcsicmp(L"MediaPortal DVBSub3", filterInfo.achName))
+       if (clsid == CLSID_DVBSub3)
         {
-          HRESULT fhr = pFilter->QueryInterface( IID_IDVBSubtitle3, ( void**)&m_pDVBSubtitle );
+          fhr = pi.pFilter->QueryInterface( IID_IDVBSubtitle3, ( void**)&m_pDVBSubtitle );
           assert( fhr == S_OK);
-          //LogDebug("Testing that DVBSub3 works");
+          LogDebug("DVBSub3 interface OK");
           m_pDVBSubtitle->Test(1);
         }
-        else if (!wcsicmp(L"MediaPortal DVBSub2", filterInfo.achName))
+        else if (clsid == CLSID_DVBSub2)
         {
-          HRESULT fhr = pFilter->QueryInterface( IID_IDVBSubtitle2, ( void**)&m_pDVBSubtitle );
+          fhr = pi.pFilter->QueryInterface( IID_IDVBSubtitle2, ( void**)&m_pDVBSubtitle );
           assert( fhr == S_OK);
-          //LogDebug("Testing that DVBSub2 works");
+          LogDebug("DVBSub2 interface OK");
           m_pDVBSubtitle->Test(1);
         }
         filterInfo.pGraph->Release();
       }
-      pFilter->Release();
-      pFilter = NULL;
+
+      pi.pFilter->Release();
     }
-    piEnumFilters->Release();
   }
-  //LogDebug( "FindSubtitleFilter - End");
+  
+  if (fhr != S_OK)
+  {
+    m_pDVBSubtitle = NULL;
+    return S_FALSE;
+  }
   return S_OK;
 }
+
 
 CTsDuration& CTsReaderFilter::GetDuration()
 {
