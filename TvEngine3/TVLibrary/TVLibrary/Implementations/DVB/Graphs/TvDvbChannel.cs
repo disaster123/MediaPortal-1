@@ -273,6 +273,8 @@ namespace TvLibrary.Implementations.DVB
       ThrowExceptionIfTuneCancelled();
 
       bool foundPMT = false;
+      try
+      {
       int retryCount = 0;
       int lookForPid;
       _pmtPid = -1;
@@ -294,97 +296,96 @@ namespace TvLibrary.Implementations.DVB
         {
           try
           {
-            if (SetupPmtGrabber(lookForPid, channel.ServiceId)) // pat lookup by sid or PMT pid
+          if (SetupPmtGrabber(lookForPid, channel.ServiceId)) // pat lookup by sid or PMT pid
+          {
+            DateTime dtNow = DateTime.Now;
+            int timeoutPMT = _parameters.TimeOutPMT * 1000;
+            if (alwaysUsePATLookup)
             {
-              DateTime dtNow = DateTime.Now;
-              int timeoutPMT = _parameters.TimeOutPMT * 1000;
-              if (alwaysUsePATLookup)
-              {
-                Log.Log.Debug("WaitForPMT: Using new way for PMT grabbing via PAT");
-                Log.Log.Debug("WaitForPMT: Waiting for SID {0}", channel.ServiceId);
-              }
-              else
-              {
-                Log.Log.Debug("WaitForPMT: Waiting for PMT {0:X}", _pmtPid);
-              }
+              Log.Log.Debug("WaitForPMT: Using new way for PMT grabbing via PAT");
+              Log.Log.Debug("WaitForPMT: Waiting for SID {0}", channel.ServiceId);
+            }
+            else
+            {
+              Log.Log.Debug("WaitForPMT: Waiting for PMT {0:X}", _pmtPid);
+            }
 
-              if (_eventPMT.WaitOne(timeoutPMT, true))
+            if (_eventPMT.WaitOne(timeoutPMT, true))
+            {
+              ThrowExceptionIfTuneCancelled();
+              TimeSpan ts = DateTime.Now - dtNow;
+              Log.Log.Debug("WaitForPMT: Found PMT after {0} seconds.", ts.TotalSeconds);
+              DateTime dtNowPMT2CAM = DateTime.Now;
+              bool sendPmtToCamDone = false;
+              try
               {
-                ThrowExceptionIfTuneCancelled();
-                TimeSpan ts = DateTime.Now - dtNow;
-                Log.Log.Debug("WaitForPMT: Found PMT after {0} seconds.", ts.TotalSeconds);
-                DateTime dtNowPMT2CAM = DateTime.Now;
-                bool sendPmtToCamDone = false;
-                try
+                while (ts.TotalMilliseconds < timeoutPMT && !sendPmtToCamDone)
+                //lets keep trying to send pmt2cam and at the same time obey the timelimit specified in timeoutPMT
                 {
-                  while (ts.TotalMilliseconds < timeoutPMT && !sendPmtToCamDone)
-                  //lets keep trying to send pmt2cam and at the same time obey the timelimit specified in timeoutPMT
+                  ts = DateTime.Now - dtNow;
+                  bool updatePids;
+                  int waitInterval; //ms         
+                  sendPmtToCamDone = SendPmtToCam(out updatePids, out waitInterval);
+                  if (sendPmtToCamDone)
                   {
-                    ts = DateTime.Now - dtNow;
-                    bool updatePids;
-                    int waitInterval; //ms         
-                    sendPmtToCamDone = SendPmtToCam(out updatePids, out waitInterval);
-                    if (sendPmtToCamDone)
+                    if (updatePids)
                     {
-                      if (updatePids)
+                      if (_channelInfo != null)
                       {
-                        if (_channelInfo != null)
+                        SetMpegPidMapping(_channelInfo);
+                        if (_mdplugs != null && _channelInfo.scrambled && _mdplugs.IsProviderSelected(channel.Provider))
                         {
-                          SetMpegPidMapping(_channelInfo);
-                          if (_mdplugs != null && _channelInfo.scrambled && _mdplugs.IsProviderSelected(channel.Provider))
-                          {
-                            //_mdplugs.SetChannel(_currentChannel, _channelInfo, false);
+                          //_mdplugs.SetChannel(_currentChannel, _channelInfo, false);
                           _mdplugs.AddSubChannel(_subChannelId,_currentChannel, _channelInfo, false);
-                          }
-                          else
-                          {
-                            Log.Log.Debug("OnPMTReceived: MDAPI disabled. Possible reasons are _mdplugs=null or provider not listed");
-                          }
                         }
-                        Log.Log.Info("subch:{0} stop tif", _subChannelId);
-                        if (_filterTIF != null)
+                        else
                         {
-                          _filterTIF.Stop();
+                          Log.Log.Debug("OnPMTReceived: MDAPI disabled. Possible reasons are _mdplugs=null or provider not listed");
                         }
                       }
-                    }
-                    else
-                    {
-                      Log.Log.Debug("WaitForPMT: waiting for SendPmtToCam {0} ms.", ts.TotalMilliseconds);
-                      Thread.Sleep(waitInterval);
+                      Log.Log.Info("subch:{0} stop tif", _subChannelId);
+                      if (_filterTIF != null)
+                      {
+                        _filterTIF.Stop();
+                      }
                     }
                   }
+                  else
+                  {
+                    Log.Log.Debug("WaitForPMT: waiting for SendPmtToCam {0} ms.", ts.TotalMilliseconds);
+                    Thread.Sleep(waitInterval);
+                  }
                 }
-                catch (Exception ex)
-                {
-                  Log.Log.WriteFile("subch:{0}", ex.Message);
-                  Log.Log.WriteFile("subch:{0}", ex.Source);
-                  Log.Log.WriteFile("subch::{0}", ex.StackTrace);
-                }
-                TimeSpan tsPMT2CAM = DateTime.Now - dtNowPMT2CAM;
-                _listenCA = false;
-                if (!sendPmtToCamDone)
-                {
-                  Log.Log.Debug("WaitForPMT: Timed out sending PMT to CAM {0} seconds.", tsPMT2CAM.TotalSeconds);
-                }
-                else
-                {
-                  Log.Log.Debug("WaitForPmt: PMT handling took {0} seconds.", tsPMT2CAM.TotalSeconds);
-                }
-                // PMT was found so exit here
-                foundPMT = true;
-                break;
+              }
+              catch (Exception ex)
+              {
+                Log.Log.WriteFile("subch:{0}", ex.Message);
+                Log.Log.WriteFile("subch:{0}", ex.Source);
+                Log.Log.WriteFile("subch::{0}", ex.StackTrace);
+              }
+              TimeSpan tsPMT2CAM = DateTime.Now - dtNowPMT2CAM;
+              _listenCA = false;
+              if (!sendPmtToCamDone)
+              {
+                Log.Log.Debug("WaitForPMT: Timed out sending PMT to CAM {0} seconds.", tsPMT2CAM.TotalSeconds);
               }
               else
               {
-                // Timeout waiting for PMT
-                TimeSpan ts = DateTime.Now - dtNow;
-                Log.Log.Debug("WaitForPMT: Timed out waiting for PMT after {0} seconds. Increase the PMT timeout value?",
-                              ts.TotalSeconds);
-                Log.Log.Debug("Setting to 0 to search for new PMT.");
-                lookForPid = 0;
+                Log.Log.Debug("WaitForPmt: PMT handling took {0} seconds.", tsPMT2CAM.TotalSeconds);
               }
+              // PMT was found so exit here
+              foundPMT = true;
+              break;
             }
+            else
+            {             
+              TimeSpan ts = DateTime.Now - dtNow;
+              Log.Log.Debug("WaitForPMT: Timed out waiting for PMT after {0} seconds. Increase the PMT timeout value?",
+                            ts.TotalSeconds);
+              Log.Log.Debug("Setting to 0 to search for new PMT.");
+              lookForPid = 0;
+            }
+          }
           }
           finally
           {
@@ -392,8 +393,156 @@ namespace TvLibrary.Implementations.DVB
           }
         } // retry loop
       }
+        return foundPMT;
+      }
+      finally
+      {
+        if (foundPMT)
+        {
+          if (DvbStreamFailedEvent == null)
+            DvbStreamFailedEvent += TvDvbChannel_DvbStreamFailedEvent;
+        }
+        else
+        {
+          StopWatcher();
+          DvbStreamFailedEvent = null;
+        }
+      }
+    }
 
-      return foundPMT;
+
+    #region Scramble watcher
+
+    // Error detection
+    private long _dvbStreamBytes = 0;
+    private System.Timers.Timer _dvbStreamWatcherTimer;
+
+    ///<summary>
+    ///</summary>
+    public event EventHandler DvbStreamFailedEvent;
+
+
+    /* 1) WaitForPMT: attach DvbStreamFailedEvent handler
+     * 2) OnStartRecording: attach AudioVideoEvent += TvDvbChannel_AudioVideoEvent;
+     * 3) TvDvbChannel_AudioVideoEvent: when Pids are seen, start Watcher (CreateWatcher), detach TvDvbChannel_AudioVideoEvent;
+     * 4) DvbStreamWatcher checks once per second for unscrambled signal and increasing recording file
+     * 5)   on error it stops the Watcher and does FireDvbStreamFailedEvent();
+     * 6)   TvDvbChannel_DvbStreamFailedEvent does WaitForPMT
+     */
+
+    void TvDvbChannel_AudioVideoEvent(PidType pidType)
+    {
+      Log.Log.Info("SubChannel [{0}, {1}, FTA:{2}] received A/V seen PidType {3}.",
+                  SubChannelId, CurrentChannel.Name, CurrentChannel.FreeToAir, pidType);
+
+      AudioVideoEvent -= TvDvbChannel_AudioVideoEvent; // unregister myself
+      CreateWatcher();
+    }
+
+
+
+    protected void CreateWatcher()
+    {
+      _dvbStreamBytes = 0;
+      if (_dvbStreamWatcherTimer == null)
+      {
+        Log.Log.Info("SubChannel [{0}, {1}, FTA:{2}] created dvb stream watcher.",
+                    SubChannelId, CurrentChannel.Name, CurrentChannel.FreeToAir);
+        _dvbStreamWatcherTimer = new System.Timers.Timer { Enabled = true, AutoReset = true, Interval = 1000 };
+        _dvbStreamWatcherTimer.Elapsed += _dvbStreamWatcherTimer_Elapsed;
+      }
+    }
+
+    protected void StopWatcher()
+    {
+      if (_dvbStreamWatcherTimer != null)
+      {
+        Log.Log.Info("SubChannel [{0}, {1}, FTA:{2}] stopped dvb stream watcher.",
+                    SubChannelId, CurrentChannel.Name, CurrentChannel.FreeToAir);
+        _dvbStreamWatcherTimer.Enabled = false;
+        _dvbStreamWatcherTimer.Dispose();
+        _dvbStreamWatcherTimer = null;
+      }
+    }
+
+    protected virtual void DvbStreamWatcher()
+    {
+      if (!IsReceivingAudioVideo)
+      {
+        Log.Log.Error("SubChannel [{0}, {1}, FTA:{2}] is no longer receiving A/V. Decryption failed? / no signal?",
+                  SubChannelId, CurrentChannel.Name, CurrentChannel.FreeToAir);
+        StopWatcher();
+        FireDvbStreamFailedEvent();
+        return;
+      }
+
+      if (_tsFilterInterface != null)
+      {
+        int totalTsBytes;
+        int tsDiscontinuity;
+        int totalRecordingBytes;
+        int recordingDiscontinuity;
+        int totalDvbStreamBytes;
+
+        _tsFilterInterface.GetStreamQualityCounters(_subChannelId, out totalTsBytes, out totalRecordingBytes, out tsDiscontinuity, out recordingDiscontinuity);
+        if (IsRecording)
+        {
+          totalDvbStreamBytes = totalRecordingBytes;
+        }
+        else
+        {
+          totalDvbStreamBytes = totalTsBytes;
+        }
+
+        // if the tswriter internal counter was resetted, reset it here also
+        if (totalDvbStreamBytes < _dvbStreamBytes)
+        {
+          Log.Log.Info("SubChannel [{0}, {1}, FTA:{2}] Resetting recording counter (before {3}, after {4}).",
+                    SubChannelId, CurrentChannel.Name, CurrentChannel.FreeToAir, _dvbStreamBytes, totalDvbStreamBytes);
+          _dvbStreamBytes = 0;
+        }
+
+        // we expect an increasing filesize of recording, if not there was something wrong.
+        if (totalDvbStreamBytes == _dvbStreamBytes && _dvbStreamBytes != 0)
+        {
+          // how to handle this, if the reson is not clear?
+          // first try: same as scrambled event
+          Log.Log.Error("SubChannel [{0}, {1}, FTA:{2}] Recording size not increased (before {3}, after {4}).",
+                    SubChannelId, CurrentChannel.Name, CurrentChannel.FreeToAir, _dvbStreamBytes, totalDvbStreamBytes);
+          StopWatcher();
+          FireDvbStreamFailedEvent();
+          return;
+    }
+        _dvbStreamBytes = totalDvbStreamBytes;
+      }
+    }
+
+    protected void FireDvbStreamFailedEvent()
+    {
+      if (DvbStreamFailedEvent != null)
+        DvbStreamFailedEvent(this, EventArgs.Empty);
+    }
+
+    void _dvbStreamWatcherTimer_Elapsed(object sender, System.Timers.ElapsedEventArgs e)
+    {
+      DvbStreamWatcher();
+    }
+
+    #endregion
+
+    // when the decryption failed during usage, try to decode PMT again
+    void TvDvbChannel_DvbStreamFailedEvent(object sender, EventArgs e)
+    {
+      Log.Log.Error("SubChannel [{0}, {1}, FTA:{2}] Trying to recover from switching to scrambled / no signal.", SubChannelId, CurrentChannel.Name, CurrentChannel.FreeToAir);
+      AudioVideoEvent += TvDvbChannel_AudioVideoEvent; // readd audio / video event
+      if (WaitForPMT())
+      {
+        Log.Log.Error("SubChannel [{0}, {1}, FTA:{2}] Recover successful.", SubChannelId, CurrentChannel.Name, CurrentChannel.FreeToAir);
+      }
+      else
+      {
+        Log.Log.Error("SubChannel [{0}, {1}, FTA:{2}] Recover FAILED.", SubChannelId, CurrentChannel.Name, CurrentChannel.FreeToAir);
+      }
     }
 
     private void ThrowExceptionIfTuneCancelled()
@@ -543,6 +692,7 @@ namespace TvLibrary.Implementations.DVB
     /// <param name="fileName">filename to which to recording should be saved</param>
     protected override void OnStartRecording(string fileName)
     {
+      AudioVideoEvent += TvDvbChannel_AudioVideoEvent;
       Log.Log.WriteFile("subch:{0} StartRecord({1})", _subChannelId, fileName);
       if (_tsFilterInterface != null)
       {
@@ -580,6 +730,7 @@ namespace TvLibrary.Implementations.DVB
     /// <returns></returns>
     protected override void OnStopRecording()
     {
+      StopWatcher();
       Log.Log.WriteFile("tvdvbchannel.OnStopRecording subch={0}, subch index={1}", _subChannelId, _subChannelIndex);
       if (IsRecording)
       {
@@ -611,7 +762,7 @@ namespace TvLibrary.Implementations.DVB
 
       _timeshiftFileName = fileName;
       Log.Log.WriteFile("subch:{0} SetTimeShiftFileName:{1}", _subChannelId, fileName);
-      //int hr;
+      AudioVideoEvent += TvDvbChannel_AudioVideoEvent;
       if (_tsFilterInterface != null)
       {
         Log.Log.WriteFile("Set video / audio observer");
@@ -648,6 +799,7 @@ namespace TvLibrary.Implementations.DVB
     {
       if (IsTimeShifting)
       {
+        StopWatcher();
         Log.Log.WriteFile("subch:{0}-{1} tswriter StopTimeshifting...", _subChannelId, _subChannelIndex);
         if (_tsFilterInterface != null)
         {
