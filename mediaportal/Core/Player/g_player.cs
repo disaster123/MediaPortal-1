@@ -1376,7 +1376,8 @@ namespace MediaPortal.Player
 
         if (!playingRemoteUrl) // MediaInfo can only be used on files (local or SMB)
         {
-          _mediaInfo = new MediaInfoWrapper(strFile);
+          // no mediainfo on play - it just makes play slow!
+          // _mediaInfo = new MediaInfoWrapper(strFile);
         }
 
         if ((!playingRemoteUrl && Util.Utils.IsVideo(strFile)) || Util.Utils.IsLiveTv(strFile) || Util.Utils.IsRTSP(strFile)) //local video, tv, rtsp
