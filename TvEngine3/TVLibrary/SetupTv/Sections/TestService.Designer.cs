@@ -382,6 +382,7 @@ namespace SetupTv.Sections
       this.mpComboBoxChannels.Location = new System.Drawing.Point(64, 220);
       this.mpComboBoxChannels.Name = "mpComboBoxChannels";
       this.mpComboBoxChannels.Size = new System.Drawing.Size(151, 21);
+      this.mpComboBoxChannels.Sorted = true;
       this.mpComboBoxChannels.TabIndex = 54;
       // 
       // comboBoxGroups
@@ -393,6 +394,7 @@ namespace SetupTv.Sections
       this.comboBoxGroups.Location = new System.Drawing.Point(64, 196);
       this.comboBoxGroups.Name = "comboBoxGroups";
       this.comboBoxGroups.Size = new System.Drawing.Size(151, 21);
+      this.comboBoxGroups.Sorted = true;
       this.comboBoxGroups.TabIndex = 61;
       this.comboBoxGroups.SelectedIndexChanged += new System.EventHandler(this.comboBoxGroups_SelectedIndexChanged);
       // 
