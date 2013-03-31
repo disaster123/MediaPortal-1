@@ -491,8 +491,8 @@ namespace MediaPortal.Util
     public static bool IsAVStream(string strPath)
     {
       if (strPath == null) return false;
-      if (strPath.StartsWith("http:")) return true;
-      if (strPath.StartsWith("https:")) return true;
+      //if (strPath.StartsWith("http:")) return true;
+      //if (strPath.StartsWith("https:")) return true;
       if (strPath.StartsWith("mms:")) return true;
       return false;
     }
