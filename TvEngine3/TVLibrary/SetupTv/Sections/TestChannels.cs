@@ -273,7 +273,7 @@ namespace SetupTv.Sections
         channelTestThread.IsBackground = true;
         channelTestThread.Priority = ThreadPriority.Lowest;
         channelsO = channels as List<Channel>;
-        channelsO.AddRange(maps.Select(map => map.ReferencedChannel()).Where(ch => ch.IsTv));
+        channelsO.AddRange(maps.Select(map => map.ReferencedChannel()).Where(ch => ch.IsTv && ch.VisibleInGuide));
         _usersShareChannels = chkShareChannels.Checked;
         _tunedelay = txtTuneDelay.Value;
         _concurrentTunes = txtConcurrentTunes.Value;
