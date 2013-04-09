@@ -222,6 +222,7 @@ namespace MediaPortal
       private Label _versionLabel;
       private Label _cvsLabel;
       private Label _informationLabel;
+      private Label _disasterLabel;
 
       /// <summary>
       /// Required designer variable.
@@ -255,6 +256,7 @@ namespace MediaPortal
       {
         string[] strVersion = version.Split('-');
         _versionLabel.Text = strVersion[0];
+        _disasterLabel.Text = "Disaster Edition";
         Log.Info("Version: Application {0}", strVersion[0]);
         if (strVersion.Length > 1)
         {
@@ -322,6 +324,7 @@ namespace MediaPortal
         this._informationLabel = new System.Windows.Forms.Label();
         this._versionLabel = new System.Windows.Forms.Label();
         this._cvsLabel = new System.Windows.Forms.Label();
+        this._disasterLabel = new System.Windows.Forms.Label();
         this._panel1.SuspendLayout();
         this.SuspendLayout();
         // 
@@ -332,6 +335,7 @@ namespace MediaPortal
         this._panel1.Controls.Add(this._informationLabel);
         this._panel1.Controls.Add(this._versionLabel);
         this._panel1.Controls.Add(this._cvsLabel);
+        this._panel1.Controls.Add(this._disasterLabel);
         this._panel1.Dock = System.Windows.Forms.DockStyle.Fill;
         this._panel1.Location = new System.Drawing.Point(0, 0);
         this._panel1.Name = "_panel1";
@@ -370,6 +374,17 @@ namespace MediaPortal
         this._versionLabel.Size = new System.Drawing.Size(111, 16);
         this._versionLabel.TabIndex = 5;
         this._versionLabel.TextAlign = System.Drawing.ContentAlignment.TopRight;
+
+        this._disasterLabel.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) | System.Windows.Forms.AnchorStyles.Right)));
+        this._disasterLabel.BackColor = System.Drawing.Color.Transparent;
+        this._disasterLabel.Font = new System.Drawing.Font("Arial", 7F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+        this._disasterLabel.Location = new System.Drawing.Point(10, 113);
+        this._disasterLabel.Name = "disasterLabel";
+        this._disasterLabel.Size = new System.Drawing.Size(100, 16);
+        this._disasterLabel.TabIndex = 5;
+        this._disasterLabel.TextAlign = System.Drawing.ContentAlignment.TopRight;
+        this._disasterLabel.Text = "Disaster Edition";
+
         // 
         // cvsLabel
         // 
