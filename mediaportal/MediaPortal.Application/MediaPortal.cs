@@ -648,11 +648,11 @@ public class MediaPortalApp : D3D, IRender
       // Log MediaPortal version build and operating system level
       FileVersionInfo versionInfo = FileVersionInfo.GetVersionInfo(Application.ExecutablePath);
 
-      Log.Info("Main: MediaPortal v" + versionInfo.FileVersion + " is starting up on " + OSInfo.OSInfo.GetOSDisplayVersion());
-
-      #if DEBUG
-      Log.Info("Debug Build: " + Application.ProductVersion);
-      #else
+      Log.Info("Main: MediaPortal Disaster Edition v" + versionInfo.FileVersion + " is starting up on " +
+               OSInfo.OSInfo.GetOSDisplayVersion());
+#if DEBUG
+      Log.Info("Debug build: " + Application.ProductVersion);
+#else
       Log.Info("Build: " + Application.ProductVersion);
       #endif
 
