@@ -109,9 +109,9 @@ namespace MediaPortal.Player
       //currently disabled for all tv/radio/streaming video
       if (isTV || isRadio || isRTSP || isAVStream)
       {
-        Log.Debug("MediaInfoWrapper: isTv:{0}, isRadio:{1}, isRTSP:{2}, isAVStream:{3}", isTV, isRadio, isRTSP,
+        Log.Info("MediaInfoWrapper: isTv:{0}, isRadio:{1}, isRTSP:{2}, isAVStream:{3}", isTV, isRadio, isRTSP,
                   isAVStream);
-        Log.Debug("MediaInfoWrapper: disabled for this content");
+        Log.Info("MediaInfoWrapper: disabled for this content");
         _mediaInfoNotloaded = true;
         return;
       }
@@ -141,6 +141,8 @@ namespace MediaPortal.Player
 
       try
       {
+        Log.Info("MediaInfoWrapper started: isTv:{0}, isRadio:{1}, isRTSP:{2}, isAVStream:{3}", isTV, isRadio, isRTSP,
+                  isAVStream);
         _mI = new MediaInfo();
         _mI.Option("ParseSpeed", _ParseSpeed);
 
@@ -395,6 +397,7 @@ namespace MediaPortal.Player
           Log.Debug("MediaInfoWrapper.MediaInfoWrapper: Closing file : {0}", strFile);
         }
       }
+      Log.Info("MediaInfoWrapper done");
     }
 
     #endregion
