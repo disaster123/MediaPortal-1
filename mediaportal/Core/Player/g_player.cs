@@ -1357,7 +1357,8 @@ namespace MediaPortal.Player
 
         if (!playingRemoteUrl) // MediaInfo can only be used on files (local or SMB)
         {
-          _mediaInfo = new MediaInfoWrapper(strFile);
+          // do not query mediainfo
+          //_mediaInfo = new MediaInfoWrapper(strFile);
         }
 
         // back to previous Windows if we are only in video fullscreen to do a proper release when next item is music only
