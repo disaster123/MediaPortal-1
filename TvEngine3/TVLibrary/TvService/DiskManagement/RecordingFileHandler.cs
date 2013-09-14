@@ -63,6 +63,10 @@ namespace TvService
           }
           filesDeleted = true;
         }
+        else {
+          Log.Debug("DeleteRecordingOnDisk: Directory does not exist!: '{0}'", Path.GetDirectoryName(fileNameForRec));
+          filesDeleted = true;          
+        }
       }
       catch (Exception ex)
       {
