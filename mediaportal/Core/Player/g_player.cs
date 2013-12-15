@@ -39,6 +39,7 @@ using Un4seen.Bass;
 using Un4seen.Bass.AddOn.Cd;
 using Action = MediaPortal.GUI.Library.Action;
 using MediaPortal.Player.Subtitles;
+using System.Threading;
 
 namespace MediaPortal.Player
 {
@@ -68,6 +69,7 @@ namespace MediaPortal.Player
     #region variables
 
     public static MediaInfoWrapper _mediaInfo = null;
+    private static Thread _delayedrefreshratechanger = null;
     private static int _currentStep = 0;
     private static int _currentStepIndex = -1;
     private static DateTime _seekTimer = DateTime.MinValue;
@@ -643,6 +645,11 @@ namespace MediaPortal.Player
       }
       if (_player != null)
       {
+        if (_delayedrefreshratechanger != null)
+        {
+          _delayedrefreshratechanger.Abort();
+          _delayedrefreshratechanger = null;
+        }
         Log.Debug("g_Player.doStop() keepTimeShifting = {0} keepExclusiveModeOn = {1}", keepTimeShifting,
                   keepExclusiveModeOn);
         // Get playing file for unmount handling
@@ -1362,6 +1369,12 @@ namespace MediaPortal.Player
             }
         }
 
+        if (_delayedrefreshratechanger != null)
+        {
+          _delayedrefreshratechanger.Abort();
+          _delayedrefreshratechanger = null;
+        }
+
         if (!playingRemoteUrl) // MediaInfo can only be used on files (local or SMB)
         {
           if (currentMediaInfoFilePlaying != strFile)
@@ -1455,17 +1468,15 @@ namespace MediaPortal.Player
               // Identify if it's a video
               if (strFile.IndexOf(@"\BDMV\INDEX.BDMV") == -1 && type != MediaType.Radio)
               {
-                // Make a double check on .ts because it can be recorded TV or Radio
-                if (extension == ".ts")
-                {
-                  if (MediaInfo.hasVideo)
+                if (_mediaInfo == null || _mediaInfo.Framerate <= 0)
                   {
-                    RefreshRateChanger.AdaptRefreshRate(strFile, (RefreshRateChanger.MediaType)(int)type);
-                  }
+                  // using DelayedRefreshrateChanger
+                  _delayedrefreshratechanger = new Thread(delegate() { RefreshRateChanger.DelayedRefreshrateChanger(strFile, type); });
+                  _delayedrefreshratechanger.Start();
                 }
                 else
                 {
-                  RefreshRateChanger.AdaptRefreshRate(strFile, (RefreshRateChanger.MediaType)(int)type);
+                  RefreshRateChanger.AdaptRefreshRate(strFile, (RefreshRateChanger.MediaType)(int)type, _mediaInfo.Framerate);
                 }
               }
             }
@@ -1546,7 +1557,16 @@ namespace MediaPortal.Player
                   }
                 }
                 // Do refresh rate
-                RefreshRateChanger.AdaptRefreshRate(strFile, (RefreshRateChanger.MediaType)(int)type);
+                if (_mediaInfo == null || _mediaInfo.Framerate <= 0)
+                {
+                  // using DelayedRefreshrateChanger
+                  _delayedrefreshratechanger = new Thread(delegate() { RefreshRateChanger.DelayedRefreshrateChanger(strFile, type); });
+                  _delayedrefreshratechanger.Start();
+                }
+                else
+                {
+                  RefreshRateChanger.AdaptRefreshRate(strFile, (RefreshRateChanger.MediaType)(int)type, _mediaInfo.Framerate);
+                }
 
                 if (RefreshRateChangePending())
                 {
