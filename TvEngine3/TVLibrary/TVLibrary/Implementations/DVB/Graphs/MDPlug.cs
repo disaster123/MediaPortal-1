@@ -63,7 +63,7 @@ namespace TvLibrary.Implementations.DVB
           _mapSubChannels[id] = dvbChannel;
         }
         
-        if (!isChannelAlreadyDecoding)
+        if (!isChannelAlreadyDecoding || update)
         {
           SetChannel(currentChannel, channelInfo, update); 
         }        
