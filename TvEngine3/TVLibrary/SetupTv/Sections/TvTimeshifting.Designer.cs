@@ -319,7 +319,7 @@ namespace SetupTv.Sections
       // 
       this.numericUpDownWaitTimeshifting.Location = new System.Drawing.Point(153, 123);
       this.numericUpDownWaitTimeshifting.Maximum = new decimal(new int[] {
-            30,
+            3000,
             0,
             0,
             0});
@@ -342,7 +342,7 @@ namespace SetupTv.Sections
       // 
       this.numericUpDownWaitUnscrambled.Location = new System.Drawing.Point(153, 97);
       this.numericUpDownWaitUnscrambled.Maximum = new decimal(new int[] {
-            30,
+            3000,
             0,
             0,
             0});
