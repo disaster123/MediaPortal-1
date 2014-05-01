@@ -269,7 +269,7 @@ namespace MediaPortal.Player
                                                                                    IntPtr.Zero);              
               if (r != displayResult)
               {
-                Log.Info("CycleRefreshRate: unable to change refresh rate {0}Hz for monitor {1}", refreshRate, monitorIndex);
+                Log.Info("CycleRefreshRate: unable to change refresh rate {0}Hz for monitor {1} (r != displayResult)", refreshRate, monitorIndex);
               }
               else
               {
@@ -284,7 +284,7 @@ namespace MediaPortal.Player
       }
       else
       {
-        Log.Info("CycleRefreshRate: unable to change refresh rate {0}Hz for monitor {1}", refreshRate, monitorIndex);
+        Log.Info("CycleRefreshRate: unable to change refresh rate {0}Hz for monitor {1} EnumDisplayDevices: result", refreshRate, monitorIndex, result);
       }
     }
 
