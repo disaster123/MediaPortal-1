@@ -1640,6 +1640,9 @@ public class MediaPortalApp : D3D, IRender
         // The computer is about to enter a suspended state
         case (int)PBT_EVENT.PBT_APMSUSPEND:
 
+          // disable event handlers
+          GUIGraphicsContext.DX9Device.DeviceLost -= OnDeviceLost;
+
           _resumedAutomatic = false;
           _resumedSuspended = false;
           _delayedResume = false;
@@ -1649,9 +1652,15 @@ public class MediaPortalApp : D3D, IRender
           PrepareSuspend();
           PluginManager.WndProc(ref msg);
           OnSuspend();
+
+          // enable event handlers
+          GUIGraphicsContext.DX9Device.DeviceLost += OnDeviceLost;
           break;
 
         case (int)PBT_EVENT.PBT_APMRESUMEAUTOMATIC:
+          // disable event handlers
+          GUIGraphicsContext.DX9Device.DeviceLost -= OnDeviceLost;
+
           // Check Delayed Resume
           CheckDelayedResume();
 
@@ -1668,6 +1677,9 @@ public class MediaPortalApp : D3D, IRender
           {
             Log.Info("Main: PBT_APMRESUMEAUTOMATIC was already handled, skipping");
           }
+
+          // enable event handlers
+          GUIGraphicsContext.DX9Device.DeviceLost += OnDeviceLost;
           break;
 
         // Only for Windows XP
@@ -1685,6 +1697,9 @@ public class MediaPortalApp : D3D, IRender
           goto case (int)PBT_EVENT.PBT_APMRESUMEAUTOMATIC;
 
         case (int)PBT_EVENT.PBT_APMRESUMESUSPEND:
+          // disable event handlers
+          GUIGraphicsContext.DX9Device.DeviceLost -= OnDeviceLost;
+
           // Check Delayed Resume
           CheckDelayedResume();
 
@@ -1709,6 +1724,9 @@ public class MediaPortalApp : D3D, IRender
           {
             Log.Info("Main: PBT_APMRESUMESUSPEND was already handled, skipping");
           }
+
+          // enable event handlers
+          GUIGraphicsContext.DX9Device.DeviceLost += OnDeviceLost;
           break;
 
         // A change in the power status of the computer is detected
