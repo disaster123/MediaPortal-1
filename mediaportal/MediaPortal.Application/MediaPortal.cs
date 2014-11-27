@@ -1433,8 +1433,11 @@ public class MediaPortalApp : D3D, IRender
 
         // set maximum and minimum form size in windowed mode
         case WM_GETMINMAXINFO:
-          OnGetMinMaxInfo(ref msg);
-          PluginManager.WndProc(ref msg);
+          if (!_suspended)
+          {
+            OnGetMinMaxInfo(ref msg);
+            PluginManager.WndProc(ref msg);
+          }
           break;
 
         case WM_ENTERSIZEMOVE:
@@ -1639,6 +1642,10 @@ public class MediaPortalApp : D3D, IRender
       {
         // The computer is about to enter a suspended state
         case (int)PBT_EVENT.PBT_APMSUSPEND:
+          _resumedAutomatic = false;
+          _resumedSuspended = false;
+          _delayedResume = false;
+
           // Suspending when we are on minimize (otherwise MP can stay freezed if notification windows show up while minimize)
           WindowState = FormWindowState.Minimized;
 
@@ -1653,10 +1660,6 @@ public class MediaPortalApp : D3D, IRender
             GUIGraphicsContext.DX9Device.DeviceLost -= OnDeviceLost;
           }
 
-          _resumedAutomatic = false;
-          _resumedSuspended = false;
-          _delayedResume = false;
-
           // Suspend operation
           Log.Info("Main: Suspending operation");
           PrepareSuspend();
@@ -1668,6 +1671,8 @@ public class MediaPortalApp : D3D, IRender
           {
             GUIGraphicsContext.DX9Device.DeviceLost += OnDeviceLost;
           }
+
+          _suspended = true;
           break;
 
         case (int)PBT_EVENT.PBT_APMRESUMEAUTOMATIC:
@@ -1753,6 +1758,8 @@ public class MediaPortalApp : D3D, IRender
           {
             GUIGraphicsContext.DX9Device.DeviceLost += OnDeviceLost;
           }
+
+          _suspended = false;
           break;
 
         // A change in the power status of the computer is detected
@@ -1872,8 +1879,11 @@ public class MediaPortalApp : D3D, IRender
 
       case WA_ACTIVE:
       case WA_CLICKACTIVE:
-        Log.Info("Main: Activation request received");
-        RestoreFromTray();
+        if (!_suspended)
+        {
+          Log.Info("Main: Activation request received");
+          RestoreFromTray();
+        }
         break;
     }
     msg.Result = (IntPtr)0;
@@ -2510,7 +2520,6 @@ public class MediaPortalApp : D3D, IRender
     Log.Debug("Main: OnSuspend - dispose DB connection");
     DisposeDBs();
 
-    _suspended = true;
     Log.Info("Main: OnSuspend - Done");
   }
 
@@ -2587,7 +2596,6 @@ public class MediaPortalApp : D3D, IRender
       Log.Warn("Main: OnResumeSuspend - Could not initialize volume handler: ", exception.Message);
     }
 
-    _suspended = false;
     _lastOnresume = DateTime.Now;
 
     WindowState = FormWindowState.Normal;
@@ -2597,6 +2605,8 @@ public class MediaPortalApp : D3D, IRender
     {
       GUIGraphicsContext.CurrentState = GUIGraphicsContext.State.RUNNING;
     }
+
+    RestoreFromTray();
 
     // Force Focus after resume done (really weird sequence)
     ForceMPFocus();
@@ -4564,7 +4574,10 @@ public class MediaPortalApp : D3D, IRender
   /// <param name="e"></param>
   protected override void NotifyIconRestore(Object sender, EventArgs e)
   {
-    RestoreFromTray();
+    if (!_suspended)
+    {
+      RestoreFromTray();
+    }
   }
 
   #endregion
