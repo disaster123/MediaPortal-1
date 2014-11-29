@@ -2040,7 +2040,7 @@ public class MediaPortalApp : D3D, IRender
           Bounds = screen.Bounds;
           Log.Debug("Main: Screen MP OnDisplayChange recreate swap chain");
           NeedRecreateSwapChain = true;
-          RecreateSwapChain();
+          RecreateSwapChain(false);
           _changeScreenDisplayChange = true;
         }
         // Restore original Start Screen in case of change from RDP Session
@@ -2144,7 +2144,7 @@ public class MediaPortalApp : D3D, IRender
         Bounds = screen.Bounds;
         Log.Debug("Main: Screen MP OnGetMinMaxInfo recreate swap chain");
         NeedRecreateSwapChain = true;
-        RecreateSwapChain();
+        RecreateSwapChain(false);
         _changeScreen = true;
 
         if (!Windowed)
@@ -2599,6 +2599,9 @@ public class MediaPortalApp : D3D, IRender
     _lastOnresume = DateTime.Now;
 
     WindowState = FormWindowState.Normal;
+
+    // Force restore DirectX (workaround to avoid GPU Crash)
+    RecreateSwapChain(true);
 
     // Restore GUIGraphicsContext.State when we recover from minimize
     if (GUIGraphicsContext.CurrentState == GUIGraphicsContext.State.SUSPENDING)
