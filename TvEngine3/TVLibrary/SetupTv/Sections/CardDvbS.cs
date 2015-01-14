@@ -1254,6 +1254,7 @@ namespace SetupTv.Sections
 
         int newChannels = 0;
         int updatedChannels = 0;
+        int removedChannels = 0;
         for (int i = 0; i < channels.Length; ++i)
         {
           Channel dbChannel;
@@ -1276,6 +1277,57 @@ namespace SetupTv.Sections
             //a service is that channel movement tracking won't work (each transponder/mux should have its own TSID).
             currentDetail = layer.GetTuningDetail(channel.NetworkId, channel.TransportId, channel.ServiceId,
                                                                TvBusinessLayer.GetChannelType(channel));
+          }
+
+          // clean up old channel, if there is a channel on the frequency with another
+          // tuningdetail name than ours - doesn't touch DisplayName in other cases
+          if (currentDetail != null && currentDetail.Name != channel.Name)
+          {
+            // delete channel and tuningdetails of old one
+            String line2 = String.Format("replaced channel: {0} with {1}",
+                     currentDetail.Name, channel.Name);
+            ListViewItem item2 = listViewStatus.Items.Add(new ListViewItem(line2));
+            item2.EnsureVisible();
+
+            removedChannels++;
+
+            Channel channeldel = currentDetail.ReferencedChannel();
+
+            // if the channel exists
+            if (channeldel != null)
+            {
+              IList<Schedule> schedules = Schedule.ListAll();
+              TvServer server = new TvServer();
+
+              //also delete any still active schedules
+              if (schedules != null)
+              {
+                for (int i2 = schedules.Count - 1; i2 > -1; i2--)
+                {
+                  Schedule schedule = schedules[i2];
+                  if (schedule.IdChannel == channeldel.IdChannel)
+                  {
+                    server.StopRecordingSchedule(schedule.IdSchedule);
+                    schedule.Delete();
+                    schedules.RemoveAt(i2);
+                  }
+                }
+              }
+
+              // this also deleted the currentDetails
+              channeldel.Delete();
+            }
+            else
+            {
+              currentDetail.Remove();
+            }
+            currentDetail = null;
+          }
+
+          if (currentDetail != null && currentDetail.ReferencedChannel() == null)
+          {
+            currentDetail.Remove();
+            currentDetail = null;
           }
 
           if (currentDetail == null)
@@ -1371,9 +1423,9 @@ namespace SetupTv.Sections
             }
           }
           layer.MapChannelToCard(card, dbChannel, false);
-          line = String.Format("lnb:{0} {1}tp- {2} {3} {4}:New:{5} Updated:{6}",
+          line = String.Format("lnb:{0} {1}tp- {2} {3} {4}:New:{5} Updated:{6} Removed:{7}",
                                lnb, 1 + index, tuneChannel.Frequency, tuneChannel.Polarisation, tuneChannel.SymbolRate,
-                               newChannels, updatedChannels);
+                               newChannels, updatedChannels, removedChannels);
           item.Text = line;
         }
       }
