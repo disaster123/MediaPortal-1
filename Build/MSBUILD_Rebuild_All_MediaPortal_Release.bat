@@ -1,4 +1,4 @@
-@ECHO OFF
+rem @ECHO OFF
 
 rem build init
 set project=MediaPortal
@@ -26,7 +26,7 @@ BuildReport\msxsl %xml% _BuildReport_Files\BuildReport.xslt -o %html%
 echo.
 echo Reverting assemblies...
 rem %DeployVersionGIT% /git="%GIT_ROOT%" /path="%MediaPortal%" /revert >> %log%
-%DeployVersionGIT% /git="%GIT_ROOT%" /path="%CommonMPTV%" /revert >> %log%
+rem %DeployVersionGIT% /git="%GIT_ROOT%" /path="%CommonMPTV%" /revert >> %log%
 
 echo.
 echo Reading the git revision...
@@ -39,7 +39,7 @@ echo.
 echo Building Installer...
 "%progpath%\NSIS\makensis.exe" /DBUILD_TYPE=%BUILD_TYPE% /DVER_BUILD=%version% "%MediaPortal%\Setup\setup.nsi" >> %log%
 
-@ECHO OFF
+rem @ECHO OFF
 
 rem build init
 set project=TVServer_Client
@@ -49,7 +49,7 @@ rem build
 echo.
 echo Writing GIT revision assemblies...
 rem %DeployVersionGIT% /git="%GIT_ROOT%" /path="%TVLibrary%" >> %log%
-%DeployVersionGIT% /git="%GIT_ROOT%" /path="%CommonMPTV%" >> %log%
+rem %DeployVersionGIT% /git="%GIT_ROOT%" /path="%CommonMPTV%" >> %log%
 
 echo.
 echo Building TV Server...
@@ -72,7 +72,7 @@ BuildReport\msxsl %xml% _BuildReport_Files\BuildReport.xslt -o %html%
 echo.
 echo Reverting assemblies...
 rem %DeployVersionGIT% /git="%GIT_ROOT%" /path="%TVLibrary%" /revert >> %log%
-%DeployVersionGIT% /git="%GIT_ROOT%" /path="%CommonMPTV%" /revert >> %log%
+rem %DeployVersionGIT% /git="%GIT_ROOT%" /path="%CommonMPTV%" /revert >> %log%
 
 echo.
 echo Reading the GIT revision...
