@@ -104,5 +104,7 @@ REM #######################################
 del content\References\ProgramData\ProgramData.zip
 "c:\Program Files\7-Zip\7z.exe" a -r content\References\ProgramData\ProgramData.zip "..\..\TvServer.Base\TuningParameters" "..\..\TvServer.Base\WebEPG" "..\..\TvServer.Base\xmltv" "..\..\..\..\DirectShowFilters\MPIPTVSource\MPIPTVSource\MPIPTVSource.ini" ".\content\References\gentle.config"
 
-nuget pack MediaPortal.TvEngine.Core3.nuspec -OutputDirectory ..
+..\nuget.exe pack MediaPortal.TvEngine.Core3.nuspec -OutputDirectory ..
 cd ..
+
+pause
