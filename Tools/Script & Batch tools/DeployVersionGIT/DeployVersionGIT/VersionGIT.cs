@@ -49,7 +49,7 @@ namespace DeployVersionGIT
 
     private Process RunGitCommand(string arguments)
     {
-      string programFiles = Environment.GetEnvironmentVariable("ProgramFiles(x86)") ?? Environment.GetEnvironmentVariable("ProgramFiles");
+      string programFiles = @"C:\Programme";
 
       FileInfo file = new FileInfo(programFiles + @"\Git\bin\git.exe");
       ProcessStartInfo procInfo = new ProcessStartInfo();
