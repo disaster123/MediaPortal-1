@@ -2,10 +2,10 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
     <metadata>
         <id>MediaPortal.TvEngine.Core3</id>
-        <version>3.0.12.3</version>
-        <authors>Morpheus_xx</authors>
+        <version>3.0.12.99</version>
+        <authors>Disaster123</authors>
         <requireLicenseAcceptance>false</requireLicenseAcceptance>
-        <description>Binary package that contains TVE3 dependencies for MP2.</description>
+        <description>Binary package that contains TVE3 dependencies for MP2 in Disaster123 edition.</description>
         <dependencies>
             <dependency id="MediaPortal.TvEngine.Interfaces" version="1.0.4" />
         </dependencies>
