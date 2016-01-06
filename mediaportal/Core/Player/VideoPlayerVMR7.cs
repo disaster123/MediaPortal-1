@@ -899,6 +899,18 @@ namespace MediaPortal.Player
     {
       get
       {
+        return (int)RealSpeed;
+      }
+      set
+      {
+        RealSpeed = (double)value;
+      }
+    }
+
+    public override double RealSpeed
+    {
+      get
+      {
         if (m_state == PlayState.Init)
         {
           return 1;
@@ -907,6 +919,12 @@ namespace MediaPortal.Player
         {
           return 1;
         }
+
+        if (g_Player._mediaInfo != null && m_speedRate == 5000 && g_Player._mediaInfo.Framerate == 24)
+        {
+          return 0.25;
+        }
+
         switch (m_speedRate)
         {
           case -10000:
@@ -931,6 +949,8 @@ namespace MediaPortal.Player
             return 16;
           case 320000:
             return 32;
+          case 5000:
+            return 0.2;
           default:
             return 1;
         }
@@ -941,6 +961,11 @@ namespace MediaPortal.Player
         {
           if (mediaSeek != null)
           {
+            if (value == 0.25 || value == 0.2)
+            {
+              TrySpeed(value, 5000);
+            }
+            else
             switch ((int)value)
             {
               case -1:
