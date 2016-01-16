@@ -36,15 +36,6 @@ namespace HideVolumeOSD
 		[DllImport("user32.dll", SetLastError = true)]
 		static extern IntPtr FindWindowEx(IntPtr hwndParent, IntPtr hwndChildAfter, string lpszClass, string lpszWindow);
 
-		[StructLayout(LayoutKind.Sequential)]
-		public struct RECT
-		{
-			public int left;        // x position of upper-left corner
-			public int top;         // y position of upper-left corner
-			public int right;       // x position of lower-right corner
-			public int bottom;      // y position of lower-right corner
-		}
-
 		[DllImport("user32.dll", SetLastError = true)]
 		static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 
@@ -53,27 +44,33 @@ namespace HideVolumeOSD
     public HideVolumeOSDLib(bool IsMuted)
 		{
       hWndInject = FindOSDWindow();
-      
-			if (hWndInject == IntPtr.Zero)
+
+			int count = 0;
+
+			while (hWndInject == IntPtr.Zero && count < 10)
 			{
-        if (IsMuted)
-        {
-          keybd_event((byte)Keys.VolumeMute, 0, 0, 0);
-          keybd_event((byte)Keys.VolumeMute, 0, 0, 0);
-        }
-        else
-        {
-          keybd_event((byte)Keys.VolumeUp, 0, 0, 0);
-          keybd_event((byte)Keys.VolumeDown, 0, 0, 0);
-        }
+				if (IsMuted)
+				{
+					keybd_event((byte)Keys.VolumeMute, 0, 0, 0);
+					keybd_event((byte)Keys.VolumeMute, 0, 0, 0);
+				}
+				else
+				{
+					keybd_event((byte)Keys.VolumeUp, 0, 0, 0);
+					keybd_event((byte)Keys.VolumeDown, 0, 0, 0);
+				}
+
+				System.Threading.Thread.Sleep(500);
 
 				hWndInject = FindOSDWindow();
 
-        if (hWndInject == IntPtr.Zero)
-        {
-          Log.Error("HideVolumeOSD: VolumeOSD not found.");
-        }
+				count++;
 			}
+      
+      if (hWndInject == IntPtr.Zero)
+      {
+        Log.Error("HideVolumeOSD: VolumeOSD not found.");
+      }
 		}
 
 		private IntPtr FindOSDWindow()
