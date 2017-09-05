@@ -64,7 +64,7 @@
 # DEFINES
 #---------------------------------------------------------------------------
 !define PRODUCT_NAME          "MediaPortal TV Server / Client"
-!define PRODUCT_PUBLISHER     "Team MediaPortal"
+!define PRODUCT_PUBLISHER     "Team MediaPortal and Disaster123"
 !define PRODUCT_WEB_SITE      "www.team-mediaportal.com"
 
 !define REG_UNINSTALL         "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\MediaPortal TV Server"
@@ -210,7 +210,7 @@ BrandingText  "${PRODUCT_NAME} ${VERSION_DISP} by ${PRODUCT_PUBLISHER}"
 !if ${VER_BUILD} == 0       # it's an official release
   OutFile "${git_OUT}\package-tvengine.exe"
 !else                       # it's a git release
-  OutFile "${git_OUT}\Setup-TvEngine-git-${VER_MAJOR}.${VER_MINOR}.${VER_REVISION}.${VER_BUILD}.exe"
+  OutFile "${git_OUT}\Setup-TvEngine-Disaster123-git-${VER_MAJOR}.${VER_MINOR}.${VER_REVISION}.${VER_BUILD}.exe"
 !endif
 InstallDir ""
 CRCCheck on
