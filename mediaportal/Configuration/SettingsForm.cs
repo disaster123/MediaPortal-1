@@ -1,4 +1,4 @@
-﻿#region Copyright (C) 2005-2011 Team MediaPortal
+#region Copyright (C) 2005-2011 Team MediaPortal
 
 // Copyright (C) 2005-2011 Team MediaPortal
 // http://www.team-mediaportal.com
@@ -162,6 +162,7 @@ namespace MediaPortal.Configuration
       // Required for Windows Form Designer support
       InitializeComponent();
       this.linkLabel1.Links.Add(0, linkLabel1.Text.Length, "http://www.team-mediaportal.com/donate.html");
+      this.linkLabelDisaster.Links.Add(0, linkLabelDisaster.Text.Length, "http://forum.team-mediaportal.com/mediaportal-plugins-47/new-mp-1-0-features-fixes-network-share-monitoring-new-schedule-option-48181/");
       // Build options tree
       if (splashScreen != null)
       {
@@ -1147,6 +1148,11 @@ namespace MediaPortal.Configuration
     {
       ToggleSectionVisibility(toolStripButtonSwitchAdvanced.Checked);
       toolStripButtonSwitchAdvanced.Text = AdvancedMode ? "Switch to standard mode" : "Switch to expert mode";
+    }
+
+    private void linkLabelDisaster_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+    {
+      Process.Start((string)e.Link.LinkData);
     }
 
     protected override void OnClosing(CancelEventArgs e)

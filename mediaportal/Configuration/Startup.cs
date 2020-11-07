@@ -69,11 +69,11 @@ namespace MediaPortal.Configuration
 
       try
       {
-        Log.Info("Main: Configuration v" + versionInfo.FileVersion + " is starting up on " + OSInfo.OSInfo.GetOSDisplayVersion());
+        Log.Info("Main: Configuration Disaster Edition v" + versionInfo.FileVersion + " is starting up on " + OSInfo.OSInfo.GetOSDisplayVersion());
       }
       catch
       {
-        Log.Info("Main: Configuration v" + versionInfo.FileVersion + " is starting up on Windows 10 Pro for Workstations (???)");
+        Log.Info("Main: Configuration Disaster Edition v" + versionInfo.FileVersion + " is starting up on Windows 10 Pro for Workstations (???)");
       }
       //Log.Info(OSInfo.OSInfo.GetLastInstalledWindowsUpdateTimestampAsString());
       Log.Info("Windows Media Player: [{0}]", OSInfo.OSInfo.GetWMPVersion());

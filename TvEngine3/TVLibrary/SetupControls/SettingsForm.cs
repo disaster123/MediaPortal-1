@@ -43,6 +43,7 @@ namespace SetupControls
       InitializeComponent();
 
       linkLabel1.Links.Add(0, linkLabel1.Text.Length, "http://www.team-mediaportal.com/donate.html");
+      linkLabelDisaster.Links.Add(0, linkLabelDisaster.Text.Length, "http://forum.team-mediaportal.com/mediaportal-plugins-47/new-mp-1-0-features-fixes-network-share-monitoring-new-schedule-option-48181/");
     }
 
     public virtual void AddSection(SectionSettings section)
@@ -129,6 +130,11 @@ namespace SetupControls
     public virtual void applyButton_Click(object sender, EventArgs e) {}
 
     private void holderPanel_Paint(object sender, PaintEventArgs e) {}
+
+    private void linkLabelDisaster_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+    {
+       System.Diagnostics.Process.Start((string)e.Link.LinkData);
+    }
 
     private void linkLabel1_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
     {

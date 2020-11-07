@@ -919,12 +919,12 @@ namespace TvService
 
           try
           {
-            Log.WriteFile("TVService v" + versionInfo.FileVersion + " is starting up on " +
+            Log.WriteFile("TVService Disaster Edition v" + versionInfo.FileVersion + " is starting up on " +
             OSInfo.OSInfo.GetOSDisplayVersion());
           }
           catch (Exception)
           {
-            Log.WriteFile("TVService v" + versionInfo.FileVersion + " is starting up on Windows 10 Pro for Workstations (???)");
+            Log.WriteFile("TVService Disaster Edition v" + versionInfo.FileVersion + " is starting up on Windows 10 Pro for Workstations (???)");
           }
 
           //Log.Info(OSInfo.OSInfo.GetLastInstalledWindowsUpdateTimestampAsString());

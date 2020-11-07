@@ -153,6 +153,7 @@ namespace MediaPortal.Configuration
       private Panel panel1;
       private Label versionLabel;
       private Label informationLabel;
+      private Label disasterLabel;
 
       /// <summary>
       /// Required designer variable.
@@ -239,6 +240,7 @@ namespace MediaPortal.Configuration
       {
         this.panel1 = new System.Windows.Forms.Panel();
         this.informationLabel = new System.Windows.Forms.Label();
+      this.disasterLabel = new System.Windows.Forms.Label();
         this.versionLabel = new System.Windows.Forms.Label();
         this.panel1.SuspendLayout();
         this.SuspendLayout();
@@ -248,6 +250,7 @@ namespace MediaPortal.Configuration
         this.panel1.BackColor = System.Drawing.Color.Transparent;
         this.panel1.BorderStyle = System.Windows.Forms.BorderStyle.None;
         this.panel1.Controls.Add(this.informationLabel);
+      this.panel1.Controls.Add(this.disasterLabel);
         this.panel1.Controls.Add(this.versionLabel);
         this.panel1.Dock = System.Windows.Forms.DockStyle.Fill;
         this.panel1.Location = new System.Drawing.Point(0, 0);
@@ -286,9 +289,21 @@ namespace MediaPortal.Configuration
         this.versionLabel.Size = new System.Drawing.Size(100, 16);
         this.versionLabel.TabIndex = 5;
         this.versionLabel.TextAlign = System.Drawing.ContentAlignment.TopRight;
-        // 
+
+      this.disasterLabel.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left)
+                   | System.Windows.Forms.AnchorStyles.Right)));
+      this.disasterLabel.BackColor = System.Drawing.Color.Transparent;
+      this.disasterLabel.Font = new System.Drawing.Font("Arial", 7F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+      this.disasterLabel.Location = new System.Drawing.Point(10, 113);
+      this.disasterLabel.Name = "disasterLabel";
+      this.disasterLabel.Size = new System.Drawing.Size(100, 16);
+      this.disasterLabel.TabIndex = 5;
+      this.disasterLabel.TextAlign = System.Drawing.ContentAlignment.TopRight;
+      this.disasterLabel.Text = "Disaster Edition";
+
+        //
         // SplashForm
-        // 
+        //
         this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
         this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Dpi;
         this.BackgroundImage = global::MediaPortal.Configuration.Properties.Resources.mplogo;
