@@ -747,10 +747,10 @@ public class MediaPortalApp : D3D, IRender
       FileVersionInfo versionInfo = FileVersionInfo.GetVersionInfo(Application.ExecutablePath);
       try
       {
-        Log.Info("Main: MediaPortal v" + versionInfo.FileVersion + " is starting up on " + OSInfo.OSInfo.GetOSDisplayVersion());
+        Log.Info("Main: MediaPortal Disaster Edition v" + versionInfo.FileVersion + " is starting up on " + OSInfo.OSInfo.GetOSDisplayVersion());
       }
       catch {
-        Log.Info("Main: MediaPortal v" + versionInfo.FileVersion + " is starting up on Windows 10 Pro for Workstations (???)");
+        Log.Info("Main: MediaPortal Disaster Edition v" + versionInfo.FileVersion + " is starting up on Windows 10 Pro for Workstations (???)");
       }
       //Log.Info(OSInfo.OSInfo.GetLastInstalledWindowsUpdateTimestampAsString());
       Log.Info("Windows Media Player: [{0}]", OSInfo.OSInfo.GetWMPVersion());

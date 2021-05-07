@@ -5,6 +5,8 @@
     /// <summary>
     /// Required designer variable.
     /// </summary>
+    private System.ComponentModel.IContainer components = null;
+    private System.Windows.Forms.LinkLabel linkLabelDisaster;
     private System.Windows.Forms.LinkLabel linkLabel1;
     private System.Windows.Forms.ToolStrip toolStrip1;
     private System.Windows.Forms.ToolStripButton helpToolStripSplitButton;
@@ -53,6 +55,7 @@
       this.holderPanel = new System.Windows.Forms.Panel();
       this.beveledLine1 = new MediaPortal.UserInterface.Controls.MPBeveledLine();
       this.applyButton = new MediaPortal.UserInterface.Controls.MPButton();
+	  this.linkLabelDisaster = new System.Windows.Forms.LinkLabel();
       this.linkLabel1 = new System.Windows.Forms.LinkLabel();
       this.toolStrip1 = new System.Windows.Forms.ToolStrip();
       this.helpToolStripSplitButton = new System.Windows.Forms.ToolStripButton();
@@ -155,9 +158,20 @@
       this.applyButton.UseVisualStyleBackColor = true;
       this.applyButton.Visible = false;
       this.applyButton.Click += new System.EventHandler(this.applyButton_Click);
-      // 
+      //
+      // linkLabelDisaster
+      //
+      this.linkLabelDisaster.AutoSize = true;
+      this.linkLabelDisaster.Location = new System.Drawing.Point(141, 518);
+      this.linkLabelDisaster.Name = "linkLabelDisaster";
+      this.linkLabelDisaster.Size = new System.Drawing.Size(80, 13);
+      this.linkLabelDisaster.TabIndex = 11;
+      this.linkLabelDisaster.TabStop = true;
+      this.linkLabelDisaster.Text = "Disaster Edition";
+      this.linkLabelDisaster.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.linkLabelDisaster_LinkClicked);
+      //
       // linkLabel1
-      // 
+      //
       this.linkLabel1.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
       this.linkLabel1.AutoSize = true;
       this.linkLabel1.Location = new System.Drawing.Point(12, 535);
@@ -260,6 +274,7 @@
       this.ClientSize = new System.Drawing.Size(784, 561);
       this.Controls.Add(this.toolStrip1);
       this.Controls.Add(this.linkLabel1);
+      this.Controls.Add(this.linkLabelDisaster);
       this.Controls.Add(this.applyButton);
       this.Controls.Add(this.beveledLine1);
       this.Controls.Add(this.holderPanel);
